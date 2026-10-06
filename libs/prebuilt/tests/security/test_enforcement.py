@@ -25,6 +25,7 @@ from langgraph.prebuilt.security.enforcement import (
     SupportAssessment,
     SupportLevel,
     compile_grant,
+    compile_obligations,
 )
 from langgraph.prebuilt.security.profile import (
     FsRule,
@@ -171,7 +172,27 @@ def _obligations(
             "service.deny_unlisted",
             "*",
         ),
+        *(
+            EnforcementObligation(
+                f"domain.{domain.value}.default_deny",
+                f"domain:{domain.value}",
+                ObligationKind.DENY_COMPLEMENT,
+                domain,
+                "deny_unlisted",
+                "*",
+            )
+            for domain in AuthorityDomain
+            if domain is not AuthorityDomain.SERVICE
+        ),
     )
+
+
+def _complement_ids() -> set[str]:
+    return {
+        item.obligation_id
+        for item in _obligations()
+        if item.kind is ObligationKind.DENY_COMPLEMENT
+    }
 
 
 def test_compile_grant_preserves_requirements_and_baseline() -> None:
@@ -268,6 +289,19 @@ def test_compile_grant_rejects_denial_and_unmarked_baseline() -> None:
         compile_grant(allowed, baseline_rules=(hidden,), **arguments)
 
 
+def test_compile_obligations_denies_complement_of_every_domain() -> None:
+    """Omitted domains still require proof that their ambient authority is denied."""
+    obligations = compile_obligations(_grant())
+
+    complements = {
+        item.domain
+        for item in obligations
+        if item.kind is ObligationKind.DENY_COMPLEMENT
+    }
+    assert complements == set(AuthorityDomain)
+    assert any(item.obligation_id == "rule:mail-rule:operate" for item in obligations)
+
+
 def _host(*, nonce: str = "challenge", signature: str = "trusted") -> HostAttestation:
     return HostAttestation(
         "supervisor",
@@ -325,7 +359,7 @@ def test_grant_digest_is_canonical_and_conditions_are_frozen() -> None:
 
 def test_capability_class_does_not_substitute_for_exact_rule_support() -> None:
     """A host capability cannot make an adapter's unsupported rule executable."""
-    adapter = _Adapter("service", {"mail.default_deny"})
+    adapter = _Adapter("service", _complement_ids())
     result = EnforcementCoordinator([adapter], _Verifier()).negotiate(
         _grant(),
         _ledger(),
@@ -356,12 +390,13 @@ def test_closed_world_complement_is_required_and_nonwaivable() -> None:
         now=50.0,
     )
     assert not result.allowed
-    assert result.reason == "default_deny_missing:service"
+    assert result.reason.startswith("default_deny_missing:")
+    assert "service" in result.reason
 
 
 def test_multi_component_rule_requires_every_dependency() -> None:
     """Recipient validation alone is insufficient without channel and custody."""
-    supported = {"mail.recipient", "mail.default_deny"}
+    supported = {"mail.recipient", *_complement_ids()}
     adapter = _Adapter("service", supported)
     result = EnforcementCoordinator([adapter], _Verifier()).negotiate(
         _grant(),
@@ -399,7 +434,7 @@ def test_one_primary_owner_is_selected_per_obligation() -> None:
         owners=owners,
         now=50.0,
     )
-    assert conflict.reason == "adapter_ownership_conflict:mail.channel"
+    assert conflict.reason.startswith("adapter_ownership_conflict:")
     assert selected.allowed
     assert selected.plan is not None
     assert {item.adapter_id for item in selected.plan.assignments} == {"first"}
@@ -410,7 +445,7 @@ def test_waiver_cannot_remove_need_but_can_remove_want_as_degraded() -> None:
     supported = {
         "mail.channel",
         "mail.credential",
-        "mail.default_deny",
+        *_complement_ids(),
     }
     adapter = _Adapter("service", supported)
     coordinator = EnforcementCoordinator([adapter], _Verifier())
@@ -485,6 +520,31 @@ def test_activation_receipt_binds_plan_and_worker_context() -> None:
     assert receipt.context_digest == _context().digest
     assert receipt.activated_obligations == frozenset(obligation_ids)
     assert receipt.mode is EnforcementMode.ENFORCED
+    assert coordinator.validate_receipt(
+        receipt,
+        _grant(),
+        result.plan,
+        _host(),
+        _context(),
+        now=50.0,
+    )
+    changed_broker = replace(_context(), broker_epoch="broker-2")
+    assert not coordinator.validate_receipt(
+        receipt,
+        _grant(),
+        result.plan,
+        _host(),
+        changed_broker,
+        now=50.0,
+    )
+    assert not coordinator.validate_receipt(
+        receipt,
+        _grant(),
+        result.plan,
+        _host(),
+        _context(),
+        now=101.0,
+    )
 
 
 def test_activation_rejects_evidence_from_another_worker() -> None:

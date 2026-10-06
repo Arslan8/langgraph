@@ -102,6 +102,7 @@ TCB component and must pass its platform contract suite.
 | `Grant` | Immutable authority for one principal, session, artifact, normalized intent, policy, and call. Its canonical digest binds all rules. |
 | `GrantCompilation` | A final `Grant` paired with its source-to-rule `RequirementLedger`. |
 | `compile_grant` | Converts a successful constructive DAC evaluation into exact attributed rules, rejecting denied evaluations and unmarked runtime baseline authority. |
+| `compile_obligations` | Expands every grant rule into an operation obligation and adds a non-waivable deny-complement obligation for every authority domain, including domains with no allow rule. |
 | `RequirementEntry` | Connects one source `need` or `want` to its descendant final grant rules. |
 | `RequirementLedger` | Rechecks source requirements after mandatory filtering, lowering, and activation reductions. |
 | `RequirementCheck` | Revalidation result listing missing needs and removed wants. |

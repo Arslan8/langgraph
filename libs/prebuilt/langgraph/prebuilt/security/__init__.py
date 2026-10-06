@@ -54,6 +54,7 @@ from langgraph.prebuilt.security.enforcement import (
     SupportAssessment,
     SupportLevel,
     compile_grant,
+    compile_obligations,
 )
 from langgraph.prebuilt.security.errors import (
     SecurityAuditError,
@@ -240,6 +241,7 @@ __all__ = (
     "analyze_source",
     "copy_blobs",
     "compile_grant",
+    "compile_obligations",
     "dac",
     "dac_check",
     "delegate",

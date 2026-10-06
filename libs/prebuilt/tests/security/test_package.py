@@ -106,6 +106,7 @@ def test_security_package_exports_descriptor_api() -> None:
         "analyze_source",
         "copy_blobs",
         "compile_grant",
+        "compile_obligations",
         "dac",
         "dac_check",
         "delegate",

@@ -404,6 +404,49 @@ class EnforcementObligation:
         }
 
 
+def compile_obligations(
+    grant: Grant,
+    *,
+    additional: Sequence[EnforcementObligation] = (),
+) -> tuple[EnforcementObligation, ...]:
+    """Expand a grant into operation and all-domain default-deny obligations."""
+    obligations: list[EnforcementObligation] = []
+    for rule in grant.rules:
+        kind = (
+            ObligationKind.RESOURCE_LIMIT
+            if rule.domain is AuthorityDomain.RESOURCE_LIMIT
+            else ObligationKind.OPERATE
+        )
+        obligations.append(
+            EnforcementObligation(
+                f"rule:{rule.rule_id}:operate",
+                rule.rule_id,
+                kind,
+                rule.domain,
+                rule.operation,
+                rule.selector,
+                rule.conditions,
+                waivable=(rule.requirement is Requirement.WANT and not rule.baseline),
+            )
+        )
+    for domain in AuthorityDomain:
+        obligations.append(
+            EnforcementObligation(
+                f"domain:{domain.value}:deny_complement",
+                f"domain:{domain.value}",
+                ObligationKind.DENY_COMPLEMENT,
+                domain,
+                "deny_unlisted",
+                "*",
+            )
+        )
+    obligations.extend(additional)
+    identifiers = [item.obligation_id for item in obligations]
+    if len(identifiers) != len(set(identifiers)):
+        raise ValueError("compiled obligation IDs must be unique")
+    return tuple(obligations)
+
+
 @dataclass(frozen=True, slots=True)
 class HostAttestation:
     """Trust-anchored host evidence used for one negotiation freshness window."""
@@ -684,6 +727,11 @@ class ActivationReceipt:
     mode: EnforcementMode
     evidence: tuple[ActivationEvidence, ...]
     activated_obligations: frozenset[str]
+    valid_until: float
+
+    def __post_init__(self) -> None:
+        if self.valid_until <= 0:
+            raise ValueError("activation receipt expiry must be positive")
 
 
 class EnforcementCoordinator:
@@ -771,6 +819,9 @@ class EnforcementCoordinator:
         timestamp = time.time() if now is None else now
         if plan.grant_digest != grant.digest or plan.host_digest != host.digest:
             raise ValueError("activation inputs do not match the negotiated plan")
+        host_error = self._validate_host(host, host.nonce, timestamp)
+        if host_error is not None:
+            raise ValueError(host_error)
         if context.boot_id != host.boot_id:
             raise ValueError("worker boot identity differs from host attestation")
         evidence: list[ActivationEvidence] = []
@@ -797,7 +848,49 @@ class EnforcementCoordinator:
             plan.mode,
             tuple(evidence),
             frozenset(activated),
+            min(host.expires_at, *(item.expires_at for item in evidence)),
         )
+
+    def validate_receipt(
+        self,
+        receipt: ActivationReceipt,
+        grant: Grant,
+        plan: EnforcementPlan,
+        host: HostAttestation,
+        context: ExecutionContext,
+        *,
+        now: float | None = None,
+    ) -> bool:
+        """Revalidate live host, worker, broker, credential, and adapter evidence."""
+        timestamp = time.time() if now is None else now
+        if timestamp > receipt.valid_until:
+            return False
+        if self._validate_host(host, host.nonce, timestamp) is not None:
+            return False
+        if (
+            receipt.grant_digest != grant.digest
+            or receipt.plan_digest != plan.digest
+            or receipt.host_digest != host.digest
+            or receipt.context_digest != context.digest
+            or receipt.mode is not plan.mode
+        ):
+            return False
+        expected = {assignment.obligation_id for assignment in plan.assignments}
+        if receipt.activated_obligations != expected:
+            return False
+        plans = {item.adapter_id: item for item in plan.adapter_plans}
+        try:
+            for evidence in receipt.evidence:
+                adapter = self._adapters[evidence.adapter_id]
+                adapter_plan = plans[evidence.adapter_id]
+                _validate_activation(
+                    evidence, adapter_plan, context, receipt.nonce, timestamp
+                )
+                if not adapter.verify_activation(evidence):
+                    return False
+        except (KeyError, ValueError):
+            return False
+        return True
 
     def _validate_host(
         self, host: HostAttestation, nonce: str, timestamp: float
@@ -875,20 +968,26 @@ def _validate_obligations(
     if not obligations:
         return "obligations_missing"
     rule_ids = {rule.rule_id for rule in grant.rules}
-    if any(item.rule_id not in rule_ids for item in obligations.values()):
+    if any(
+        item.rule_id not in rule_ids
+        and not (
+            item.kind is ObligationKind.DENY_COMPLEMENT
+            and item.rule_id == f"domain:{item.domain.value}"
+        )
+        for item in obligations.values()
+    ):
         return "obligation_unknown_rule"
     obligation_ids = set(obligations)
     if any(
         not item.dependencies.issubset(obligation_ids) for item in obligations.values()
     ):
         return "obligation_dependency_missing"
-    domains = {rule.domain for rule in grant.rules}
     complemented = {
         item.domain
         for item in obligations.values()
         if item.kind is ObligationKind.DENY_COMPLEMENT
     }
-    missing = domains - complemented
+    missing = set(AuthorityDomain) - complemented
     if missing:
         return "default_deny_missing:" + ",".join(
             sorted(item.value for item in missing)
@@ -926,7 +1025,8 @@ def _fully_enforced_rules(
 ) -> frozenset[str]:
     by_rule: dict[str, set[str]] = defaultdict(set)
     for obligation in obligations.values():
-        by_rule[obligation.rule_id].add(obligation.obligation_id)
+        if obligation.kind is not ObligationKind.DENY_COMPLEMENT:
+            by_rule[obligation.rule_id].add(obligation.obligation_id)
     return frozenset(
         rule_id
         for rule_id, obligation_ids in by_rule.items()

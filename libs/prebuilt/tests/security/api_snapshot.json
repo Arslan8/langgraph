@@ -99,6 +99,7 @@
   "analyze_source",
   "copy_blobs",
   "compile_grant",
+  "compile_obligations",
   "dac",
   "dac_check",
   "delegate",
