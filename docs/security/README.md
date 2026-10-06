@@ -9,7 +9,8 @@ Start with the [10-line HOWTO](HOWTO.md), then use the
 [API and behavior reference](reference.md). Existing applications should follow
 the [migration guide](migration.md). The constructive DAC language is specified
 by the [frozen `.slp` profile grammar](profiles.md). The design rationale is
-recorded in the [`adr/`](adr/) directory.
+recorded in the [`adr/`](adr/) directory. Three runnable examples live in
+[`examples/`](examples/README.md).
 
 ## Security boundary
 
