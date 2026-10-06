@@ -7,7 +7,7 @@ from dataclasses import asdict, dataclass
 from enum import Enum
 from typing import Any
 
-SCHEMA_VERSION = "1.1.0"
+SCHEMA_VERSION = "1.2.0"
 
 
 class SinkClass(str, Enum):
@@ -84,6 +84,19 @@ class EnforcementAdapterModel:
     The model is deliberately independent of a concrete implementation. A
     Linux, Windows, WASI, microVM, service, or remote-resource adapter may
     provide any subset of the same resource capabilities.
+    """
+
+    name: str
+    capabilities: frozenset[ResourceClass]
+
+
+@dataclass(frozen=True, slots=True)
+class HostModel:
+    """Named inventory of semantic enforcement capabilities on one host.
+
+    A host model reports what the current machine can support independently of
+    which enforcement adapters are selected. Production host models must come
+    from trusted probes and carry attestation; E1 instances are projections.
     """
 
     name: str
@@ -191,6 +204,8 @@ class ExposureScore:
     decisions: tuple[SinkDecision, ...]
     adapter_model: str | None = None
     adapter_capabilities: tuple[ResourceClass, ...] = ()
+    host_model: str | None = None
+    host_capabilities: tuple[ResourceClass, ...] = ()
     schema_version: str = SCHEMA_VERSION
 
     def to_dict(self) -> dict[str, Any]:

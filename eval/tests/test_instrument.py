@@ -8,9 +8,11 @@ import pytest
 from slanggraph_eval.instrument import (
     ADVISORY_ADAPTER,
     COMPOSED_ADAPTERS,
+    E1_HOST,
     HOST_ADAPTER,
     Defense,
     EnforcementAdapterModel,
+    HostModel,
     ResourceClass,
     TaintOrigin,
     ToolSpec,
@@ -37,9 +39,9 @@ def test_joined_path_is_below_argument_boundary() -> None:
     assert {path.source for path in sink.taint_paths} == {"base", "user_path"}
     assert any(not path.boundary_constrainable for path in sink.taint_paths)
     assert score_defense(report, Defense.PROGENT).exposed == (sink.sink_id,)
-    assert score_defense(report, Defense.SLANGGRAPH, adapters=HOST_ADAPTER).mediated == (
-        sink.sink_id,
-    )
+    assert score_defense(
+        report, Defense.SLANGGRAPH, adapters=HOST_ADAPTER, host=E1_HOST
+    ).mediated == (sink.sink_id,)
 
 
 def test_camel_credits_only_untrusted_tagged_paths() -> None:
@@ -75,13 +77,15 @@ def test_advisory_and_bolt_on_do_not_cover_in_tool_sinks() -> None:
     sink_id = report.attacker_reachable_sinks[0].sink_id
 
     assert score_defense(report, Defense.BOLT_ON).exposed == (sink_id,)
-    assert score_defense(report, Defense.SLANGGRAPH, adapters=ADVISORY_ADAPTER).exposed == (
-        sink_id,
-    )
-    assert score_defense(report, Defense.SLANGGRAPH, adapters=HOST_ADAPTER).mediated == (sink_id,)
+    assert score_defense(
+        report, Defense.SLANGGRAPH, adapters=ADVISORY_ADAPTER, host=E1_HOST
+    ).exposed == (sink_id,)
+    assert score_defense(
+        report, Defense.SLANGGRAPH, adapters=HOST_ADAPTER, host=E1_HOST
+    ).mediated == (sink_id,)
 
 
-def test_backend_capability_narrows_theoretical_coverage() -> None:
+def test_adapter_capability_narrows_theoretical_coverage() -> None:
     report = analyze_tool(
         ToolSpec(
             FIXTURE,
@@ -94,15 +98,35 @@ def test_backend_capability_narrows_theoretical_coverage() -> None:
         report,
         Defense.SLANGGRAPH,
         adapters=EnforcementAdapterModel("filesystem-only", frozenset({ResourceClass.FILESYSTEM})),
+        host=E1_HOST,
     )
     assert score.exposed
     assert "adapter set lacks network capability" in score.decisions[0].reason
 
 
+def test_host_capability_narrows_adapter_coverage() -> None:
+    report = analyze_tool(
+        ToolSpec(
+            FIXTURE,
+            "web_fetch",
+            declared_resources=frozenset({ResourceClass.NETWORK}),
+        )
+    )
+
+    score = score_defense(
+        report,
+        Defense.SLANGGRAPH,
+        adapters=HOST_ADAPTER,
+        host=HostModel("filesystem-only-host", frozenset({ResourceClass.FILESYSTEM})),
+    )
+    assert score.exposed
+    assert score.decisions[0].reason == "host lacks network capability"
+
+
 def test_undeclared_resource_is_default_denied_not_exposed() -> None:
     report = analyze_tool(ToolSpec(FIXTURE, "web_fetch"))
 
-    score = score_defense(report, Defense.SLANGGRAPH, adapters=HOST_ADAPTER)
+    score = score_defense(report, Defense.SLANGGRAPH, adapters=HOST_ADAPTER, host=E1_HOST)
     assert score.mediated
     assert "default-denied" in score.decisions[0].reason
 
@@ -118,10 +142,12 @@ def test_delegation_requires_subset_enforcement() -> None:
     sink_id = report.attacker_reachable_sinks[0].sink_id
 
     assert score_defense(report, Defense.PROGENT).mediated == (sink_id,)
-    assert score_defense(report, Defense.SLANGGRAPH, adapters=HOST_ADAPTER).exposed == (sink_id,)
-    assert score_defense(report, Defense.SLANGGRAPH, adapters=COMPOSED_ADAPTERS).mediated == (
-        sink_id,
-    )
+    assert score_defense(
+        report, Defense.SLANGGRAPH, adapters=HOST_ADAPTER, host=E1_HOST
+    ).exposed == (sink_id,)
+    assert score_defense(
+        report, Defense.SLANGGRAPH, adapters=COMPOSED_ADAPTERS, host=E1_HOST
+    ).mediated == (sink_id,)
 
 
 def test_slanggraph_requires_an_explicit_adapter_model() -> None:
@@ -129,6 +155,8 @@ def test_slanggraph_requires_an_explicit_adapter_model() -> None:
 
     with pytest.raises(ValueError, match="explicit adapter model"):
         score_defense(report, Defense.SLANGGRAPH)
+    with pytest.raises(ValueError, match="explicit host model"):
+        score_defense(report, Defense.SLANGGRAPH, adapters=HOST_ADAPTER)
 
 
 def test_reports_and_scores_are_machine_readable() -> None:
@@ -137,6 +165,6 @@ def test_reports_and_scores_are_machine_readable() -> None:
 
     report_data = json.loads(report.to_json())
     score_data = json.loads(score.to_json())
-    assert report_data["schema_version"] == "1.1.0"
+    assert report_data["schema_version"] == "1.2.0"
     assert report_data["sinks"][0]["sink_class"] == "filesystem"
     assert score_data["defense"] == "none"

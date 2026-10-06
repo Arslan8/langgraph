@@ -157,6 +157,12 @@ Each enforcing adapter must resolve resource objects safely for its platform. Th
 Linux reference adapter will use descriptors as specified by ADR 0007; other
 platforms may use different native object identities behind the same contract.
 
+The planned `HostModel` is separate from both the final `Grant` and adapter set.
+It will contain an attested, platform-neutral inventory of capabilities available
+on the current machine. Execution will fail closed when a grant requires a host
+capability that the selected host does not provide, even if an adapter implements
+that capability on other hosts.
+
 ## Exceptions and fail-closed behavior
 
 The package deliberately uses ordinary Python exception families at its

@@ -183,16 +183,46 @@ belong to the adapter's compiled sandbox, not the portable `Grant`.
 The `Grant` type and Cedar request construction freeze together after the Cedar
 integration lands.
 
+## Host model
+
+An immutable `HostModel` describes the semantic enforcement capabilities that a
+particular machine currently provides. It is produced by trusted runtime probes,
+not supplied by graph state, tool metadata, policy data, or the model. Platform,
+architecture, capability evidence, probe versions, and an attestation digest are
+recorded for audit, while the capability names themselves remain platform-neutral.
+
+The host model is distinct from the adapter contract. A host can provide a
+primitive for which no selected adapter exists, and an adapter can support a
+capability that is unavailable on the current host. For each call, the framework
+computes:
+
+```text
+required       = grant.classes()
+host_missing   = grant.host_classes() - host.capabilities()
+adapter_missing = required - adapters.declared_capabilities()
+effective      = adapters.capabilities(host)
+```
+
+Any host-bound requirement absent from `effective` denies execution. Diagnostics
+attribute the failure precisely as `host_cannot_enforce:<classes>`,
+`adapter_not_selected:<classes>`, or both. Service and resource-side capabilities
+are checked against their adapters rather than the host set.
+
+The host model used at compile time is an expectation, not a permanent fact. The
+selected adapters re-probe or validate attestation before dispatch. A stale model,
+changed host feature, failed probe, or unverifiable attestation denies execution;
+none silently selects advisory mode.
+
 ## Enforcement-adapter capability contract
 
-An adapter set reports its supported rule classes, compiles a `Grant` into an
+An adapter set reports its supported rule classes for a `HostModel`, compiles a `Grant` into an
 enforcement plan, and produces an attestation describing its enforcement features
 and how they were detected. Host, service, and resource adapters may be composed;
 the framework evaluates their union without depending on their platform APIs.
 Before execution:
 
 ```text
-missing = grant.classes() - adapters.capabilities()
+missing = grant.classes() - adapters.capabilities(host)
 ```
 
 An empty set may run. A non-empty set denies with

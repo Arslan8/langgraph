@@ -7,6 +7,7 @@ from .schema import (
     EnforcementAdapterModel,
     Enforcer,
     ExposureScore,
+    HostModel,
     ResourceClass,
     SinkDecision,
     SinkRecord,
@@ -14,17 +15,16 @@ from .schema import (
     ToolSinkReport,
 )
 
-HOST_ADAPTER = EnforcementAdapterModel(
-    "host",
-    frozenset(
-        {
-            ResourceClass.FILESYSTEM,
-            ResourceClass.NETWORK,
-            ResourceClass.EXEC,
-            ResourceClass.SYSCALL,
-        }
-    ),
+_HOST_CAPABILITIES = frozenset(
+    {
+        ResourceClass.FILESYSTEM,
+        ResourceClass.NETWORK,
+        ResourceClass.EXEC,
+        ResourceClass.SYSCALL,
+    }
 )
+E1_HOST = HostModel("e1-host-projection", _HOST_CAPABILITIES)
+HOST_ADAPTER = EnforcementAdapterModel("host", _HOST_CAPABILITIES)
 _SERVICE_CAPABILITIES = frozenset(
     {
         ResourceClass.SQL,
@@ -44,22 +44,27 @@ def score_defense(
     defense: Defense | str,
     *,
     adapters: EnforcementAdapterModel | None = None,
+    host: HostModel | None = None,
 ) -> ExposureScore:
     """Return exposed and mediated sets under one explicit mediation model.
 
     Only attacker-reachable sinks are scored. slangGraph requires an explicit
-    adapter model so its policy architecture is never conflated with Landlock,
-    Windows isolation, or any other particular lowering implementation. Adapter
-    models are E1 capability projections, not runtime attestations.
+    adapter and host models so its policy architecture is never conflated with
+    Landlock, Windows isolation, or any other particular lowering implementation.
+    E1 models are capability projections, not runtime attestations.
     """
     selected = Defense(defense)
     if selected is Defense.SLANGGRAPH and adapters is None:
         raise ValueError("slangGraph scoring requires an explicit adapter model")
-    if selected is not Defense.SLANGGRAPH and adapters is not None:
-        raise ValueError("adapter models apply only to slangGraph scoring")
+    if selected is Defense.SLANGGRAPH and host is None:
+        raise ValueError("slangGraph scoring requires an explicit host model")
+    if selected is not Defense.SLANGGRAPH and (adapters is not None or host is not None):
+        raise ValueError("adapter and host models apply only to slangGraph scoring")
     capabilities = adapters.capabilities if adapters is not None else frozenset()
+    host_capabilities = host.capabilities if host is not None else frozenset()
     decisions = tuple(
-        _decision(sink, selected, capabilities) for sink in report.attacker_reachable_sinks
+        _decision(sink, selected, capabilities, host_capabilities)
+        for sink in report.attacker_reachable_sinks
     )
     return ExposureScore(
         tool=report.tool,
@@ -69,6 +74,8 @@ def score_defense(
         decisions=decisions,
         adapter_model=adapters.name if adapters is not None else None,
         adapter_capabilities=tuple(sorted(capabilities, key=lambda item: item.value)),
+        host_model=host.name if host is not None else None,
+        host_capabilities=tuple(sorted(host_capabilities, key=lambda item: item.value)),
     )
 
 
@@ -76,6 +83,7 @@ def _decision(
     sink: SinkRecord,
     defense: Defense,
     capabilities: frozenset[ResourceClass],
+    host_capabilities: frozenset[ResourceClass],
 ) -> SinkDecision:
     if defense is Defense.NONE:
         return SinkDecision(sink.sink_id, False, "defense has no enforcing mediation point")
@@ -118,14 +126,24 @@ def _decision(
             "trusted-tagged or untagged data is transformed inside the tool",
         )
 
-    missing = sink.resource_classes - capabilities
-    if missing:
+    host_missing = (sink.resource_classes & _HOST_CAPABILITIES) - host_capabilities
+    adapter_missing = sink.resource_classes - capabilities
+    missing_reasons: list[str] = []
+    if host_missing:
+        missing_reasons.append(
+            "host lacks " + ", ".join(sorted(item.value for item in host_missing)) + " capability"
+        )
+    if adapter_missing:
+        missing_reasons.append(
+            "adapter set lacks "
+            + ", ".join(sorted(item.value for item in adapter_missing))
+            + " capability"
+        )
+    if missing_reasons:
         return SinkDecision(
             sink.sink_id,
             False,
-            "adapter set lacks "
-            + ", ".join(sorted(item.value for item in missing))
-            + " capability",
+            "; ".join(missing_reasons),
         )
     expected_enforcer = (
         Enforcer.BROKER if sink.resource_class in _SERVICE_CAPABILITIES else sink.required_enforcer

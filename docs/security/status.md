@@ -28,7 +28,7 @@ the target design; an accepted ADR is not evidence that its adapters exist.
 | 1. Profile grammar and monotonic DAC evaluator | Complete | The `.slp` grammar is frozen. |
 | 2. Attributed platform-neutral `Grant` IR and resource selectors | Not implemented | No `Grant` API is frozen. `ConstructiveGrant` is only the DAC candidate. |
 | 3. Cedar integration and reference forbid policies | Not implemented | Cedar request construction and module forbid emission are not frozen. |
-| 4. Enforcement-adapter interface, capability contract, attestation, audit changes, and `advisory` | Not implemented | Adapter and expanded audit contracts are not frozen. |
+| 4. `HostModel`, enforcement-adapter interface, capability negotiation, attestation, audit changes, and `advisory` | Not implemented | Host, adapter, and expanded audit contracts are not frozen. |
 | 5. Dedicated spawner and Linux reference adapter | Not implemented | There is no host-confinement claim. |
 
 The seven hook names and invocation structure are frozen. The detailed
@@ -66,7 +66,7 @@ kernel enforcement.
 
 ## Target security claim
 
-After phase-one steps 2 through 5 land and their capability contract passes,
+After phase-one steps 2 through 5 land and host/adapter capability negotiation passes,
 local untrusted tool code will run only under an attested adapter set or an explicit
 audited advisory exception. The final claim still excludes model final text,
 domain-level egress without a broker or proxy, kernel bugs, and remote APIs that

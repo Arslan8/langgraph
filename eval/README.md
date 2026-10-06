@@ -18,6 +18,9 @@ available on the deployment. Landlock plus seccomp is the planned Linux referenc
 adapter; Windows isolation, WASI, microVM, service-broker, and resource-side adapters
 can implement the same capability contract. E1 therefore names slangGraph adapter
 models by capability rather than treating a Linux mechanism as the architecture.
+It also records a separate host model. A projected adapter capability counts only
+when the host model provides the corresponding host-bound capability; otherwise
+the sink remains exposed with a `host lacks ... capability` decision.
 
 The shared static instrument emits one record for every filesystem, network,
 process, database/service, native, or dynamic sink reachable from a tool argument.
@@ -70,8 +73,8 @@ See `STATUS.md` for the exact completed/pending boundary and `reproduction/E0.md
 for baseline qualifications.
 
 The repository's current security layer does **not** yet contain the planned final
-Grant, Cedar policy adapter, enforcement-adapter contract, Linux reference adapter,
-or service adapters. Therefore a zero-exposure static projection for the composed
+Grant, Cedar policy adapter, host model, enforcement-adapter contract, Linux
+reference adapter, or service adapters. Therefore a zero-exposure static projection for the composed
 adapter model is a capability-model result, not runtime blocking evidence. No report
 may label a slangGraph adapter condition as dynamically verified until the selected
 adapters exist and emit enforcement audit records.

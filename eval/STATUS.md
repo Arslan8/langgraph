@@ -40,11 +40,12 @@ capability so partial results cannot be mistaken for completed experiments.
 ## Blocked by core implementation, not evaluation code
 
 The LangGraph security layer currently lacks the planned final `Grant` IR, Cedar
-policy adapter, enforcement-adapter contract, Linux reference worker, and service
-adapters. Consequently:
+policy adapter, attested `HostModel`, enforcement-adapter contract, Linux reference
+worker, and service adapters. Consequently:
 
 - E1 `slanggraph-host-adapter` and `slanggraph-composed-adapters` values are
-  static capability projections, independent of any particular platform lowering.
+  static capability projections. Their host availability comes from the explicitly
+  recorded `e1-host-projection`, not a runtime probe or attestation.
 - E2 cannot yet truthfully claim platform denial, service re-check, credential
   subset enforcement, or adapter audit evidence.
 - E3 and E5 slangGraph adapter rows cannot run.

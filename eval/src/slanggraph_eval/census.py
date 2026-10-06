@@ -13,6 +13,7 @@ from .audit import AuditWriter
 from .instrument import (
     ADVISORY_ADAPTER,
     COMPOSED_ADAPTERS,
+    E1_HOST,
     HOST_ADAPTER,
     Defense,
     EnforcementAdapterModel,
@@ -68,7 +69,12 @@ def generate_census(
         if report.parse_errors:
             raise ValueError(f"cannot analyze {tool.name}: {report.parse_errors}")
         scores = {
-            label: score_defense(report, defense, adapters=adapters)
+            label: score_defense(
+                report,
+                defense,
+                adapters=adapters,
+                host=E1_HOST if defense is Defense.SLANGGRAPH else None,
+            )
             for label, defense, adapters in _COLUMNS
         }
         row: dict[str, Any] = {
@@ -131,7 +137,7 @@ def _write_json(
     evidence: list[dict[str, Any]],
 ) -> None:
     payload = {
-        "schema_version": "1.1.0",
+        "schema_version": "1.2.0",
         "experiment": "E1",
         "instrument": "shared-static-sink-report",
         "manifest": _display_path(manifest_path),

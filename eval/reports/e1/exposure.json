@@ -4,7 +4,7 @@
       "cohort": "headline",
       "report": {
         "parse_errors": [],
-        "schema_version": "1.1.0",
+        "schema_version": "1.2.0",
         "sinks": [
           {
             "alternate_resource_classes": [],
@@ -74,10 +74,12 @@
           ],
           "defense": "camel",
           "exposed": [],
+          "host_capabilities": [],
+          "host_model": null,
           "mediated": [
             "781826adc422f5d5"
           ],
-          "schema_version": "1.1.0",
+          "schema_version": "1.2.0",
           "tool": "read_file"
         },
         "langchain-eydii": {
@@ -94,8 +96,10 @@
           "exposed": [
             "781826adc422f5d5"
           ],
+          "host_capabilities": [],
+          "host_model": null,
           "mediated": [],
-          "schema_version": "1.1.0",
+          "schema_version": "1.2.0",
           "tool": "read_file"
         },
         "langchain-forge": {
@@ -112,8 +116,10 @@
           "exposed": [
             "781826adc422f5d5"
           ],
+          "host_capabilities": [],
+          "host_model": null,
           "mediated": [],
-          "schema_version": "1.1.0",
+          "schema_version": "1.2.0",
           "tool": "read_file"
         },
         "langchain-nuggets": {
@@ -130,8 +136,10 @@
           "exposed": [
             "781826adc422f5d5"
           ],
+          "host_capabilities": [],
+          "host_model": null,
           "mediated": [],
-          "schema_version": "1.1.0",
+          "schema_version": "1.2.0",
           "tool": "read_file"
         },
         "none": {
@@ -148,8 +156,10 @@
           "exposed": [
             "781826adc422f5d5"
           ],
+          "host_capabilities": [],
+          "host_model": null,
           "mediated": [],
-          "schema_version": "1.1.0",
+          "schema_version": "1.2.0",
           "tool": "read_file"
         },
         "progent": {
@@ -166,8 +176,10 @@
           "exposed": [
             "781826adc422f5d5"
           ],
+          "host_capabilities": [],
+          "host_model": null,
           "mediated": [],
-          "schema_version": "1.1.0",
+          "schema_version": "1.2.0",
           "tool": "read_file"
         },
         "slanggraph-composed-adapters": {
@@ -191,10 +203,17 @@
           ],
           "defense": "slanggraph",
           "exposed": [],
+          "host_capabilities": [
+            "exec",
+            "filesystem",
+            "network",
+            "syscall"
+          ],
+          "host_model": "e1-host-projection",
           "mediated": [
             "781826adc422f5d5"
           ],
-          "schema_version": "1.1.0",
+          "schema_version": "1.2.0",
           "tool": "read_file"
         },
         "slanggraph-host-adapter": {
@@ -214,10 +233,17 @@
           ],
           "defense": "slanggraph",
           "exposed": [],
+          "host_capabilities": [
+            "exec",
+            "filesystem",
+            "network",
+            "syscall"
+          ],
+          "host_model": "e1-host-projection",
           "mediated": [
             "781826adc422f5d5"
           ],
-          "schema_version": "1.1.0",
+          "schema_version": "1.2.0",
           "tool": "read_file"
         },
         "slanggraph-policy-only": {
@@ -234,8 +260,15 @@
           "exposed": [
             "781826adc422f5d5"
           ],
+          "host_capabilities": [
+            "exec",
+            "filesystem",
+            "network",
+            "syscall"
+          ],
+          "host_model": "e1-host-projection",
           "mediated": [],
-          "schema_version": "1.1.0",
+          "schema_version": "1.2.0",
           "tool": "read_file"
         }
       },
@@ -245,7 +278,7 @@
       "cohort": "headline",
       "report": {
         "parse_errors": [],
-        "schema_version": "1.1.0",
+        "schema_version": "1.2.0",
         "sinks": [
           {
             "alternate_resource_classes": [],
@@ -328,10 +361,12 @@
           ],
           "defense": "camel",
           "exposed": [],
+          "host_capabilities": [],
+          "host_model": null,
           "mediated": [
             "f07ac3646aafa6a0"
           ],
-          "schema_version": "1.1.0",
+          "schema_version": "1.2.0",
           "tool": "write_file"
         },
         "langchain-eydii": {
@@ -348,8 +383,10 @@
           "exposed": [
             "f07ac3646aafa6a0"
           ],
+          "host_capabilities": [],
+          "host_model": null,
           "mediated": [],
-          "schema_version": "1.1.0",
+          "schema_version": "1.2.0",
           "tool": "write_file"
         },
         "langchain-forge": {
@@ -366,8 +403,10 @@
           "exposed": [
             "f07ac3646aafa6a0"
           ],
+          "host_capabilities": [],
+          "host_model": null,
           "mediated": [],
-          "schema_version": "1.1.0",
+          "schema_version": "1.2.0",
           "tool": "write_file"
         },
         "langchain-nuggets": {
@@ -384,8 +423,10 @@
           "exposed": [
             "f07ac3646aafa6a0"
           ],
+          "host_capabilities": [],
+          "host_model": null,
           "mediated": [],
-          "schema_version": "1.1.0",
+          "schema_version": "1.2.0",
           "tool": "write_file"
         },
         "none": {
@@ -402,8 +443,10 @@
           "exposed": [
             "f07ac3646aafa6a0"
           ],
+          "host_capabilities": [],
+          "host_model": null,
           "mediated": [],
-          "schema_version": "1.1.0",
+          "schema_version": "1.2.0",
           "tool": "write_file"
         },
         "progent": {
@@ -420,8 +463,10 @@
           "exposed": [
             "f07ac3646aafa6a0"
           ],
+          "host_capabilities": [],
+          "host_model": null,
           "mediated": [],
-          "schema_version": "1.1.0",
+          "schema_version": "1.2.0",
           "tool": "write_file"
         },
         "slanggraph-composed-adapters": {
@@ -445,10 +490,17 @@
           ],
           "defense": "slanggraph",
           "exposed": [],
+          "host_capabilities": [
+            "exec",
+            "filesystem",
+            "network",
+            "syscall"
+          ],
+          "host_model": "e1-host-projection",
           "mediated": [
             "f07ac3646aafa6a0"
           ],
-          "schema_version": "1.1.0",
+          "schema_version": "1.2.0",
           "tool": "write_file"
         },
         "slanggraph-host-adapter": {
@@ -468,10 +520,17 @@
           ],
           "defense": "slanggraph",
           "exposed": [],
+          "host_capabilities": [
+            "exec",
+            "filesystem",
+            "network",
+            "syscall"
+          ],
+          "host_model": "e1-host-projection",
           "mediated": [
             "f07ac3646aafa6a0"
           ],
-          "schema_version": "1.1.0",
+          "schema_version": "1.2.0",
           "tool": "write_file"
         },
         "slanggraph-policy-only": {
@@ -488,8 +547,15 @@
           "exposed": [
             "f07ac3646aafa6a0"
           ],
+          "host_capabilities": [
+            "exec",
+            "filesystem",
+            "network",
+            "syscall"
+          ],
+          "host_model": "e1-host-projection",
           "mediated": [],
-          "schema_version": "1.1.0",
+          "schema_version": "1.2.0",
           "tool": "write_file"
         }
       },
@@ -499,7 +565,7 @@
       "cohort": "headline",
       "report": {
         "parse_errors": [],
-        "schema_version": "1.1.0",
+        "schema_version": "1.2.0",
         "sinks": [
           {
             "alternate_resource_classes": [],
@@ -576,10 +642,12 @@
           ],
           "defense": "camel",
           "exposed": [],
+          "host_capabilities": [],
+          "host_model": null,
           "mediated": [
             "0c78cb9aa5a36701"
           ],
-          "schema_version": "1.1.0",
+          "schema_version": "1.2.0",
           "tool": "run_shell"
         },
         "langchain-eydii": {
@@ -596,8 +664,10 @@
           "exposed": [
             "0c78cb9aa5a36701"
           ],
+          "host_capabilities": [],
+          "host_model": null,
           "mediated": [],
-          "schema_version": "1.1.0",
+          "schema_version": "1.2.0",
           "tool": "run_shell"
         },
         "langchain-forge": {
@@ -614,8 +684,10 @@
           "exposed": [
             "0c78cb9aa5a36701"
           ],
+          "host_capabilities": [],
+          "host_model": null,
           "mediated": [],
-          "schema_version": "1.1.0",
+          "schema_version": "1.2.0",
           "tool": "run_shell"
         },
         "langchain-nuggets": {
@@ -632,8 +704,10 @@
           "exposed": [
             "0c78cb9aa5a36701"
           ],
+          "host_capabilities": [],
+          "host_model": null,
           "mediated": [],
-          "schema_version": "1.1.0",
+          "schema_version": "1.2.0",
           "tool": "run_shell"
         },
         "none": {
@@ -650,8 +724,10 @@
           "exposed": [
             "0c78cb9aa5a36701"
           ],
+          "host_capabilities": [],
+          "host_model": null,
           "mediated": [],
-          "schema_version": "1.1.0",
+          "schema_version": "1.2.0",
           "tool": "run_shell"
         },
         "progent": {
@@ -668,8 +744,10 @@
           "exposed": [
             "0c78cb9aa5a36701"
           ],
+          "host_capabilities": [],
+          "host_model": null,
           "mediated": [],
-          "schema_version": "1.1.0",
+          "schema_version": "1.2.0",
           "tool": "run_shell"
         },
         "slanggraph-composed-adapters": {
@@ -693,10 +771,17 @@
           ],
           "defense": "slanggraph",
           "exposed": [],
+          "host_capabilities": [
+            "exec",
+            "filesystem",
+            "network",
+            "syscall"
+          ],
+          "host_model": "e1-host-projection",
           "mediated": [
             "0c78cb9aa5a36701"
           ],
-          "schema_version": "1.1.0",
+          "schema_version": "1.2.0",
           "tool": "run_shell"
         },
         "slanggraph-host-adapter": {
@@ -716,10 +801,17 @@
           ],
           "defense": "slanggraph",
           "exposed": [],
+          "host_capabilities": [
+            "exec",
+            "filesystem",
+            "network",
+            "syscall"
+          ],
+          "host_model": "e1-host-projection",
           "mediated": [
             "0c78cb9aa5a36701"
           ],
-          "schema_version": "1.1.0",
+          "schema_version": "1.2.0",
           "tool": "run_shell"
         },
         "slanggraph-policy-only": {
@@ -736,8 +828,15 @@
           "exposed": [
             "0c78cb9aa5a36701"
           ],
+          "host_capabilities": [
+            "exec",
+            "filesystem",
+            "network",
+            "syscall"
+          ],
+          "host_model": "e1-host-projection",
           "mediated": [],
-          "schema_version": "1.1.0",
+          "schema_version": "1.2.0",
           "tool": "run_shell"
         }
       },
@@ -747,7 +846,7 @@
       "cohort": "headline",
       "report": {
         "parse_errors": [],
-        "schema_version": "1.1.0",
+        "schema_version": "1.2.0",
         "sinks": [
           {
             "alternate_resource_classes": [],
@@ -810,10 +909,12 @@
           ],
           "defense": "camel",
           "exposed": [],
+          "host_capabilities": [],
+          "host_model": null,
           "mediated": [
             "d6440253d158ff88"
           ],
-          "schema_version": "1.1.0",
+          "schema_version": "1.2.0",
           "tool": "sql_query"
         },
         "langchain-eydii": {
@@ -830,8 +931,10 @@
           "exposed": [
             "d6440253d158ff88"
           ],
+          "host_capabilities": [],
+          "host_model": null,
           "mediated": [],
-          "schema_version": "1.1.0",
+          "schema_version": "1.2.0",
           "tool": "sql_query"
         },
         "langchain-forge": {
@@ -848,8 +951,10 @@
           "exposed": [
             "d6440253d158ff88"
           ],
+          "host_capabilities": [],
+          "host_model": null,
           "mediated": [],
-          "schema_version": "1.1.0",
+          "schema_version": "1.2.0",
           "tool": "sql_query"
         },
         "langchain-nuggets": {
@@ -866,8 +971,10 @@
           "exposed": [
             "d6440253d158ff88"
           ],
+          "host_capabilities": [],
+          "host_model": null,
           "mediated": [],
-          "schema_version": "1.1.0",
+          "schema_version": "1.2.0",
           "tool": "sql_query"
         },
         "none": {
@@ -884,8 +991,10 @@
           "exposed": [
             "d6440253d158ff88"
           ],
+          "host_capabilities": [],
+          "host_model": null,
           "mediated": [],
-          "schema_version": "1.1.0",
+          "schema_version": "1.2.0",
           "tool": "sql_query"
         },
         "progent": {
@@ -902,8 +1011,10 @@
           "exposed": [
             "d6440253d158ff88"
           ],
+          "host_capabilities": [],
+          "host_model": null,
           "mediated": [],
-          "schema_version": "1.1.0",
+          "schema_version": "1.2.0",
           "tool": "sql_query"
         },
         "slanggraph-composed-adapters": {
@@ -927,10 +1038,17 @@
           ],
           "defense": "slanggraph",
           "exposed": [],
+          "host_capabilities": [
+            "exec",
+            "filesystem",
+            "network",
+            "syscall"
+          ],
+          "host_model": "e1-host-projection",
           "mediated": [
             "d6440253d158ff88"
           ],
-          "schema_version": "1.1.0",
+          "schema_version": "1.2.0",
           "tool": "sql_query"
         },
         "slanggraph-host-adapter": {
@@ -952,8 +1070,15 @@
           "exposed": [
             "d6440253d158ff88"
           ],
+          "host_capabilities": [
+            "exec",
+            "filesystem",
+            "network",
+            "syscall"
+          ],
+          "host_model": "e1-host-projection",
           "mediated": [],
-          "schema_version": "1.1.0",
+          "schema_version": "1.2.0",
           "tool": "sql_query"
         },
         "slanggraph-policy-only": {
@@ -970,8 +1095,15 @@
           "exposed": [
             "d6440253d158ff88"
           ],
+          "host_capabilities": [
+            "exec",
+            "filesystem",
+            "network",
+            "syscall"
+          ],
+          "host_model": "e1-host-projection",
           "mediated": [],
-          "schema_version": "1.1.0",
+          "schema_version": "1.2.0",
           "tool": "sql_query"
         }
       },
@@ -981,7 +1113,7 @@
       "cohort": "headline",
       "report": {
         "parse_errors": [],
-        "schema_version": "1.1.0",
+        "schema_version": "1.2.0",
         "sinks": [
           {
             "alternate_resource_classes": [
@@ -1031,10 +1163,12 @@
           ],
           "defense": "camel",
           "exposed": [],
+          "host_capabilities": [],
+          "host_model": null,
           "mediated": [
             "7504416f7948054a"
           ],
-          "schema_version": "1.1.0",
+          "schema_version": "1.2.0",
           "tool": "web_fetch"
         },
         "langchain-eydii": {
@@ -1051,8 +1185,10 @@
           "exposed": [
             "7504416f7948054a"
           ],
+          "host_capabilities": [],
+          "host_model": null,
           "mediated": [],
-          "schema_version": "1.1.0",
+          "schema_version": "1.2.0",
           "tool": "web_fetch"
         },
         "langchain-forge": {
@@ -1069,8 +1205,10 @@
           "exposed": [
             "7504416f7948054a"
           ],
+          "host_capabilities": [],
+          "host_model": null,
           "mediated": [],
-          "schema_version": "1.1.0",
+          "schema_version": "1.2.0",
           "tool": "web_fetch"
         },
         "langchain-nuggets": {
@@ -1087,8 +1225,10 @@
           "exposed": [
             "7504416f7948054a"
           ],
+          "host_capabilities": [],
+          "host_model": null,
           "mediated": [],
-          "schema_version": "1.1.0",
+          "schema_version": "1.2.0",
           "tool": "web_fetch"
         },
         "none": {
@@ -1105,8 +1245,10 @@
           "exposed": [
             "7504416f7948054a"
           ],
+          "host_capabilities": [],
+          "host_model": null,
           "mediated": [],
-          "schema_version": "1.1.0",
+          "schema_version": "1.2.0",
           "tool": "web_fetch"
         },
         "progent": {
@@ -1123,8 +1265,10 @@
           "exposed": [
             "7504416f7948054a"
           ],
+          "host_capabilities": [],
+          "host_model": null,
           "mediated": [],
-          "schema_version": "1.1.0",
+          "schema_version": "1.2.0",
           "tool": "web_fetch"
         },
         "slanggraph-composed-adapters": {
@@ -1148,10 +1292,17 @@
           ],
           "defense": "slanggraph",
           "exposed": [],
+          "host_capabilities": [
+            "exec",
+            "filesystem",
+            "network",
+            "syscall"
+          ],
+          "host_model": "e1-host-projection",
           "mediated": [
             "7504416f7948054a"
           ],
-          "schema_version": "1.1.0",
+          "schema_version": "1.2.0",
           "tool": "web_fetch"
         },
         "slanggraph-host-adapter": {
@@ -1171,10 +1322,17 @@
           ],
           "defense": "slanggraph",
           "exposed": [],
+          "host_capabilities": [
+            "exec",
+            "filesystem",
+            "network",
+            "syscall"
+          ],
+          "host_model": "e1-host-projection",
           "mediated": [
             "7504416f7948054a"
           ],
-          "schema_version": "1.1.0",
+          "schema_version": "1.2.0",
           "tool": "web_fetch"
         },
         "slanggraph-policy-only": {
@@ -1191,8 +1349,15 @@
           "exposed": [
             "7504416f7948054a"
           ],
+          "host_capabilities": [
+            "exec",
+            "filesystem",
+            "network",
+            "syscall"
+          ],
+          "host_model": "e1-host-projection",
           "mediated": [],
-          "schema_version": "1.1.0",
+          "schema_version": "1.2.0",
           "tool": "web_fetch"
         }
       },
@@ -1202,7 +1367,7 @@
       "cohort": "headline",
       "report": {
         "parse_errors": [],
-        "schema_version": "1.1.0",
+        "schema_version": "1.2.0",
         "sinks": [
           {
             "alternate_resource_classes": [],
@@ -1307,10 +1472,12 @@
           ],
           "defense": "camel",
           "exposed": [],
+          "host_capabilities": [],
+          "host_model": null,
           "mediated": [
             "36f7ca0ffb2ac0bb"
           ],
-          "schema_version": "1.1.0",
+          "schema_version": "1.2.0",
           "tool": "send_email"
         },
         "langchain-eydii": {
@@ -1327,8 +1494,10 @@
           "exposed": [
             "36f7ca0ffb2ac0bb"
           ],
+          "host_capabilities": [],
+          "host_model": null,
           "mediated": [],
-          "schema_version": "1.1.0",
+          "schema_version": "1.2.0",
           "tool": "send_email"
         },
         "langchain-forge": {
@@ -1345,8 +1514,10 @@
           "exposed": [
             "36f7ca0ffb2ac0bb"
           ],
+          "host_capabilities": [],
+          "host_model": null,
           "mediated": [],
-          "schema_version": "1.1.0",
+          "schema_version": "1.2.0",
           "tool": "send_email"
         },
         "langchain-nuggets": {
@@ -1363,8 +1534,10 @@
           "exposed": [
             "36f7ca0ffb2ac0bb"
           ],
+          "host_capabilities": [],
+          "host_model": null,
           "mediated": [],
-          "schema_version": "1.1.0",
+          "schema_version": "1.2.0",
           "tool": "send_email"
         },
         "none": {
@@ -1381,8 +1554,10 @@
           "exposed": [
             "36f7ca0ffb2ac0bb"
           ],
+          "host_capabilities": [],
+          "host_model": null,
           "mediated": [],
-          "schema_version": "1.1.0",
+          "schema_version": "1.2.0",
           "tool": "send_email"
         },
         "progent": {
@@ -1399,8 +1574,10 @@
           "exposed": [
             "36f7ca0ffb2ac0bb"
           ],
+          "host_capabilities": [],
+          "host_model": null,
           "mediated": [],
-          "schema_version": "1.1.0",
+          "schema_version": "1.2.0",
           "tool": "send_email"
         },
         "slanggraph-composed-adapters": {
@@ -1424,10 +1601,17 @@
           ],
           "defense": "slanggraph",
           "exposed": [],
+          "host_capabilities": [
+            "exec",
+            "filesystem",
+            "network",
+            "syscall"
+          ],
+          "host_model": "e1-host-projection",
           "mediated": [
             "36f7ca0ffb2ac0bb"
           ],
-          "schema_version": "1.1.0",
+          "schema_version": "1.2.0",
           "tool": "send_email"
         },
         "slanggraph-host-adapter": {
@@ -1449,8 +1633,15 @@
           "exposed": [
             "36f7ca0ffb2ac0bb"
           ],
+          "host_capabilities": [
+            "exec",
+            "filesystem",
+            "network",
+            "syscall"
+          ],
+          "host_model": "e1-host-projection",
           "mediated": [],
-          "schema_version": "1.1.0",
+          "schema_version": "1.2.0",
           "tool": "send_email"
         },
         "slanggraph-policy-only": {
@@ -1467,8 +1658,15 @@
           "exposed": [
             "36f7ca0ffb2ac0bb"
           ],
+          "host_capabilities": [
+            "exec",
+            "filesystem",
+            "network",
+            "syscall"
+          ],
+          "host_model": "e1-host-projection",
           "mediated": [],
-          "schema_version": "1.1.0",
+          "schema_version": "1.2.0",
           "tool": "send_email"
         }
       },
@@ -1478,7 +1676,7 @@
       "cohort": "headline",
       "report": {
         "parse_errors": [],
-        "schema_version": "1.1.0",
+        "schema_version": "1.2.0",
         "sinks": [
           {
             "alternate_resource_classes": [],
@@ -1547,10 +1745,12 @@
           ],
           "defense": "camel",
           "exposed": [],
+          "host_capabilities": [],
+          "host_model": null,
           "mediated": [
             "b7d103dd1b7faf60"
           ],
-          "schema_version": "1.1.0",
+          "schema_version": "1.2.0",
           "tool": "post_to_slack"
         },
         "langchain-eydii": {
@@ -1567,8 +1767,10 @@
           "exposed": [
             "b7d103dd1b7faf60"
           ],
+          "host_capabilities": [],
+          "host_model": null,
           "mediated": [],
-          "schema_version": "1.1.0",
+          "schema_version": "1.2.0",
           "tool": "post_to_slack"
         },
         "langchain-forge": {
@@ -1585,8 +1787,10 @@
           "exposed": [
             "b7d103dd1b7faf60"
           ],
+          "host_capabilities": [],
+          "host_model": null,
           "mediated": [],
-          "schema_version": "1.1.0",
+          "schema_version": "1.2.0",
           "tool": "post_to_slack"
         },
         "langchain-nuggets": {
@@ -1603,8 +1807,10 @@
           "exposed": [
             "b7d103dd1b7faf60"
           ],
+          "host_capabilities": [],
+          "host_model": null,
           "mediated": [],
-          "schema_version": "1.1.0",
+          "schema_version": "1.2.0",
           "tool": "post_to_slack"
         },
         "none": {
@@ -1621,8 +1827,10 @@
           "exposed": [
             "b7d103dd1b7faf60"
           ],
+          "host_capabilities": [],
+          "host_model": null,
           "mediated": [],
-          "schema_version": "1.1.0",
+          "schema_version": "1.2.0",
           "tool": "post_to_slack"
         },
         "progent": {
@@ -1639,8 +1847,10 @@
           "exposed": [
             "b7d103dd1b7faf60"
           ],
+          "host_capabilities": [],
+          "host_model": null,
           "mediated": [],
-          "schema_version": "1.1.0",
+          "schema_version": "1.2.0",
           "tool": "post_to_slack"
         },
         "slanggraph-composed-adapters": {
@@ -1664,10 +1874,17 @@
           ],
           "defense": "slanggraph",
           "exposed": [],
+          "host_capabilities": [
+            "exec",
+            "filesystem",
+            "network",
+            "syscall"
+          ],
+          "host_model": "e1-host-projection",
           "mediated": [
             "b7d103dd1b7faf60"
           ],
-          "schema_version": "1.1.0",
+          "schema_version": "1.2.0",
           "tool": "post_to_slack"
         },
         "slanggraph-host-adapter": {
@@ -1689,8 +1906,15 @@
           "exposed": [
             "b7d103dd1b7faf60"
           ],
+          "host_capabilities": [
+            "exec",
+            "filesystem",
+            "network",
+            "syscall"
+          ],
+          "host_model": "e1-host-projection",
           "mediated": [],
-          "schema_version": "1.1.0",
+          "schema_version": "1.2.0",
           "tool": "post_to_slack"
         },
         "slanggraph-policy-only": {
@@ -1707,8 +1931,15 @@
           "exposed": [
             "b7d103dd1b7faf60"
           ],
+          "host_capabilities": [
+            "exec",
+            "filesystem",
+            "network",
+            "syscall"
+          ],
+          "host_model": "e1-host-projection",
           "mediated": [],
-          "schema_version": "1.1.0",
+          "schema_version": "1.2.0",
           "tool": "post_to_slack"
         }
       },
@@ -1718,7 +1949,7 @@
       "cohort": "headline",
       "report": {
         "parse_errors": [],
-        "schema_version": "1.1.0",
+        "schema_version": "1.2.0",
         "sinks": [
           {
             "alternate_resource_classes": [],
@@ -1771,10 +2002,12 @@
           ],
           "defense": "camel",
           "exposed": [],
+          "host_capabilities": [],
+          "host_model": null,
           "mediated": [
             "d03705e874b16ca6"
           ],
-          "schema_version": "1.1.0",
+          "schema_version": "1.2.0",
           "tool": "delegate_to_subagent"
         },
         "langchain-eydii": {
@@ -1791,8 +2024,10 @@
           "exposed": [
             "d03705e874b16ca6"
           ],
+          "host_capabilities": [],
+          "host_model": null,
           "mediated": [],
-          "schema_version": "1.1.0",
+          "schema_version": "1.2.0",
           "tool": "delegate_to_subagent"
         },
         "langchain-forge": {
@@ -1809,8 +2044,10 @@
           "exposed": [
             "d03705e874b16ca6"
           ],
+          "host_capabilities": [],
+          "host_model": null,
           "mediated": [],
-          "schema_version": "1.1.0",
+          "schema_version": "1.2.0",
           "tool": "delegate_to_subagent"
         },
         "langchain-nuggets": {
@@ -1827,8 +2064,10 @@
           "exposed": [
             "d03705e874b16ca6"
           ],
+          "host_capabilities": [],
+          "host_model": null,
           "mediated": [],
-          "schema_version": "1.1.0",
+          "schema_version": "1.2.0",
           "tool": "delegate_to_subagent"
         },
         "none": {
@@ -1845,8 +2084,10 @@
           "exposed": [
             "d03705e874b16ca6"
           ],
+          "host_capabilities": [],
+          "host_model": null,
           "mediated": [],
-          "schema_version": "1.1.0",
+          "schema_version": "1.2.0",
           "tool": "delegate_to_subagent"
         },
         "progent": {
@@ -1861,10 +2102,12 @@
           ],
           "defense": "progent",
           "exposed": [],
+          "host_capabilities": [],
+          "host_model": null,
           "mediated": [
             "d03705e874b16ca6"
           ],
-          "schema_version": "1.1.0",
+          "schema_version": "1.2.0",
           "tool": "delegate_to_subagent"
         },
         "slanggraph-composed-adapters": {
@@ -1888,10 +2131,17 @@
           ],
           "defense": "slanggraph",
           "exposed": [],
+          "host_capabilities": [
+            "exec",
+            "filesystem",
+            "network",
+            "syscall"
+          ],
+          "host_model": "e1-host-projection",
           "mediated": [
             "d03705e874b16ca6"
           ],
-          "schema_version": "1.1.0",
+          "schema_version": "1.2.0",
           "tool": "delegate_to_subagent"
         },
         "slanggraph-host-adapter": {
@@ -1913,8 +2163,15 @@
           "exposed": [
             "d03705e874b16ca6"
           ],
+          "host_capabilities": [
+            "exec",
+            "filesystem",
+            "network",
+            "syscall"
+          ],
+          "host_model": "e1-host-projection",
           "mediated": [],
-          "schema_version": "1.1.0",
+          "schema_version": "1.2.0",
           "tool": "delegate_to_subagent"
         },
         "slanggraph-policy-only": {
@@ -1931,8 +2188,15 @@
           "exposed": [
             "d03705e874b16ca6"
           ],
+          "host_capabilities": [
+            "exec",
+            "filesystem",
+            "network",
+            "syscall"
+          ],
+          "host_model": "e1-host-projection",
           "mediated": [],
-          "schema_version": "1.1.0",
+          "schema_version": "1.2.0",
           "tool": "delegate_to_subagent"
         }
       },
@@ -1942,7 +2206,7 @@
       "cohort": "auxiliary",
       "report": {
         "parse_errors": [],
-        "schema_version": "1.1.0",
+        "schema_version": "1.2.0",
         "sinks": [
           {
             "alternate_resource_classes": [],
@@ -2026,8 +2290,10 @@
           "exposed": [
             "0dcf2c0feb8604e3"
           ],
+          "host_capabilities": [],
+          "host_model": null,
           "mediated": [],
-          "schema_version": "1.1.0",
+          "schema_version": "1.2.0",
           "tool": "camel_argument_hijack"
         },
         "langchain-eydii": {
@@ -2044,8 +2310,10 @@
           "exposed": [
             "0dcf2c0feb8604e3"
           ],
+          "host_capabilities": [],
+          "host_model": null,
           "mediated": [],
-          "schema_version": "1.1.0",
+          "schema_version": "1.2.0",
           "tool": "camel_argument_hijack"
         },
         "langchain-forge": {
@@ -2062,8 +2330,10 @@
           "exposed": [
             "0dcf2c0feb8604e3"
           ],
+          "host_capabilities": [],
+          "host_model": null,
           "mediated": [],
-          "schema_version": "1.1.0",
+          "schema_version": "1.2.0",
           "tool": "camel_argument_hijack"
         },
         "langchain-nuggets": {
@@ -2080,8 +2350,10 @@
           "exposed": [
             "0dcf2c0feb8604e3"
           ],
+          "host_capabilities": [],
+          "host_model": null,
           "mediated": [],
-          "schema_version": "1.1.0",
+          "schema_version": "1.2.0",
           "tool": "camel_argument_hijack"
         },
         "none": {
@@ -2098,8 +2370,10 @@
           "exposed": [
             "0dcf2c0feb8604e3"
           ],
+          "host_capabilities": [],
+          "host_model": null,
           "mediated": [],
-          "schema_version": "1.1.0",
+          "schema_version": "1.2.0",
           "tool": "camel_argument_hijack"
         },
         "progent": {
@@ -2116,8 +2390,10 @@
           "exposed": [
             "0dcf2c0feb8604e3"
           ],
+          "host_capabilities": [],
+          "host_model": null,
           "mediated": [],
-          "schema_version": "1.1.0",
+          "schema_version": "1.2.0",
           "tool": "camel_argument_hijack"
         },
         "slanggraph-composed-adapters": {
@@ -2141,10 +2417,17 @@
           ],
           "defense": "slanggraph",
           "exposed": [],
+          "host_capabilities": [
+            "exec",
+            "filesystem",
+            "network",
+            "syscall"
+          ],
+          "host_model": "e1-host-projection",
           "mediated": [
             "0dcf2c0feb8604e3"
           ],
-          "schema_version": "1.1.0",
+          "schema_version": "1.2.0",
           "tool": "camel_argument_hijack"
         },
         "slanggraph-host-adapter": {
@@ -2164,10 +2447,17 @@
           ],
           "defense": "slanggraph",
           "exposed": [],
+          "host_capabilities": [
+            "exec",
+            "filesystem",
+            "network",
+            "syscall"
+          ],
+          "host_model": "e1-host-projection",
           "mediated": [
             "0dcf2c0feb8604e3"
           ],
-          "schema_version": "1.1.0",
+          "schema_version": "1.2.0",
           "tool": "camel_argument_hijack"
         },
         "slanggraph-policy-only": {
@@ -2184,8 +2474,15 @@
           "exposed": [
             "0dcf2c0feb8604e3"
           ],
+          "host_capabilities": [
+            "exec",
+            "filesystem",
+            "network",
+            "syscall"
+          ],
+          "host_model": "e1-host-projection",
           "mediated": [],
-          "schema_version": "1.1.0",
+          "schema_version": "1.2.0",
           "tool": "camel_argument_hijack"
         }
       },
@@ -2324,6 +2621,6 @@
     }
   ],
   "runtime_verified": false,
-  "schema_version": "1.1.0",
+  "schema_version": "1.2.0",
   "source": "vulntools/tools.py"
 }
