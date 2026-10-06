@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import re
 from pathlib import Path
 
 from langgraph.prebuilt import security
@@ -29,3 +30,20 @@ def test_security_docs_use_single_backticks() -> None:
     """Repository documentation follows the inline-code formatting rule."""
     for document in _SECURITY_DOCS.rglob("*.md"):
         assert "``" not in document.read_text().replace("```", "")
+
+
+def test_every_public_export_is_documented() -> None:
+    """Every promised symbol has an explicit entry in the API reference."""
+    document = (_SECURITY_DOCS / "api.md").read_text()
+    missing = [name for name in security.__all__ if f"`{name}`" not in document]
+    assert missing == []
+
+
+def test_security_docs_relative_links_resolve() -> None:
+    """Keep the security documentation navigable inside the repository."""
+    for document in _SECURITY_DOCS.rglob("*.md"):
+        for target in re.findall(r"\[[^]]+\]\(([^)]+)\)", document.read_text()):
+            path = target.split("#", 1)[0]
+            if not path or "://" in path or path.startswith("/"):
+                continue
+            assert (document.parent / path).exists(), (document, target)

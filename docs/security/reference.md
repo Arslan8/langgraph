@@ -4,6 +4,10 @@ The public API lives in `langgraph.prebuilt.security`. No security dependency is
 added to LangGraph core; `StateGraph.compile(security=...)` uses a small
 configuration protocol implemented by `SecurityConfig`.
 
+This page explains behavior and invariants. See the [public API reference](api.md)
+for every exported symbol and the [implementation status](status.md) for the
+boundary between shipped and planned enforcement.
+
 ## Tool declarations
 
 Use `@effects(...)` to declare side effects, resource-bearing arguments,

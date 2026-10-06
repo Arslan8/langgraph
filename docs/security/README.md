@@ -6,11 +6,13 @@ tamper-evident auditing, and redacted observability. It is opt-in: omitting
 `security` preserves the existing execution path.
 
 Start with the [10-line HOWTO](HOWTO.md), then use the
-[API and behavior reference](reference.md). Existing applications should follow
-the [migration guide](migration.md). The constructive DAC language is specified
-by the [frozen `.slp` profile grammar](profiles.md). The design rationale is
-recorded in the [`adr/`](adr/) directory. Three runnable examples live in
-[`examples/`](examples/README.md).
+[behavior reference](reference.md) and [complete public API reference](api.md).
+Existing applications should follow the [migration guide](migration.md) and
+[worked patterns](workflows.md). The constructive DAC language is specified by
+the [frozen `.slp` profile grammar](profiles.md). The [implementation status](status.md)
+separates shipped behavior from the kernel-enforcement roadmap. The design
+rationale is recorded in the [`adr/`](adr/) directory. Three runnable examples
+live in [`examples/`](examples/README.md).
 
 ## Security boundary
 
