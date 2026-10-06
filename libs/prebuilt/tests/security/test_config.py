@@ -12,6 +12,7 @@ from langgraph.prebuilt.security import (
     DacOverrides,
     MemoryAuditSink,
     SecurityConfig,
+    SecurityConfigurationError,
     SecurityModule,
     ToolDac,
     ToolProfile,
@@ -125,3 +126,14 @@ def test_unknown_constructor_override_is_rejected() -> None:
                 dac_overrides=DacOverrides({"misspelled": override})
             ),
         )
+
+
+def test_secured_tool_node_cannot_be_reconfigured() -> None:
+    """A nested or later configuration cannot replace an established boundary."""
+    first = SecurityConfig()
+    node = ToolNode([configured_tool], security=first)
+
+    with pytest.raises(SecurityConfigurationError, match="cannot be reconfigured"):
+        SecurityConfig().configure_tool_node(node)
+
+    assert node._security_config is first

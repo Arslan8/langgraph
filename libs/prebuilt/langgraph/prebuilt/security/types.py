@@ -50,6 +50,14 @@ class Slot(MutableMapping[str, Any]):
         """Return an independent slot initialized from this slot."""
         return Slot(self.snapshot())
 
+    def put_if_absent(self, key: str, value: Any) -> bool:
+        """Atomically store a value only when the key has not been used."""
+        with self._lock:
+            if key in self._values:
+                return False
+            self._values[key] = value
+            return True
+
 
 class Blobs(Mapping[str, Slot]):
     """Map security-module names to their private mutable slots."""
@@ -131,6 +139,15 @@ class Verdict(str, Enum):
     ESCALATE = "escalate"
 
 
+class ExecutionOutcome(str, Enum):
+    """Durable execution state recorded independently of an authorization verdict."""
+
+    DENIED_BEFORE_DISPATCH = "denied_before_dispatch"
+    SUCCEEDED = "succeeded"
+    FAILED = "failed"
+    INDETERMINATE = "indeterminate"
+
+
 @dataclass(frozen=True, slots=True)
 class EscalationRequest:
     """Redacted human-approval request emitted by a policy module."""
@@ -140,11 +157,15 @@ class EscalationRequest:
     tool_name: str
     call_id: str
     metadata: Mapping[str, Any] = field(default_factory=dict)
+    subject_digest: str = ""
+    expires_at: float | None = None
 
     def __post_init__(self) -> None:
         if not all((self.request_id, self.reason, self.tool_name, self.call_id)):
             raise ValueError("escalation identifiers and reason must be non-empty")
         object.__setattr__(self, "metadata", MappingProxyType(dict(self.metadata)))
+        if self.expires_at is not None and self.expires_at <= 0:
+            raise ValueError("escalation expiry must be positive")
 
     def to_payload(self) -> Mapping[str, Any]:
         """Return the argument-free payload passed to LangGraph `interrupt()`."""
@@ -156,6 +177,8 @@ class EscalationRequest:
                 "tool_name": self.tool_name,
                 "call_id": self.call_id,
                 "metadata": dict(self.metadata),
+                "subject_digest": self.subject_digest,
+                "expires_at": self.expires_at,
             }
         )
 
@@ -168,6 +191,7 @@ class Approval:
     approved: bool
     approver: str
     reason: str = ""
+    subject_digest: str = ""
 
     def __post_init__(self) -> None:
         if not self.request_id or not self.approver:
@@ -212,6 +236,7 @@ class AuditRecord:
     prev_hash: str = ""
     hash: str = ""
     session_id: str = ""
+    outcome: ExecutionOutcome | None = None
 
     def __post_init__(self) -> None:
         if self.call_index < 0:

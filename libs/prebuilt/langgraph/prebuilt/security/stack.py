@@ -3,7 +3,10 @@
 from __future__ import annotations
 
 import asyncio
+import hashlib
 import inspect
+import json
+import time
 from collections.abc import Callable, Mapping, Sequence
 from concurrent.futures import ThreadPoolExecutor
 from concurrent.futures import TimeoutError as FutureTimeoutError
@@ -25,6 +28,8 @@ from langgraph.prebuilt.security.types import (
     Approval,
     AuditSink,
     Decision,
+    EscalationRequest,
+    ExecutionOutcome,
     Principal,
     Slot,
     ToolCall,
@@ -68,9 +73,12 @@ class SecurityStack:
         policy_timeout_s: float = 2.0,
         observer: SecurityObserver | None = None,
         audit_sink: AuditSink | None = None,
+        approval_ttl_s: float = 300.0,
     ) -> None:
         if policy_timeout_s <= 0:
             raise ValueError("policy_timeout_s must be positive")
+        if approval_ttl_s <= 0:
+            raise ValueError("approval_ttl_s must be positive")
         if any(module.name == "cap" for module in modules):
             raise ValueError("cap is framework-managed and cannot be registered")
         names = [module.name for module in modules]
@@ -78,6 +86,7 @@ class SecurityStack:
             raise ValueError("security module names must be unique and non-empty")
         self.modules = (CapModule(), *modules)
         self.policy_timeout_s = policy_timeout_s
+        self.approval_ttl_s = approval_ttl_s
         self.observer = compose_observer(observer, audit_sink)
         self.audit_events = audit_sink is not None
         self._executor = ThreadPoolExecutor(
@@ -107,6 +116,7 @@ class SecurityStack:
             decision = self._sync_decision(
                 module, partial(module.tool_call_permission, principal, call)
             )
+            decision = self._bind_escalation(module, principal, call, decision)
             if _matches_approval(decision, call, approval):
                 decision = Decision(Verdict.ALLOW, f"approval:{module.name}")
             self._observe(principal, call, "permission", module.name, decision, started)
@@ -132,6 +142,7 @@ class SecurityStack:
             decision = await self._async_decision(
                 module, partial(module.tool_call_permission, principal, call)
             )
+            decision = self._bind_escalation(module, principal, call, decision)
             if _matches_approval(decision, call, approval):
                 decision = Decision(Verdict.ALLOW, f"approval:{module.name}")
             self._observe(principal, call, "permission", module.name, decision, started)
@@ -312,6 +323,26 @@ class SecurityStack:
                 return decision
         return Decision(Verdict.ALLOW, "post:complete")
 
+    def record_framework_event(
+        self,
+        principal: Principal,
+        call: ToolCall,
+        stage: str,
+        decision: Decision,
+        *,
+        outcome: ExecutionOutcome | None = None,
+    ) -> None:
+        """Persist a framework execution-boundary event through the audit path."""
+        self._observe(
+            principal,
+            call,
+            stage,
+            "framework",
+            decision,
+            self._started(),
+            outcome=outcome,
+        )
+
     def _restrictive_sync(
         self,
         hook: Callable[[SecurityModule], Any],
@@ -353,6 +384,8 @@ class SecurityStack:
         module: str,
         decision: Decision,
         started: float | None,
+        *,
+        outcome: ExecutionOutcome | None = None,
     ) -> None:
         if self.observer is None or started is None:
             return
@@ -368,6 +401,7 @@ class SecurityStack:
                 tool_name=call.tool.name if call is not None else None,
                 call_index=call.call_index if call is not None else None,
                 args_hash=hash_args(call.args) if call is not None else "",
+                outcome=outcome,
             )
         )
 
@@ -390,6 +424,38 @@ class SecurityStack:
         if not isinstance(result, Decision):
             return Decision(Verdict.DENY, f"module_error:{module.name}")
         return result
+
+    def _bind_escalation(
+        self,
+        module: SecurityModule,
+        principal: Principal,
+        call: ToolCall,
+        decision: Decision,
+    ) -> Decision:
+        escalation = decision.escalation
+        if decision.verdict is not Verdict.ESCALATE or escalation is None:
+            return decision
+        payload = {
+            "args": dict(call.args),
+            "call_id": call.call_id,
+            "delegated_by": principal.delegated_by,
+            "module": module.name,
+            "normalized": dict(call.normalized),
+            "roles": sorted(principal.roles),
+            "scopes": sorted(principal.scopes),
+            "session_id": principal.session_id,
+            "tool": call.tool.name,
+            "user_id": principal.user_id,
+        }
+        encoded = json.dumps(
+            payload, sort_keys=True, default=repr, separators=(",", ":")
+        ).encode()
+        bound = replace(
+            escalation,
+            subject_digest=hashlib.sha256(encoded).hexdigest(),
+            expires_at=time.time() + self.approval_ttl_s,
+        )
+        return replace(decision, escalation=bound)
 
     async def _async_decision(
         self, module: SecurityModule, hook: Callable[[], Any]
@@ -418,9 +484,69 @@ class SecurityStack:
         return result
 
 
-def record_approval(principal: Principal, approval: Approval) -> None:
-    """Store redacted approval input in the framework-owned capability slot."""
-    principal.security.allocate("cap")[f"approval:{approval.request_id}"] = approval
+def record_approval(principal: Principal, approval: Approval) -> bool:
+    """Atomically record one approval and reject reuse of its request ID."""
+    slot = principal.security.allocate("cap")
+    return slot.put_if_absent(f"approval:{approval.request_id}", approval)
+
+
+def coerce_approval(response: Any, escalation: EscalationRequest) -> Approval:
+    """Bind an interrupt response to the framework-generated approval subject."""
+    request_id = escalation.request_id
+    subject_digest = escalation.subject_digest
+    if isinstance(response, Approval):
+        if response.request_id != request_id:
+            return Approval(
+                request_id,
+                False,
+                "framework",
+                "request_id_mismatch",
+                subject_digest,
+            )
+        if response.subject_digest not in ("", subject_digest):
+            return Approval(
+                request_id,
+                False,
+                "framework",
+                "subject_digest_mismatch",
+                subject_digest,
+            )
+        return replace(response, subject_digest=subject_digest)
+    if isinstance(response, bool):
+        return Approval(request_id, response, "human", subject_digest=subject_digest)
+    if isinstance(response, Mapping):
+        response_id = str(response.get("request_id", request_id))
+        if response_id != request_id:
+            return Approval(
+                request_id,
+                False,
+                "framework",
+                "request_id_mismatch",
+                subject_digest,
+            )
+        response_digest = str(response.get("subject_digest", subject_digest))
+        if response_digest != subject_digest:
+            return Approval(
+                request_id,
+                False,
+                "framework",
+                "subject_digest_mismatch",
+                subject_digest,
+            )
+        return Approval(
+            request_id,
+            response.get("approved") is True,
+            str(response.get("approver", "human")),
+            str(response.get("reason", "")),
+            subject_digest,
+        )
+    return Approval(
+        request_id,
+        False,
+        "framework",
+        "invalid_response",
+        subject_digest,
+    )
 
 
 def _matches_approval(
@@ -435,6 +561,9 @@ def _matches_approval(
         and escalation.request_id == approval.request_id
         and escalation.call_id == call.call_id
         and escalation.tool_name == call.tool.name
+        and bool(escalation.subject_digest)
+        and approval.subject_digest == escalation.subject_digest
+        and (escalation.expires_at is None or time.time() <= escalation.expires_at)
     )
 
 

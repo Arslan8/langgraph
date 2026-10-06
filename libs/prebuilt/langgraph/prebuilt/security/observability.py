@@ -11,7 +11,13 @@ from dataclasses import asdict, dataclass
 from threading import RLock
 from typing import Any, Protocol, runtime_checkable
 
-from langgraph.prebuilt.security.types import AuditRecord, AuditSink, Verdict
+from langgraph.prebuilt.security.errors import SecurityAuditError
+from langgraph.prebuilt.security.types import (
+    AuditRecord,
+    AuditSink,
+    ExecutionOutcome,
+    Verdict,
+)
 
 
 @dataclass(frozen=True, slots=True)
@@ -28,6 +34,7 @@ class SecurityEvent:
     call_index: int | None = None
     args_hash: str = ""
     session_id: str = ""
+    outcome: ExecutionOutcome | None = None
 
     def attributes(self) -> Mapping[str, str | int | float]:
         """Return low-cardinality attributes suitable for traces and logs."""
@@ -115,14 +122,24 @@ class OpenTelemetrySecurityObserver:
 
 
 class _CompositeSecurityObserver:
-    def __init__(self, observers: Sequence[SecurityObserver]) -> None:
+    def __init__(
+        self,
+        observers: Sequence[SecurityObserver],
+        *,
+        critical: Sequence[SecurityObserver] = (),
+    ) -> None:
         self.observers = tuple(observers)
+        self.critical = frozenset(id(observer) for observer in critical)
 
     def record(self, event: SecurityEvent) -> None:
         for observer in self.observers:
             try:
                 observer.record(event)
-            except Exception:
+            except Exception as exc:
+                if id(observer) in self.critical:
+                    raise SecurityAuditError(
+                        "required security audit write failed"
+                    ) from exc
                 logging.getLogger("langgraph.security").exception(
                     "security observer failed"
                 )
@@ -146,6 +163,7 @@ class _AuditSecurityObserver:
                 verdict=event.verdict,
                 reason=event.reason,
                 session_id=event.session_id,
+                outcome=event.outcome,
             )
         )
 
@@ -155,13 +173,16 @@ def compose_observer(
 ) -> SecurityObserver | None:
     """Combine optional telemetry and audit consumers."""
     observers: list[SecurityObserver] = []
+    critical: list[SecurityObserver] = []
     if observer is not None:
         observers.append(observer)
     if audit_sink is not None:
-        observers.append(_AuditSecurityObserver(audit_sink))
+        audit_observer = _AuditSecurityObserver(audit_sink)
+        observers.append(audit_observer)
+        critical.append(audit_observer)
     if not observers:
         return None
-    return _CompositeSecurityObserver(observers)
+    return _CompositeSecurityObserver(observers, critical=critical)
 
 
 def hash_args(args: Mapping[str, Any]) -> str:

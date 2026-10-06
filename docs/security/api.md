@@ -61,6 +61,7 @@ confine the implementation.
 | `with_principal` | Copies a runnable config, prepares module credential slots, and binds the authenticated principal outside graph state. |
 | `principal_from` | Reads the bound principal from runnable config or runtime context and returns `None` when absent. Invalid reserved values fail closed. |
 | `SecurityBindingError` | Raised when a module fails while preparing a principal binding. |
+| `SecurityConfigurationError` | Raised when secured execution would lose its explicit or inherited configuration. |
 
 `Principal`, `Tool`, and `ToolCall` are frozen records. Their nested `Blobs`
 remain mutable only through module-owned slots.
@@ -70,6 +71,7 @@ remain mutable only through module-owned slots.
 | Name | Contract |
 | --- | --- |
 | `Verdict` | Enum containing `ALLOW`, `DENY`, `TRANSFORM`, and `ESCALATE`. |
+| `ExecutionOutcome` | Durable execution state: denied before dispatch, succeeded, failed, or indeterminate. It is separate from an authorization verdict. |
 | `Decision` | Immutable verdict plus a reason. `TRANSFORM` requires `new_args`; `ESCALATE` requires an `EscalationRequest`; allow and deny carry neither. |
 | `EscalationRequest` | Redacted request ID, reason, tool and call IDs, and safe metadata. `to_payload()` never includes tool arguments. |
 | `Approval` | Human response containing request ID, boolean decision, approver, and optional reason. |
@@ -78,6 +80,8 @@ remain mutable only through module-owned slots.
 | `SecurityStack` | Restrictive composition engine for DAC, capability checks, ordered modules, timeout handling, audit, and observation. Application code normally creates `SecurityConfig` instead. |
 | `SecurityConfig` | Frozen configuration for modules, DAC overrides, audit sink, observer, policy timeout, and principal requirement. It configures `ToolNode` directly or through `StateGraph.compile`. |
 | `SecurityDeniedError` | `PermissionError` subclass raised when a guarded direct call or delegation is denied. `ToolNode` instead returns an error `ToolMessage`. |
+| `SecurityAuditError` | Raised when a required audit record cannot be persisted before dispatch. |
+| `SecurityIndeterminateError` | Raised after dispatch when the operation may have executed but its outcome cannot be durably recorded. |
 | `guarded_tool` | Wraps a callable or `BaseTool` so direct sync and async invocation crosses the same security stack as `ToolNode`. Other aliases to the original callable remain unguarded. |
 | `delegate` | Wraps a child runnable with an explicit scope subset, independent copied blobs, and `delegated_by` provenance. Scope growth is denied. |
 
@@ -85,11 +89,44 @@ Modules are independently restrictive. An allow never overrides another deny.
 Malformed return values, exceptions, and timeouts become denials. A transform is
 normalized and checked by DAC again before permission hooks run.
 
+## Exact grants and enforcement activation
+
+These types implement the platform-neutral enforcement contract. They do not
+make a native mechanism trustworthy by declaration: an `EnforcementAdapter` is a
+TCB component and must pass its platform contract suite.
+
+| Name | Contract |
+| --- | --- |
+| `AuthorityDomain` | Closed-world authority domain such as filesystem, network, process, service, credential, or runtime. |
+| `GrantRule` | One exact operation, selector, conditions, need/want requirement, provenance, and baseline marker. |
+| `Grant` | Immutable authority for one principal, session, artifact, normalized intent, policy, and call. Its canonical digest binds all rules. |
+| `GrantCompilation` | A final `Grant` paired with its source-to-rule `RequirementLedger`. |
+| `compile_grant` | Converts a successful constructive DAC evaluation into exact attributed rules, rejecting denied evaluations and unmarked runtime baseline authority. |
+| `RequirementEntry` | Connects one source `need` or `want` to its descendant final grant rules. |
+| `RequirementLedger` | Rechecks source requirements after mandatory filtering, lowering, and activation reductions. |
+| `RequirementCheck` | Revalidation result listing missing needs and removed wants. |
+| `ObligationKind` | Operation, closed-world complement, bypass prevention, credential custody, authenticated channel, resource limit, or evidence obligation. |
+| `EnforcementObligation` | One exact, independently assigned guarantee with resource conditions and dependency IDs. |
+| `SupportLevel` | Adapter relation `EXACT`, `STRICTER`, or `UNSUPPORTED`. |
+| `SupportAssessment` | One adapter's rule-specific assessment and evidence requirements for one obligation. |
+| `HostAttestation` | Fresh, nonce-bound host statement whose digest is meaningful only after trust-anchor verification. |
+| `HostAttestationVerifier` | Protocol that authenticates a `HostAttestation` against deployment trust anchors. |
+| `EnforcementAdapter` | Protocol for exact assessment, conservative lowering, worker activation, and activation-evidence verification. |
+| `AdapterPlan` | Opaque native plan digest and the exact obligation IDs assigned to it. |
+| `ObligationAssignment` | One obligation's primary adapter and conservative support relation. |
+| `EnforcementMode` | `ENFORCED` when all guarantees are active or `DEGRADED` after an explicit permissible waiver. |
+| `EnforcementPlan` | Complete assignments, adapter plans, reductions, and canonical plan digest for one grant and host. |
+| `NegotiationResult` | Fail-closed result containing either a complete plan or a precise denial reason. |
+| `ExecutionContext` | Worker, process, boot, namespaces, credentials, cgroup, and broker epoch bound into activation. |
+| `ActivationEvidence` | Adapter-signed statement that one native plan is active for one execution context and freshness window. |
+| `ActivationReceipt` | Verified evidence bundle covering every assigned obligation before worker release. |
+| `EnforcementCoordinator` | Verifies host evidence, negotiates exact obligations, lowers plans, and validates worker-specific activation. |
+
 ## Audit and observability
 
 | Name | Contract |
 | --- | --- |
-| `AuditRecord` | One hash-chainable stage record: call index, tool, user and session IDs, argument hash, stage, module, verdict, reason, previous hash, and record hash. |
+| `AuditRecord` | One hash-chainable stage record: call index, tool, user and session IDs, argument hash, stage, module, verdict, optional execution outcome, reason, previous hash, and record hash. |
 | `AuditSink` | Protocol requiring `write`, `records`, and `verify`. |
 | `MemoryAuditSink` | Thread-safe process-local hash-chained sink. Useful for tests and short-lived runs. |
 | `SqliteAuditSink` | Thread-safe SQLite WAL sink using full synchronization and a SHA-256 chain. Call `close()` during shutdown. |
@@ -171,7 +208,8 @@ boundaries:
 - declaration and profile construction errors use `TypeError` or `ValueError`;
 - profile text errors use `ProfileSyntaxError`;
 - principal preparation errors use `SecurityBindingError`;
-- guarded runtime denials use `SecurityDeniedError`; and
+- guarded runtime denials use `SecurityDeniedError`;
+- required audit failures use `SecurityAuditError` before dispatch and `SecurityIndeterminateError` after dispatch; and
 - `ToolNode` converts runtime denials into error tool messages.
 
 Policy exceptions do not escape as authorization success. The stack attributes

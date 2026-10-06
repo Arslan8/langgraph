@@ -98,6 +98,8 @@ def test_evaluate_exact_path_inside_principal_subtree() -> None:
     assert result.grant.subject == ("alice", "read_file")
     assert result.grant.fs[0].path.value == "/home/alice/report.txt"
     assert result.grant.fs[0].operations == {"read"}
+    assert result.grant.fs[0].requirement is Requirement.NEED
+    assert result.grant.fs[0].source_id.startswith("fs:")
 
 
 def test_removed_need_denies_and_removed_want_is_recorded() -> None:

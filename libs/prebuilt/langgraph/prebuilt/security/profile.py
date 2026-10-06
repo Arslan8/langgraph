@@ -190,6 +190,8 @@ class BoundNamedRule:
     kind: str
     attributes: Mapping[str, str] = field(default_factory=dict)
     source: SourceLocation | None = field(default=None, compare=False)
+    requirement: Requirement = Requirement.NEED
+    source_id: str = ""
 
     def __post_init__(self) -> None:
         object.__setattr__(self, "attributes", MappingProxyType(dict(self.attributes)))
@@ -382,6 +384,8 @@ class BoundFsRule:
     operations: frozenset[str]
     path: BoundPath
     source: SourceLocation | None = field(default=None, compare=False)
+    requirement: Requirement = Requirement.NEED
+    source_id: str = ""
 
 
 @dataclass(frozen=True, slots=True)
@@ -391,6 +395,8 @@ class BoundNetRule:
     operation: str
     port: int
     source: SourceLocation | None = field(default=None, compare=False)
+    requirement: Requirement = Requirement.NEED
+    source_id: str = ""
 
 
 @dataclass(frozen=True, slots=True)
@@ -399,6 +405,8 @@ class BoundExecRule:
 
     path: BoundPath
     source: SourceLocation | None = field(default=None, compare=False)
+    requirement: Requirement = Requirement.NEED
+    source_id: str = ""
 
 
 @dataclass(frozen=True, slots=True)
@@ -561,8 +569,10 @@ def evaluate_dac(
     services: list[BoundNamedRule] = []
     removed: list[RemovedLine] = []
 
-    for fs_line in tool.fs:
+    for index, fs_line in enumerate(tool.fs):
         requested_fs = fs_line.path.bind(normalized_args)
+        requirement = fs_line.requirement or Requirement.NEED
+        source_id = _source_id("fs", fs_line.location, index)
         fs_survivors: set[tuple[frozenset[str], BoundPath]] = set()
         for operations, allowed in fs_envelope:
             intersection = _intersect_path(requested_fs, allowed)
@@ -571,7 +581,13 @@ def evaluate_dac(
                 fs_survivors.add((common, intersection))
         if fs_survivors:
             fs.extend(
-                BoundFsRule(operations, path, fs_line.location)
+                BoundFsRule(
+                    operations,
+                    path,
+                    fs_line.location,
+                    requirement,
+                    source_id,
+                )
                 for operations, path in sorted(
                     fs_survivors,
                     key=lambda item: (item[1].value, item[1].subtree, sorted(item[0])),
@@ -580,15 +596,24 @@ def evaluate_dac(
         else:
             removed.append(_removed("fs", fs_line))
 
-    for net_line in tool.net:
+    for index, net_line in enumerate(tool.net):
         target = (net_line.operation, net_line.bind(normalized_args))
         if target in net_envelope:
-            net.append(BoundNetRule(*target, source=net_line.location))
+            net.append(
+                BoundNetRule(
+                    *target,
+                    source=net_line.location,
+                    requirement=net_line.requirement or Requirement.NEED,
+                    source_id=_source_id("net", net_line.location, index),
+                )
+            )
         else:
             removed.append(_removed("net", net_line))
 
-    for exec_line in tool.exec:
+    for index, exec_line in enumerate(tool.exec):
         requested_exec = exec_line.path.bind(normalized_args)
+        requirement = exec_line.requirement or Requirement.NEED
+        source_id = _source_id("exec", exec_line.location, index)
         exec_survivors = {
             intersection
             for allowed in exec_envelope
@@ -596,16 +621,22 @@ def evaluate_dac(
         }
         if exec_survivors:
             executable.extend(
-                BoundExecRule(path, exec_line.location)
+                BoundExecRule(path, exec_line.location, requirement, source_id)
                 for path in sorted(exec_survivors)
             )
         else:
             removed.append(_removed("exec", exec_line))
 
-    for service_line in tool.services:
+    for index, service_line in enumerate(tool.services):
         requested_service = service_line.bind(normalized_args)
         if requested_service in service_envelope:
-            services.append(requested_service)
+            services.append(
+                replace(
+                    requested_service,
+                    requirement=service_line.requirement or Requirement.NEED,
+                    source_id=_source_id("service", service_line.location, index),
+                )
+            )
         else:
             removed.append(_removed("service", service_line))
 
@@ -627,6 +658,13 @@ def evaluate_dac(
         denied=denied,
         reason="required_line_removed" if denied else None,
     )
+
+
+def _source_id(resource_class: str, location: SourceLocation | None, index: int) -> str:
+    """Return a stable identity for one constructive source line."""
+    if location is None:
+        return f"{resource_class}:{index}"
+    return f"{resource_class}:{location.source}:{location.line}:{location.column}"
 
 
 @dataclass(frozen=True, slots=True)

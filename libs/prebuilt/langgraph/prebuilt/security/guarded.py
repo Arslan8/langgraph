@@ -19,14 +19,23 @@ from langgraph.prebuilt.security.binding import (
 from langgraph.prebuilt.security.blobs import copy_blobs
 from langgraph.prebuilt.security.config import SecurityConfig
 from langgraph.prebuilt.security.descriptor import normalize_resource, security_for_tool
+from langgraph.prebuilt.security.errors import (
+    SecurityAuditError,
+    SecurityConfigurationError,
+    SecurityIndeterminateError,
+)
 from langgraph.prebuilt.security.introspect import (
     ToolInventoryEntry,
     _register_guarded_tool,
 )
-from langgraph.prebuilt.security.stack import SecurityStack, record_approval
+from langgraph.prebuilt.security.stack import (
+    SecurityStack,
+    coerce_approval,
+    record_approval,
+)
 from langgraph.prebuilt.security.types import (
-    Approval,
     Decision,
+    ExecutionOutcome,
     Principal,
     Tool,
     ToolCall,
@@ -61,6 +70,7 @@ class _GuardedExecutor:
             policy_timeout_s=security.policy_timeout_s,
             observer=security.observer,
             audit_sink=security.audit_sink,
+            approval_ttl_s=security.approval_ttl_s,
         )
         for module in self.stack.modules:
             slot = self.tool.security.allocate(module.name)
@@ -87,12 +97,35 @@ class _GuardedExecutor:
             decision = self._resume(principal, call, decision)
         if decision.verdict is not Verdict.ALLOW:
             raise SecurityDeniedError(decision.reason)
+        try:
+            self.stack.record_framework_event(
+                principal,
+                call,
+                "dispatch",
+                Decision(Verdict.ALLOW, "dispatch:reserved"),
+            )
+        except SecurityAuditError as exc:
+            raise SecurityDeniedError("audit_failure") from exc
         result: Any = None
+        outcome = ExecutionOutcome.INDETERMINATE
         try:
             result = self.target.invoke(dict(call.args), config=config)
+            outcome = ExecutionOutcome.SUCCEEDED
             return result
         finally:
-            self.stack.post(principal, call, result)
+            try:
+                self.stack.post(principal, call, result)
+                self.stack.record_framework_event(
+                    principal,
+                    call,
+                    "outcome",
+                    Decision(Verdict.ALLOW, f"execution:{outcome.value}"),
+                    outcome=outcome,
+                )
+            except SecurityAuditError as exc:
+                raise SecurityIndeterminateError(
+                    "tool outcome is indeterminate because completion audit failed"
+                ) from exc
 
     async def ainvoke(self, args: Mapping[str, Any], config: RunnableConfig) -> Any:
         principal, call = self._prepare(args, config)
@@ -103,12 +136,35 @@ class _GuardedExecutor:
             decision = await self._aresume(principal, call, decision)
         if decision.verdict is not Verdict.ALLOW:
             raise SecurityDeniedError(decision.reason)
+        try:
+            self.stack.record_framework_event(
+                principal,
+                call,
+                "dispatch",
+                Decision(Verdict.ALLOW, "dispatch:reserved"),
+            )
+        except SecurityAuditError as exc:
+            raise SecurityDeniedError("audit_failure") from exc
         result: Any = None
+        outcome = ExecutionOutcome.INDETERMINATE
         try:
             result = await self.target.ainvoke(dict(call.args), config=config)
+            outcome = ExecutionOutcome.SUCCEEDED
             return result
         finally:
-            await self.stack.apost(principal, call, result)
+            try:
+                await self.stack.apost(principal, call, result)
+                self.stack.record_framework_event(
+                    principal,
+                    call,
+                    "outcome",
+                    Decision(Verdict.ALLOW, f"execution:{outcome.value}"),
+                    outcome=outcome,
+                )
+            except SecurityAuditError as exc:
+                raise SecurityIndeterminateError(
+                    "tool outcome is indeterminate because completion audit failed"
+                ) from exc
 
     def _prepare(
         self, args: Mapping[str, Any], config: RunnableConfig
@@ -142,8 +198,9 @@ class _GuardedExecutor:
         if escalation is None:
             return Decision(Verdict.DENY, "invalid_escalation")
         response = interrupt(dict(escalation.to_payload()))
-        approval = _coerce_approval(response, escalation.request_id)
-        record_approval(principal, approval)
+        approval = coerce_approval(response, escalation)
+        if not record_approval(principal, approval):
+            return Decision(Verdict.DENY, "approval_replay")
         resumed = self.stack.resume_permission(principal, approval)
         if resumed.verdict is not Verdict.ALLOW:
             return resumed
@@ -156,8 +213,9 @@ class _GuardedExecutor:
         if escalation is None:
             return Decision(Verdict.DENY, "invalid_escalation")
         response = interrupt(dict(escalation.to_payload()))
-        approval = _coerce_approval(response, escalation.request_id)
-        record_approval(principal, approval)
+        approval = coerce_approval(response, escalation)
+        if not record_approval(principal, approval):
+            return Decision(Verdict.DENY, "approval_replay")
         resumed = await self.stack.aresume_permission(principal, approval)
         if resumed.verdict is not Verdict.ALLOW:
             return resumed
@@ -290,7 +348,9 @@ def delegate(
     if configured is None:
         configured = getattr(getattr(graph, "builder", None), "_security_config", None)
     if not isinstance(configured, SecurityConfig):
-        configured = SecurityConfig()
+        raise SecurityConfigurationError(
+            "delegation requires an explicit or inherited SecurityConfig"
+        )
     return _DelegatedRunnable(graph, frozenset(scopes), configured)
 
 
@@ -308,23 +368,3 @@ def _normalize_args(tool: Tool, args: Mapping[str, Any]) -> dict[str, Any]:
         elif resource.normalizer == "shell_argv0":
             normalized[f"{resource.arg}_argv0"] = value
     return normalized
-
-
-def _coerce_approval(response: Any, request_id: str) -> Approval:
-    if isinstance(response, Approval):
-        if response.request_id == request_id:
-            return response
-        return Approval(request_id, False, "framework", "request_id_mismatch")
-    if isinstance(response, bool):
-        return Approval(request_id, response, "human")
-    if isinstance(response, Mapping):
-        response_id = str(response.get("request_id", request_id))
-        if response_id != request_id:
-            return Approval(request_id, False, "framework", "request_id_mismatch")
-        return Approval(
-            request_id,
-            response.get("approved") is True,
-            str(response.get("approver", "human")),
-            str(response.get("reason", "")),
-        )
-    return Approval(request_id, False, "framework", "invalid_response")

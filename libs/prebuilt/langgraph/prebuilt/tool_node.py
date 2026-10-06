@@ -106,13 +106,23 @@ from langgraph.prebuilt.security.descriptor import (
     normalize_resource,
     security_for_tool,
 )
-from langgraph.prebuilt.security.stack import SecurityStack, record_approval
+from langgraph.prebuilt.security.errors import (
+    SecurityAuditError,
+    SecurityIndeterminateError,
+)
+from langgraph.prebuilt.security.stack import (
+    SecurityStack,
+    coerce_approval,
+    record_approval,
+)
 from langgraph.prebuilt.security.types import (
     Approval,
     AuditRecord,
     AuditSink,
     Blobs,
     Decision,
+    EscalationRequest,
+    ExecutionOutcome,
     Principal,
     Verdict,
 )
@@ -963,27 +973,38 @@ class ToolNode(RunnableCallable):
         call: SecurityToolCall,
         stage: str,
         decision: Decision,
+        *,
+        force: bool = False,
+        outcome: ExecutionOutcome | None = None,
     ) -> None:
         if self._security_audit_sink is None:
             return
-        if self._security_stack is not None and self._security_stack.audit_events:
+        if (
+            not force
+            and self._security_stack is not None
+            and self._security_stack.audit_events
+        ):
             return
         encoded = json.dumps(
             dict(call.args), sort_keys=True, default=repr, separators=(",", ":")
         ).encode()
-        self._security_audit_sink.write(
-            AuditRecord(
-                call_index=call.call_index,
-                tool_name=call.tool.name,
-                user_id=principal.user_id,
-                args_hash=hashlib.sha256(encoded).hexdigest(),
-                stage=stage,
-                module=stage,
-                verdict=decision.verdict,
-                reason=decision.reason,
-                session_id=principal.session_id,
+        try:
+            self._security_audit_sink.write(
+                AuditRecord(
+                    call_index=call.call_index,
+                    tool_name=call.tool.name,
+                    user_id=principal.user_id,
+                    args_hash=hashlib.sha256(encoded).hexdigest(),
+                    stage=stage,
+                    module=stage,
+                    verdict=decision.verdict,
+                    reason=decision.reason,
+                    session_id=principal.session_id,
+                    outcome=outcome,
+                )
             )
-        )
+        except Exception as exc:
+            raise SecurityAuditError("required security audit write failed") from exc
 
     def _security_denial(self, call: ToolCall, decision: Decision) -> ToolMessage:
         return ToolMessage(
@@ -1021,8 +1042,9 @@ class ToolNode(RunnableCallable):
         if stack is None or escalation is None:
             return Decision(Verdict.DENY, "invalid_escalation")
         response = interrupt(dict(escalation.to_payload()))
-        approval = self._coerce_approval(response, escalation.request_id)
-        record_approval(principal, approval)
+        approval = self._coerce_approval(response, escalation)
+        if not record_approval(principal, approval):
+            return Decision(Verdict.DENY, "approval_replay")
         resumed = stack.resume_permission(principal, approval)
         self._audit_security(principal, call, "resume", resumed)
         if resumed.verdict is not Verdict.ALLOW:
@@ -1042,8 +1064,9 @@ class ToolNode(RunnableCallable):
         if stack is None or escalation is None:
             return Decision(Verdict.DENY, "invalid_escalation")
         response = interrupt(dict(escalation.to_payload()))
-        approval = self._coerce_approval(response, escalation.request_id)
-        record_approval(principal, approval)
+        approval = self._coerce_approval(response, escalation)
+        if not record_approval(principal, approval):
+            return Decision(Verdict.DENY, "approval_replay")
         resumed = await stack.aresume_permission(principal, approval)
         self._audit_security(principal, call, "resume", resumed)
         if resumed.verdict is not Verdict.ALLOW:
@@ -1052,24 +1075,10 @@ class ToolNode(RunnableCallable):
         self._audit_security(principal, call, "permission_after_resume", rechecked)
         return rechecked
 
-    def _coerce_approval(self, response: Any, request_id: str) -> Approval:
-        if isinstance(response, Approval):
-            if response.request_id != request_id:
-                return Approval(request_id, False, "framework", "request_id_mismatch")
-            return response
-        if isinstance(response, bool):
-            return Approval(request_id, response, "human")
-        if isinstance(response, Mapping):
-            response_id = str(response.get("request_id", request_id))
-            if response_id != request_id:
-                return Approval(request_id, False, "framework", "request_id_mismatch")
-            return Approval(
-                request_id,
-                response.get("approved") is True,
-                str(response.get("approver", "human")),
-                str(response.get("reason", "")),
-            )
-        return Approval(request_id, False, "framework", "invalid_response")
+    def _coerce_approval(
+        self, response: Any, escalation: EscalationRequest
+    ) -> Approval:
+        return coerce_approval(response, escalation)
 
     def _func(
         self,
@@ -1230,7 +1239,10 @@ class ToolNode(RunnableCallable):
             msg = f"Tool {call['name']} is not registered with ToolNode"
             raise TypeError(msg)
 
-        decision, request, security_call = self._prepare_security_request(request)
+        try:
+            decision, request, security_call = self._prepare_security_request(request)
+        except SecurityAuditError:
+            return self._security_denial(call, Decision(Verdict.DENY, "audit_failure"))
         if (
             decision.verdict is Verdict.ESCALATE
             and security_call is not None
@@ -1239,6 +1251,19 @@ class ToolNode(RunnableCallable):
             decision = self._resume_security(request.principal, security_call, decision)
         if decision.verdict is not Verdict.ALLOW:
             return self._security_denial(call, decision)
+        if security_call is not None and request.principal is not None:
+            try:
+                self._audit_security(
+                    request.principal,
+                    security_call,
+                    "dispatch",
+                    Decision(Verdict.ALLOW, "dispatch:reserved"),
+                    force=True,
+                )
+            except SecurityAuditError:
+                return self._security_denial(
+                    call, Decision(Verdict.DENY, "audit_failure")
+                )
         config = self._security_trace_config(config, security_call, decision)
         call = request.tool_call
         tool = request.tool
@@ -1250,6 +1275,7 @@ class ToolNode(RunnableCallable):
         call_args = {**injected_call, "type": "tool_call"}
 
         post_result: Any = None
+        outcome = ExecutionOutcome.INDETERMINATE
         try:
             try:
                 response = tool.invoke(call_args, config)
@@ -1266,6 +1292,7 @@ class ToolNode(RunnableCallable):
             post_result = self._normalize_tool_response(
                 response, request.tool_call, input_type
             )
+            outcome = ExecutionOutcome.SUCCEEDED
             return post_result
 
         # GraphInterrupt is a special exception that will always be raised.
@@ -1316,8 +1343,20 @@ class ToolNode(RunnableCallable):
                 and request.principal is not None
                 and stack is not None
             ):
-                post = stack.post(request.principal, security_call, post_result)
-                self._audit_security(request.principal, security_call, "post", post)
+                try:
+                    stack.post(request.principal, security_call, post_result)
+                    self._audit_security(
+                        request.principal,
+                        security_call,
+                        "outcome",
+                        Decision(Verdict.ALLOW, f"execution:{outcome.value}"),
+                        force=True,
+                        outcome=outcome,
+                    )
+                except SecurityAuditError as exc:
+                    raise SecurityIndeterminateError(
+                        "tool outcome is indeterminate because completion audit failed"
+                    ) from exc
 
     def _run_one(
         self,
@@ -1412,7 +1451,10 @@ class ToolNode(RunnableCallable):
             msg = f"Tool {call['name']} is not registered with ToolNode"
             raise TypeError(msg)
 
-        decision, request, security_call = self._prepare_security_request(request)
+        try:
+            decision, request, security_call = self._prepare_security_request(request)
+        except SecurityAuditError:
+            return self._security_denial(call, Decision(Verdict.DENY, "audit_failure"))
         if (
             decision.verdict is Verdict.ESCALATE
             and security_call is not None
@@ -1423,6 +1465,19 @@ class ToolNode(RunnableCallable):
             )
         if decision.verdict is not Verdict.ALLOW:
             return self._security_denial(call, decision)
+        if security_call is not None and request.principal is not None:
+            try:
+                self._audit_security(
+                    request.principal,
+                    security_call,
+                    "dispatch",
+                    Decision(Verdict.ALLOW, "dispatch:reserved"),
+                    force=True,
+                )
+            except SecurityAuditError:
+                return self._security_denial(
+                    call, Decision(Verdict.DENY, "audit_failure")
+                )
         config = self._security_trace_config(config, security_call, decision)
         call = request.tool_call
         tool = request.tool
@@ -1434,6 +1489,7 @@ class ToolNode(RunnableCallable):
         call_args = {**injected_call, "type": "tool_call"}
 
         post_result: Any = None
+        outcome = ExecutionOutcome.INDETERMINATE
         try:
             try:
                 response = await tool.ainvoke(call_args, config)
@@ -1450,6 +1506,7 @@ class ToolNode(RunnableCallable):
             post_result = self._normalize_tool_response(
                 response, request.tool_call, input_type
             )
+            outcome = ExecutionOutcome.SUCCEEDED
             return post_result
 
         # GraphInterrupt is a special exception that will always be raised.
@@ -1500,8 +1557,20 @@ class ToolNode(RunnableCallable):
                 and request.principal is not None
                 and stack is not None
             ):
-                post = await stack.apost(request.principal, security_call, post_result)
-                self._audit_security(request.principal, security_call, "post", post)
+                try:
+                    await stack.apost(request.principal, security_call, post_result)
+                    self._audit_security(
+                        request.principal,
+                        security_call,
+                        "outcome",
+                        Decision(Verdict.ALLOW, f"execution:{outcome.value}"),
+                        force=True,
+                        outcome=outcome,
+                    )
+                except SecurityAuditError as exc:
+                    raise SecurityIndeterminateError(
+                        "tool outcome is indeterminate because completion audit failed"
+                    ) from exc
 
     async def _arun_one(
         self,

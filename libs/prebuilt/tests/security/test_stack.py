@@ -337,13 +337,72 @@ async def test_async_prepare_covers_dac_transform_and_module_denial() -> None:
 def test_approval_matches_only_the_exact_escalated_call() -> None:
     """An approval cannot authorize another request, call, or tool."""
     call = _call()
-    escalation = EscalationRequest("request", "review", "read_file", "call")
+    escalation = EscalationRequest(
+        "request",
+        "review",
+        "read_file",
+        "call",
+        subject_digest="subject",
+        expires_at=time.time() + 60,
+    )
     decision = Decision(Verdict.ESCALATE, "review", escalation=escalation)
 
-    assert _matches_approval(decision, call, Approval("request", True, "reviewer"))
-    assert not _matches_approval(decision, call, Approval("request", False, "reviewer"))
-    assert not _matches_approval(decision, call, Approval("other", True, "reviewer"))
+    assert _matches_approval(
+        decision, call, Approval("request", True, "reviewer", subject_digest="subject")
+    )
+    assert not _matches_approval(
+        decision, call, Approval("request", False, "reviewer", subject_digest="subject")
+    )
+    assert not _matches_approval(
+        decision, call, Approval("other", True, "reviewer", subject_digest="subject")
+    )
+    assert not _matches_approval(
+        decision, call, Approval("request", True, "reviewer", subject_digest="other")
+    )
     assert not _matches_approval(Decision(Verdict.ALLOW, "ok"), call, None)
+
+
+def test_escalation_subject_binds_normalized_intent() -> None:
+    """Argument changes produce a different approval subject digest."""
+    module = FixedModule(
+        "review",
+        Decision(
+            Verdict.ESCALATE,
+            "review",
+            escalation=EscalationRequest("request", "review", "read_file", "call"),
+        ),
+    )
+    stack = SecurityStack([module])
+    try:
+        first = stack.permission(_principal(), _call(allowed_path="/safe"))
+        second = stack.permission(_principal(), _call(allowed_path="/other"))
+    finally:
+        stack.close()
+
+    assert first.escalation is not None
+    assert second.escalation is not None
+    assert first.escalation.subject_digest
+    assert first.escalation.subject_digest != second.escalation.subject_digest
+
+
+def test_expired_approval_cannot_match() -> None:
+    """Approval expiry is enforced during the resumed permission check."""
+    call = _call()
+    decision = Decision(
+        Verdict.ESCALATE,
+        "review",
+        escalation=EscalationRequest(
+            "request",
+            "review",
+            "read_file",
+            "call",
+            subject_digest="subject",
+            expires_at=time.time() - 1,
+        ),
+    )
+    assert not _matches_approval(
+        decision, call, Approval("request", True, "reviewer", subject_digest="subject")
+    )
 
 
 def test_replace_call_args_normalizes_each_resource_shape() -> None:

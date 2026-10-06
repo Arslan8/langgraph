@@ -94,6 +94,8 @@ def test_memory_observer_records_each_invoked_policy_hook() -> None:
         ("prepare", "dac_final"),
         ("permission", "dac"),
         ("permission", "cap"),
+        ("dispatch", "dispatch"),
+        ("outcome", "outcome"),
     ]
     assert audit.verify() == (True, None)
     assert _CAPTURED_METADATA["security"] == {

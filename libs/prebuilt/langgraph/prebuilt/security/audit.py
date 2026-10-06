@@ -9,7 +9,7 @@ from dataclasses import replace
 from pathlib import Path
 from threading import RLock
 
-from langgraph.prebuilt.security.types import AuditRecord, Verdict
+from langgraph.prebuilt.security.types import AuditRecord, ExecutionOutcome, Verdict
 
 
 class MemoryAuditSink:
@@ -61,7 +61,8 @@ class SqliteAuditSink:
                 verdict TEXT NOT NULL,
                 reason TEXT NOT NULL,
                 prev_hash TEXT NOT NULL,
-                hash TEXT NOT NULL
+                hash TEXT NOT NULL,
+                outcome TEXT
             )
             """
         )
@@ -73,6 +74,10 @@ class SqliteAuditSink:
             self._connection.execute(
                 "ALTER TABLE audit_records "
                 "ADD COLUMN session_id TEXT NOT NULL DEFAULT ''"
+            )
+        if "outcome" not in columns:
+            self._connection.execute(
+                "ALTER TABLE audit_records ADD COLUMN outcome TEXT"
             )
         self._connection.commit()
 
@@ -88,8 +93,8 @@ class SqliteAuditSink:
                 """
                 INSERT INTO audit_records (
                     call_index, tool_name, user_id, session_id, args_hash, stage,
-                    module, verdict, reason, prev_hash, hash
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    module, verdict, reason, prev_hash, hash, outcome
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 (
                     finalized.call_index,
@@ -103,6 +108,7 @@ class SqliteAuditSink:
                     finalized.reason,
                     finalized.prev_hash,
                     finalized.hash,
+                    finalized.outcome.value if finalized.outcome is not None else None,
                 ),
             )
             return finalized
@@ -113,7 +119,7 @@ class SqliteAuditSink:
             rows = self._connection.execute(
                 """
                 SELECT call_index, tool_name, user_id, args_hash, stage, module,
-                       verdict, reason, prev_hash, hash, session_id
+                       verdict, reason, prev_hash, hash, session_id, outcome
                 FROM audit_records ORDER BY sequence
                 """
             ).fetchall()
@@ -130,6 +136,7 @@ class SqliteAuditSink:
                 prev_hash=row[8],
                 hash=row[9],
                 session_id=row[10],
+                outcome=ExecutionOutcome(row[11]) if row[11] is not None else None,
             )
             for row in rows
         )
@@ -161,6 +168,8 @@ def _record_hash(record: AuditRecord) -> str:
         "user_id": record.user_id,
         "verdict": record.verdict.value,
     }
+    if record.outcome is not None:
+        payload["outcome"] = record.outcome.value
     if record.session_id:
         payload["session_id"] = record.session_id
     encoded = json.dumps(

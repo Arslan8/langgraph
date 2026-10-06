@@ -19,6 +19,7 @@ from langgraph.prebuilt.security import (
     EscalationRequest,
     Principal,
     SecurityConfig,
+    SecurityConfigurationError,
     SecurityDeniedError,
     SecurityModule,
     Verdict,
@@ -239,6 +240,12 @@ def test_delegate_rejects_scope_growth() -> None:
     )
     with pytest.raises(SecurityDeniedError, match="scope_growth"):
         delegated.invoke(None, config=with_principal({}, _principal()))
+
+
+def test_delegate_requires_explicit_or_inherited_security() -> None:
+    """Delegation cannot silently synthesize a new security configuration."""
+    with pytest.raises(SecurityConfigurationError, match="requires"):
+        delegate(RunnableLambda(lambda value: value), scopes=["read"])
 
 
 def test_delegate_does_not_reprepare_attenuated_module_slot() -> None:

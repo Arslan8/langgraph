@@ -9,6 +9,7 @@ from dataclasses import dataclass
 from typing import Any
 
 from langgraph.prebuilt.security.descriptor import DacOverrides
+from langgraph.prebuilt.security.errors import SecurityConfigurationError
 from langgraph.prebuilt.security.hooks import SecurityModule
 from langgraph.prebuilt.security.observability import SecurityObserver
 from langgraph.prebuilt.security.profile import ToolProfile
@@ -25,12 +26,15 @@ class SecurityConfig:
     audit_sink: AuditSink | None = None
     observer: SecurityObserver | None = None
     policy_timeout_s: float = 2.0
+    approval_ttl_s: float = 300.0
     require_principal: bool = True
 
     def __post_init__(self) -> None:
         object.__setattr__(self, "modules", tuple(self.modules))
         if self.policy_timeout_s <= 0:
             raise ValueError("policy_timeout_s must be positive")
+        if self.approval_ttl_s <= 0:
+            raise ValueError("approval_ttl_s must be positive")
         if self.dac_overrides is not None and not isinstance(
             self.dac_overrides, DacOverrides
         ):
@@ -62,8 +66,13 @@ class SecurityConfig:
         self, node: Any, *, validate_overrides: bool = True
     ) -> None:
         """Apply this configuration to one ToolNode."""
-        if getattr(node, "_security_config", None) is self:
+        existing = getattr(node, "_security_config", None)
+        if existing is self:
             return
+        if existing is not None:
+            raise SecurityConfigurationError(
+                "a secured ToolNode cannot be reconfigured or downgraded"
+            )
         overrides = self.dac_overrides or DacOverrides()
         unknown = set(overrides).difference(node._security_tools_by_name)
         if validate_overrides and unknown:
@@ -74,6 +83,7 @@ class SecurityConfig:
             policy_timeout_s=self.policy_timeout_s,
             observer=self.observer,
             audit_sink=self.audit_sink,
+            approval_ttl_s=self.approval_ttl_s,
         )
         try:
             for name, security_tool in tuple(node._security_tools_by_name.items()):
