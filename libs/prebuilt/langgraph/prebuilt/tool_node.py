@@ -110,6 +110,7 @@ from langgraph.prebuilt.security.errors import (
     SecurityAuditError,
     SecurityIndeterminateError,
 )
+from langgraph.prebuilt.security.flow import SessionFlowPolicy, ToolFlowRule
 from langgraph.prebuilt.security.stack import (
     SecurityStack,
     coerce_approval,
@@ -829,6 +830,7 @@ class ToolNode(RunnableCallable):
         self._security_config: SecurityConfig | None = None
         self._security_audit_sink: AuditSink | None = None
         self._security_require_principal = True
+        self._security_flow_policy: SessionFlowPolicy | None = None
         self._handle_tool_errors = handle_tool_errors
         self._messages_key = messages_key
         self._wrap_tool_call = wrap_tool_call
@@ -874,11 +876,13 @@ class ToolNode(RunnableCallable):
         *,
         audit_sink: AuditSink | None = None,
         require_principal: bool = True,
+        flow_policy: SessionFlowPolicy | None = None,
     ) -> None:
         """Configure mediation internally until the public constructor is added."""
         self._security_stack = stack
         self._security_audit_sink = audit_sink
         self._security_require_principal = require_principal
+        self._security_flow_policy = flow_policy
 
     def _security_check(self, request: ToolCallRequest) -> Decision:
         """Return the innermost security decision for one physical execution."""
@@ -949,6 +953,31 @@ class ToolNode(RunnableCallable):
             security=security_tool.security,
         )
         return permission, secured, security_call
+
+    def _acquire_security_flow(
+        self, principal: Principal, call: SecurityToolCall
+    ) -> tuple[Decision, ToolFlowRule | None]:
+        """Atomically reserve flow authority for one physical execution."""
+        policy = self._security_flow_policy
+        if policy is None:
+            return Decision(Verdict.ALLOW, "flow:disabled"), None
+        try:
+            decision, reservation = policy.acquire(principal, call.tool.name)
+        except BaseException:
+            decision, reservation = Decision(Verdict.DENY, "flow:store_error"), None
+        try:
+            self._audit_security(principal, call, "flow", decision, force=True)
+        except BaseException:
+            policy.release(principal, reservation)
+            raise
+        return decision, reservation
+
+    def _release_security_flow(
+        self, principal: Principal, reservation: ToolFlowRule | None
+    ) -> None:
+        policy = self._security_flow_policy
+        if policy is not None:
+            policy.release(principal, reservation)
 
     def _normalize_security_args(
         self, tool: SecurityTool, args: Mapping[str, Any]
@@ -1106,6 +1135,8 @@ class ToolNode(RunnableCallable):
             )
             tool_runtimes.append(tool_runtime)
 
+        self._premark_security_flow(tool_calls, tool_runtimes)
+
         # Pass original tool calls without injection
         input_types = [input_type] * len(tool_calls)
         with get_executor_for_config(config) as executor:
@@ -1141,6 +1172,8 @@ class ToolNode(RunnableCallable):
             )
             tool_runtimes.append(tool_runtime)
 
+        self._premark_security_flow(tool_calls, tool_runtimes)
+
         # Pass original tool calls without injection
         coros = []
         for call, tool_runtime in zip(tool_calls, tool_runtimes, strict=False):
@@ -1148,6 +1181,27 @@ class ToolNode(RunnableCallable):
         outputs = await asyncio.gather(*coros)
 
         return self._combine_tool_outputs(outputs, input_type)
+
+    def _premark_security_flow(
+        self, tool_calls: Sequence[ToolCall], tool_runtimes: Sequence[ToolRuntime]
+    ) -> None:
+        """Raise session labels for a parallel batch before any call executes."""
+        policy = self._security_flow_policy
+        if policy is None:
+            return
+        grouped: dict[tuple[str, str], tuple[Principal, list[str]]] = {}
+        for call, runtime in zip(tool_calls, tool_runtimes, strict=False):
+            if call["name"] not in policy.rules:
+                continue
+            principal = principal_from(runtime.config)
+            if principal is None:
+                continue
+            key = (principal.user_id, principal.session_id)
+            if key not in grouped:
+                grouped[key] = (principal, [])
+            grouped[key][1].append(call["name"])
+        for principal, names in grouped.values():
+            policy.premark_batch(principal, names)
 
     def _combine_tool_outputs(
         self,
@@ -1251,6 +1305,22 @@ class ToolNode(RunnableCallable):
             decision = self._resume_security(request.principal, security_call, decision)
         if decision.verdict is not Verdict.ALLOW:
             return self._security_denial(call, decision)
+        flow_reservation: ToolFlowRule | None = None
+        if (
+            self._security_flow_policy is not None
+            and security_call is not None
+            and request.principal is not None
+        ):
+            try:
+                decision, flow_reservation = self._acquire_security_flow(
+                    request.principal, security_call
+                )
+            except SecurityAuditError:
+                return self._security_denial(
+                    call, Decision(Verdict.DENY, "audit_failure")
+                )
+            if decision.verdict is not Verdict.ALLOW:
+                return self._security_denial(call, decision)
         if security_call is not None and request.principal is not None:
             try:
                 self._audit_security(
@@ -1261,6 +1331,7 @@ class ToolNode(RunnableCallable):
                     force=True,
                 )
             except SecurityAuditError:
+                self._release_security_flow(request.principal, flow_reservation)
                 return self._security_denial(
                     call, Decision(Verdict.DENY, "audit_failure")
                 )
@@ -1338,12 +1409,12 @@ class ToolNode(RunnableCallable):
             return post_result
         finally:
             stack = self._security_stack
-            if (
-                security_call is not None
-                and request.principal is not None
-                and stack is not None
-            ):
-                try:
+            try:
+                if (
+                    security_call is not None
+                    and request.principal is not None
+                    and stack is not None
+                ):
                     stack.post(request.principal, security_call, post_result)
                     self._audit_security(
                         request.principal,
@@ -1353,10 +1424,13 @@ class ToolNode(RunnableCallable):
                         force=True,
                         outcome=outcome,
                     )
-                except SecurityAuditError as exc:
-                    raise SecurityIndeterminateError(
-                        "tool outcome is indeterminate because completion audit failed"
-                    ) from exc
+            except SecurityAuditError as exc:
+                raise SecurityIndeterminateError(
+                    "tool outcome is indeterminate because completion audit failed"
+                ) from exc
+            finally:
+                if request.principal is not None:
+                    self._release_security_flow(request.principal, flow_reservation)
 
     def _run_one(
         self,
@@ -1465,6 +1539,22 @@ class ToolNode(RunnableCallable):
             )
         if decision.verdict is not Verdict.ALLOW:
             return self._security_denial(call, decision)
+        flow_reservation: ToolFlowRule | None = None
+        if (
+            self._security_flow_policy is not None
+            and security_call is not None
+            and request.principal is not None
+        ):
+            try:
+                decision, flow_reservation = self._acquire_security_flow(
+                    request.principal, security_call
+                )
+            except SecurityAuditError:
+                return self._security_denial(
+                    call, Decision(Verdict.DENY, "audit_failure")
+                )
+            if decision.verdict is not Verdict.ALLOW:
+                return self._security_denial(call, decision)
         if security_call is not None and request.principal is not None:
             try:
                 self._audit_security(
@@ -1475,6 +1565,7 @@ class ToolNode(RunnableCallable):
                     force=True,
                 )
             except SecurityAuditError:
+                self._release_security_flow(request.principal, flow_reservation)
                 return self._security_denial(
                     call, Decision(Verdict.DENY, "audit_failure")
                 )
@@ -1552,12 +1643,12 @@ class ToolNode(RunnableCallable):
             return post_result
         finally:
             stack = self._security_stack
-            if (
-                security_call is not None
-                and request.principal is not None
-                and stack is not None
-            ):
-                try:
+            try:
+                if (
+                    security_call is not None
+                    and request.principal is not None
+                    and stack is not None
+                ):
                     await stack.apost(request.principal, security_call, post_result)
                     self._audit_security(
                         request.principal,
@@ -1567,10 +1658,13 @@ class ToolNode(RunnableCallable):
                         force=True,
                         outcome=outcome,
                     )
-                except SecurityAuditError as exc:
-                    raise SecurityIndeterminateError(
-                        "tool outcome is indeterminate because completion audit failed"
-                    ) from exc
+            except SecurityAuditError as exc:
+                raise SecurityIndeterminateError(
+                    "tool outcome is indeterminate because completion audit failed"
+                ) from exc
+            finally:
+                if request.principal is not None:
+                    self._release_security_flow(request.principal, flow_reservation)
 
     async def _arun_one(
         self,

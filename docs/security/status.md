@@ -14,6 +14,7 @@ sequence; accepted documentation is not evidence that its adapters exist.
 | Seven-hook restrictive module stack | Implemented and tested | DAC runs first; modules cannot override denial; failure and timeout deny. |
 | `ToolNode` mediation | Implemented and tested | Every physical callback execution, retry, and rewritten request is checked immediately before invocation. |
 | Direct tool mediation | Implemented and tested | Calls through `guarded_tool` use the same decision stack. Other aliases are outside the boundary. |
+| Session information flow | Implemented and tested when configured | Operator-complete tool classifications raise a durable session label before parallel fan-out; classified mediated sinks deny cross-call and sibling egress. This is coarse whole-session taint, not value provenance, and unmediated framework actions remain outside the claim. |
 | Scope delegation attenuation | Implemented and tested | Child scopes must be a subset and blobs are independently copied. Typed label ordering, exact-grant attenuation, and shared budgets are not implemented. |
 | Checkpoint-compatible approval flow | Implemented and tested | Escalation requires a checkpointer; resume rechecks policy; approval payloads omit arguments. Current matching binds request, call, and tool identifiers only. |
 | Hash-chained audit | Implemented and tested | In-memory and SQLite sinks detect modification inside the retained chain. They do not detect deletion of a valid suffix without an external head or terminal seal. This is decision evidence only. |
@@ -84,13 +85,14 @@ process-wide MAC, confinement of an allowed tool, syscall enforcement,
 credential isolation, or automatic compile-time rejection of every analyzer
 finding.
 
-Even after native phase-one confinement lands, the claim is per-execution
-resource access control. It does not imply cross-call confidentiality,
-noninterference between communicating siblings, confused-deputy safety for
-trusted result consumers, rollback after an adapter commit point, or that an
-allowed action matches the user's purpose. These properties require the
-separate mechanisms and claim boundaries in
-[security properties](security-properties.md).
+Without `SessionFlowPolicy`, the claim remains per-execution resource access
+control. With an operator-complete flow policy and shared durable store,
+classified calls crossing `ToolNode` or `guarded_tool` also receive conservative
+session-wide confidentiality: a session that may have observed data above a
+sink's ceiling cannot use that sink. This does not cover unmediated trusted
+result consumers, model final text, rollback after an adapter commit point, or
+whether an allowed action matches the user's purpose. See
+[security properties](security-properties.md) for the exact boundary.
 
 For untrusted tool code today, use an external OS sandbox and run
 `langgraph-security-taint` as an explicit CI gate. Do not treat an allow verdict,

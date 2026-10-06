@@ -2,8 +2,9 @@
 
 LangGraph's optional tool-security layer mediates calls that cross `ToolNode` or
 `guarded_tool`, with author DAC, operator policy modules, durable approvals,
-tamper-evident auditing, and redacted observability. It is opt-in: omitting
-`security` preserves the existing execution path.
+tamper-evident auditing, redacted observability, and optional conservative
+session-wide information-flow enforcement. It is opt-in: omitting `security`
+preserves the existing execution path.
 
 Start with the [10-line HOWTO](HOWTO.md), then use the
 [behavior reference](reference.md) and [complete public API reference](api.md).

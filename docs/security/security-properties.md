@@ -13,9 +13,10 @@ claim:
    the user's current purpose, rather than merely inside the principal's maximum
    envelope.
 
-An exact per-call grant proves only the first two properties. It does not, by
-itself, prove session confidentiality, noninterference, safe model behavior, or
-alignment with user intent.
+An exact per-call grant proves only the first two properties. Session
+confidentiality requires the independently configured `SessionFlowPolicy`; it is
+not inferred from descriptors, grants, or per-call decisions. Neither mechanism
+proves safe model behavior or alignment with user intent.
 
 ## Cross-call information flow and pooled authority
 
@@ -24,17 +25,34 @@ network-confined worker can transmit it. Parent-child subset checks likewise do
 not prevent siblings from pooling authority through checkpoints, messages,
 files, IPC, or the orchestrator.
 
-Therefore the current and phase-one claims are resource-access-control claims,
-not end-to-end information-flow claims. A future IFC mode must attach provenance
-to tool outputs and soundly propagate it through model inputs and outputs,
-messages, graph state, checkpoints, artifacts, delegation, and framework
-callbacks. Aggregate checks over a current grant, declared effects, history, or
-a lossy flow summary are not evidence of noninterference.
+`SessionFlowPolicy` implements a coarse session program-counter label for every
+call mediated by the same configured `ToolNode` and `guarded_tool` trust domain.
+The operator must classify every reachable tool with a possible output label and
+optional sink ceiling. Before a parallel batch fans out, the framework atomically
+joins every proposed source label into durable state keyed by authenticated user
+and session. Each sink then checks that accumulated label. This deliberately
+overtaints: a denied or unused source in a parallel batch may still raise the
+session label, but a sink cannot win a race against a source. The SQLite store
+preserves labels across reconstructed principals, checkpoints, and process
+restarts. Atomic source/sink reservations also prevent separately invoked graphs
+or workers from overlapping an incompatible source with an already-running
+egress operation. A crashed sink reservation fails closed until it is released
+or repaired by the operator.
 
-Until that mode exists, policies that require confidentiality across calls must
-place the entire session in one compartment with a combined no-egress grant, or
-deny the composition. Delegation attenuation limits individual authority only;
-it does not prevent collusion between communicating compartments.
+Because the whole session remains tainted, data retained through model context,
+messages, graph state, checkpoints, tool results, or same-session delegation
+cannot later leave through a classified mediated sink. Siblings share the label
+when they inherit the same security configuration and store. Delegation rejects
+replacement of an inherited configuration.
+
+This is conservative noninterference for classified mediated tool calls, not
+fine-grained provenance. It has no declassification and cannot identify which
+specific value influenced a sink. Model final text, arbitrary graph nodes,
+trusted callbacks, renderers, artifact handlers, and external actions that do
+not cross `ToolNode` or `guarded_tool` remain outside this guarantee. Those
+actions must be routed through mediation or confined in the same no-egress
+compartment. Declared effects, history, and lossy flow summaries are not used as
+evidence of noninterference; classifications are operator-owned and complete.
 
 ## Untrusted results and confused deputies
 

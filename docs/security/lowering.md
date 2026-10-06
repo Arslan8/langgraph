@@ -271,11 +271,14 @@ The policy adapter performs both per-line filtering and an aggregate check over
 the complete candidate grant, including operator-approved runtime baseline and
 authenticated channels. Aggregate policy can reject combinations such as
 sensitive-file authority plus outbound communication even if each line
-separately survived. It does not establish cross-call information flow: history,
-declared effects, or a flow summary cannot soundly represent dependencies through
-model context, graph state, checkpoints, results, or delegation. Any Cedar
-evaluation diagnostic, skipped-policy error, unknown entity, or aggregate error
-denies. A combination deny is never converted into separate allows.
+separately survived. That grant-local aggregate check does not establish
+cross-call information flow: history, declared effects, or a flow summary cannot
+soundly represent dependencies through model context, graph state, checkpoints,
+results, or delegation. The separately configured `SessionFlowPolicy` addresses
+mediated cross-call egress conservatively by tainting the whole authenticated
+session, not by claiming value-level provenance. Any Cedar evaluation
+diagnostic, skipped-policy error, unknown entity, or aggregate error denies. A
+combination deny is never converted into separate allows.
 
 ## Trusted preparation and import boundary
 

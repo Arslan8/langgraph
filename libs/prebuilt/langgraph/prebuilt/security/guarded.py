@@ -24,6 +24,7 @@ from langgraph.prebuilt.security.errors import (
     SecurityConfigurationError,
     SecurityIndeterminateError,
 )
+from langgraph.prebuilt.security.flow import ToolFlowRule
 from langgraph.prebuilt.security.introspect import (
     ToolInventoryEntry,
     _register_guarded_tool,
@@ -72,6 +73,8 @@ class _GuardedExecutor:
             audit_sink=security.audit_sink,
             approval_ttl_s=security.approval_ttl_s,
         )
+        if security.flow_policy is not None:
+            security.flow_policy.validate_tools((target.name,))
         for module in self.stack.modules:
             slot = self.tool.security.allocate(module.name)
             module.tool_alloc_security(self.tool, slot)
@@ -97,6 +100,9 @@ class _GuardedExecutor:
             decision = self._resume(principal, call, decision)
         if decision.verdict is not Verdict.ALLOW:
             raise SecurityDeniedError(decision.reason)
+        decision, flow_reservation = self._acquire_flow(principal, call)
+        if decision.verdict is not Verdict.ALLOW:
+            raise SecurityDeniedError(decision.reason)
         try:
             self.stack.record_framework_event(
                 principal,
@@ -105,6 +111,7 @@ class _GuardedExecutor:
                 Decision(Verdict.ALLOW, "dispatch:reserved"),
             )
         except SecurityAuditError as exc:
+            self._release_flow(principal, flow_reservation)
             raise SecurityDeniedError("audit_failure") from exc
         result: Any = None
         outcome = ExecutionOutcome.INDETERMINATE
@@ -126,6 +133,8 @@ class _GuardedExecutor:
                 raise SecurityIndeterminateError(
                     "tool outcome is indeterminate because completion audit failed"
                 ) from exc
+            finally:
+                self._release_flow(principal, flow_reservation)
 
     async def ainvoke(self, args: Mapping[str, Any], config: RunnableConfig) -> Any:
         principal, call = self._prepare(args, config)
@@ -136,6 +145,9 @@ class _GuardedExecutor:
             decision = await self._aresume(principal, call, decision)
         if decision.verdict is not Verdict.ALLOW:
             raise SecurityDeniedError(decision.reason)
+        decision, flow_reservation = self._acquire_flow(principal, call)
+        if decision.verdict is not Verdict.ALLOW:
+            raise SecurityDeniedError(decision.reason)
         try:
             self.stack.record_framework_event(
                 principal,
@@ -144,6 +156,7 @@ class _GuardedExecutor:
                 Decision(Verdict.ALLOW, "dispatch:reserved"),
             )
         except SecurityAuditError as exc:
+            self._release_flow(principal, flow_reservation)
             raise SecurityDeniedError("audit_failure") from exc
         result: Any = None
         outcome = ExecutionOutcome.INDETERMINATE
@@ -165,6 +178,8 @@ class _GuardedExecutor:
                 raise SecurityIndeterminateError(
                     "tool outcome is indeterminate because completion audit failed"
                 ) from exc
+            finally:
+                self._release_flow(principal, flow_reservation)
 
     def _prepare(
         self, args: Mapping[str, Any], config: RunnableConfig
@@ -190,6 +205,30 @@ class _GuardedExecutor:
             call_index,
             history,
         )
+
+    def _acquire_flow(
+        self, principal: Principal, call: ToolCall
+    ) -> tuple[Decision, ToolFlowRule | None]:
+        policy = self.security.flow_policy
+        if policy is None:
+            return Decision(Verdict.ALLOW, "flow:disabled"), None
+        try:
+            decision, reservation = policy.acquire(principal, call.tool.name)
+        except BaseException:
+            decision, reservation = Decision(Verdict.DENY, "flow:store_error"), None
+        try:
+            self.stack.record_framework_event(principal, call, "flow", decision)
+        except BaseException:
+            policy.release(principal, reservation)
+            raise
+        return decision, reservation
+
+    def _release_flow(
+        self, principal: Principal, reservation: ToolFlowRule | None
+    ) -> None:
+        policy = self.security.flow_policy
+        if policy is not None:
+            policy.release(principal, reservation)
 
     def _resume(
         self, principal: Principal, call: ToolCall, decision: Decision
@@ -342,11 +381,14 @@ def delegate(
     security: SecurityConfig | None = None,
 ) -> Runnable[Any, Any]:
     """Wrap a child graph with an explicitly reduced delegated principal."""
-    configured = security
-    if configured is None:
-        configured = getattr(graph, "_security_config", None)
-    if configured is None:
-        configured = getattr(getattr(graph, "builder", None), "_security_config", None)
+    inherited = getattr(graph, "_security_config", None)
+    if inherited is None:
+        inherited = getattr(getattr(graph, "builder", None), "_security_config", None)
+    if security is not None and inherited is not None and security is not inherited:
+        raise SecurityConfigurationError(
+            "delegation cannot replace an inherited SecurityConfig"
+        )
+    configured = security if security is not None else inherited
     if not isinstance(configured, SecurityConfig):
         raise SecurityConfigurationError(
             "delegation requires an explicit or inherited SecurityConfig"

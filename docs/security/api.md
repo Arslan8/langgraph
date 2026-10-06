@@ -139,6 +139,19 @@ to the configured backend.
 | `TypedPolicyBackend` | Built-in fail-closed reference backend with broad-path subtraction, conservative rejection of unrepresentable differences, aggregate checks, and requirement revalidation. |
 | `PolicyFilterResult` | Filtered no-broader grant, remapped requirement ledger, removals, and fail-closed diagnostics. |
 
+Session IFC uses a conservative program-counter label: after a classified source
+may run, the entire session remains at least that sensitive. This deliberately
+over-taints model context and graph state so it does not depend on inference.
+
+| Name | Purpose |
+| --- | --- |
+| `Confidentiality` | Ordered built-in lattice: public, internal, confidential, and secret. |
+| `ToolFlowRule` | Operator-owned possible output label and optional maximum label accepted by a sink. |
+| `SessionFlowPolicy` | Atomically raises labels, reserves concurrent source/sink execution, and denies egress above its ceiling. |
+| `FlowStateStore` | Atomic label and execution-reservation storage keyed by authenticated user and session identity. |
+| `MemoryFlowStateStore` | Thread-safe process-local implementation. |
+| `SqliteFlowStateStore` | Durable SQLite WAL implementation that survives principal reconstruction and restarts. |
+
 ## Audit and observability
 
 | Name | Contract |

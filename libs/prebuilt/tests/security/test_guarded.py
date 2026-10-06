@@ -248,6 +248,15 @@ def test_delegate_requires_explicit_or_inherited_security() -> None:
         delegate(RunnableLambda(lambda value: value), scopes=["read"])
 
 
+def test_delegate_rejects_replacement_of_inherited_security() -> None:
+    """A child cannot switch policy or flow-state stores during delegation."""
+    graph = RunnableLambda(lambda value: value)
+    graph._security_config = SecurityConfig()
+
+    with pytest.raises(SecurityConfigurationError, match="cannot replace"):
+        delegate(graph, scopes=["read"], security=SecurityConfig())
+
+
 def test_delegate_does_not_reprepare_attenuated_module_slot() -> None:
     """Credential preparation cannot regrow a slot after transfer restricts it."""
 

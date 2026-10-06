@@ -548,7 +548,7 @@ def _value_no_broader(original: Any, transformed: Any) -> bool:
         transformed, set | frozenset
     ):
         return transformed <= original
-    return transformed == original
+    return bool(transformed == original)
 
 
 def coerce_approval(response: Any, escalation: EscalationRequest) -> Approval:
