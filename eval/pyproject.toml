@@ -1,0 +1,34 @@
+[project]
+name = "slanggraph-eval"
+version = "0.1.0"
+description = "Reproducible evaluation artifact for slangGraph security mediation"
+requires-python = ">=3.11"
+dependencies = []
+
+[dependency-groups]
+dev = [
+  "pytest>=8.3,<9",
+  "ruff>=0.11,<0.12",
+]
+
+[tool.uv]
+package = true
+
+[tool.ruff]
+line-length = 100
+src = ["src", "tests"]
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "N", "UP", "RUF", "B", "SIM"]
+
+[tool.ruff.lint.per-file-ignores]
+"src/slanggraph_eval/instrument/analyzer.py" = ["N802", "N815"]
+
+[tool.pytest.ini_options]
+addopts = "-q"
+pythonpath = ["."]
+testpaths = ["tests"]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"

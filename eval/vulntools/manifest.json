@@ -1,0 +1,92 @@
+{
+  "schema_version": "1.0.0",
+  "tools": [
+    {
+      "name": "read_file",
+      "cohort": "headline",
+      "declared_resources": ["filesystem"],
+      "argument_origins": {
+        "base": "ambient",
+        "user_path": "untrusted_tag"
+      }
+    },
+    {
+      "name": "write_file",
+      "cohort": "headline",
+      "declared_resources": ["filesystem"],
+      "argument_origins": {
+        "base": "ambient",
+        "filename": "untrusted_tag",
+        "contents": "untrusted_tag"
+      }
+    },
+    {
+      "name": "run_shell",
+      "cohort": "headline",
+      "declared_resources": ["exec"],
+      "argument_origins": {
+        "allowed_argv0": "ambient",
+        "user_argument": "untrusted_tag",
+        "cwd": "ambient"
+      }
+    },
+    {
+      "name": "sql_query",
+      "cohort": "headline",
+      "declared_resources": ["sql"],
+      "argument_origins": {
+        "database": "ambient",
+        "account_id": "untrusted_tag"
+      }
+    },
+    {
+      "name": "web_fetch",
+      "cohort": "headline",
+      "declared_resources": ["network"],
+      "argument_origins": {
+        "url": "untrusted_tag"
+      }
+    },
+    {
+      "name": "send_email",
+      "cohort": "headline",
+      "declared_resources": ["mail"],
+      "argument_origins": {
+        "mailer": "ambient",
+        "sender": "ambient",
+        "recipient": "untrusted_tag",
+        "subject": "untrusted_tag",
+        "body": "untrusted_tag"
+      }
+    },
+    {
+      "name": "post_to_slack",
+      "cohort": "headline",
+      "declared_resources": ["chat"],
+      "argument_origins": {
+        "slack_client": "ambient",
+        "configured_webhook": "ambient",
+        "message": "untrusted_tag"
+      }
+    },
+    {
+      "name": "delegate_to_subagent",
+      "cohort": "headline",
+      "declared_resources": ["delegation"],
+      "argument_origins": {
+        "runtime": "ambient",
+        "prompt": "untrusted_tag",
+        "requested_tools": "untrusted_tag"
+      }
+    },
+    {
+      "name": "camel_argument_hijack",
+      "cohort": "auxiliary",
+      "declared_resources": ["filesystem"],
+      "argument_origins": {
+        "approved_root": "ambient",
+        "trusted_retrieved_name": "trusted_tag"
+      }
+    }
+  ]
+}

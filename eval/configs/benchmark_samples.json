@@ -1,0 +1,29 @@
+{
+  "schema_version": "1.0.0",
+  "agentdojo": [
+    {
+      "source": "vendor/agentdojo/src/agentdojo/default_suites/v1/tools/file_reader.py",
+      "function": "read_file"
+    },
+    {
+      "source": "vendor/agentdojo/src/agentdojo/default_suites/v1/tools/web.py",
+      "function": "get_webpage"
+    },
+    {
+      "source": "vendor/agentdojo/src/agentdojo/default_suites/v1/tools/email_client.py",
+      "function": "send_email"
+    },
+    {
+      "source": "vendor/agentdojo/src/agentdojo/default_suites/v1/tools/banking_client.py",
+      "function": "send_money"
+    },
+    {
+      "source": "vendor/agentdojo/src/agentdojo/default_suites/v1/tools/slack.py",
+      "function": "send_channel_message"
+    }
+  ],
+  "injecagent": {
+    "tool_schema": "vendor/injecagent/data/tools.json",
+    "note": "The pinned artifact contains tool schemas, prompts, and simulated responses, not executable tool implementations; implementation sink exposure is not statically measurable."
+  }
+}

@@ -1,0 +1,27 @@
+{
+  "schema_version": "1.0.0",
+  "endpoint": "http://localhost:11434/v1",
+  "api_key": "ollama",
+  "temperature": 0,
+  "seed": 20261005,
+  "models": [
+    {
+      "role": "primary",
+      "tag": "qwen3.8:27b",
+      "local_id": "22130167c4c2",
+      "model_digest": "sha256:f5f1dd8920d417aac2718b0bda3403da274301efdd6760b4f0f4b864ff2ad57d",
+      "num_ctx": 40960,
+      "advertised_context": 262144,
+      "tool_capable": true
+    },
+    {
+      "role": "secondary",
+      "tag": "qwen3:8b",
+      "local_id": "500a1f067a9f",
+      "model_digest": "sha256:a3de86cd1c132c822487ededd47a324c50491393e6565cd14bafa40d0b8e686f",
+      "num_ctx": 40960,
+      "advertised_context": 40960,
+      "tool_capable": true
+    }
+  ]
+}

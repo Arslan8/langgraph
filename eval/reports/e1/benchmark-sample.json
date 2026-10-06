@@ -1,0 +1,85 @@
+{
+  "evidence": [
+    {
+      "parse_errors": [],
+      "schema_version": "1.0.0",
+      "sinks": [],
+      "source": "/data/langgraph/eval/vendor/agentdojo/src/agentdojo/default_suites/v1/tools/file_reader.py",
+      "tool": "read_file"
+    },
+    {
+      "parse_errors": [],
+      "schema_version": "1.0.0",
+      "sinks": [],
+      "source": "/data/langgraph/eval/vendor/agentdojo/src/agentdojo/default_suites/v1/tools/web.py",
+      "tool": "get_webpage"
+    },
+    {
+      "parse_errors": [],
+      "schema_version": "1.0.0",
+      "sinks": [],
+      "source": "/data/langgraph/eval/vendor/agentdojo/src/agentdojo/default_suites/v1/tools/email_client.py",
+      "tool": "send_email"
+    },
+    {
+      "parse_errors": [],
+      "schema_version": "1.0.0",
+      "sinks": [],
+      "source": "/data/langgraph/eval/vendor/agentdojo/src/agentdojo/default_suites/v1/tools/banking_client.py",
+      "tool": "send_money"
+    },
+    {
+      "parse_errors": [],
+      "schema_version": "1.0.0",
+      "sinks": [],
+      "source": "/data/langgraph/eval/vendor/agentdojo/src/agentdojo/default_suites/v1/tools/slack.py",
+      "tool": "send_channel_message"
+    }
+  ],
+  "experiment": "E1",
+  "rows": [
+    {
+      "analyzable": true,
+      "benchmark": "AgentDojo",
+      "note": "in-memory benchmark implementation",
+      "static_sinks": 0,
+      "tool": "read_file"
+    },
+    {
+      "analyzable": true,
+      "benchmark": "AgentDojo",
+      "note": "in-memory benchmark implementation",
+      "static_sinks": 0,
+      "tool": "get_webpage"
+    },
+    {
+      "analyzable": true,
+      "benchmark": "AgentDojo",
+      "note": "in-memory benchmark implementation",
+      "static_sinks": 0,
+      "tool": "send_email"
+    },
+    {
+      "analyzable": true,
+      "benchmark": "AgentDojo",
+      "note": "in-memory benchmark implementation",
+      "static_sinks": 0,
+      "tool": "send_money"
+    },
+    {
+      "analyzable": true,
+      "benchmark": "AgentDojo",
+      "note": "in-memory benchmark implementation",
+      "static_sinks": 0,
+      "tool": "send_channel_message"
+    },
+    {
+      "analyzable": false,
+      "benchmark": "InjecAgent",
+      "note": "The pinned artifact contains tool schemas, prompts, and simulated responses, not executable tool implementations; implementation sink exposure is not statically measurable.",
+      "static_sinks": "N/A",
+      "tool": "330 declared schemas"
+    }
+  ],
+  "schema_version": "1.0.0"
+}

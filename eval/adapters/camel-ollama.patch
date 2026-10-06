@@ -1,0 +1,61 @@
+diff --git a/src/camel/models.py b/src/camel/models.py
+index 1f33b1d..f2d4a88 100644
+--- a/src/camel/models.py
++++ b/src/camel/models.py
+@@ -46,6 +46,8 @@ _supported_model_names = {
+     "gpt-4o-mini-2024-07-18": "GPT-4",
+     "gpt-4.1-2025-04-14": "ChatGPT",
+     "gpt-4.1-nano-2025-04-14": "ChatGPT",
++    "qwen3:8b": "Qwen",
++    "qwen3.8:27b": "Qwen",
++    "qwen3": "Qwen",
++    "qwen3.8": "Qwen",
+ } | _oai_thinking_models_with_effort
+ suffixes = ["", "+camel", "+camel+secpol", "+camel+secpol+strict"]
+
+@@ -66,6 +68,10 @@ def _is_oai_reasoning_model(model: str) -> bool:
+     return "o4" in model or "o3" in model or "o1" in model or "codex" in model
+
+
++def _provider_model_name(model: str) -> str:
++    return model.split(":", 1)[1]
++
++
+ MODEL_NAMES.update(CAMEL_MODEL_NAMES)
+
+
+@@ -106,14 +112,19 @@ def make_tools_pipeline(
+         else:
+             max_tokens = 65535
+-        llm = agent_pipeline.GoogleLLM(model.split(":")[1], client, max_tokens=max_tokens)
++        llm = agent_pipeline.GoogleLLM(_provider_model_name(model), client, max_tokens=max_tokens)
+     elif "openai" in model:
+-        client = openai.OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
++        client = openai.OpenAI(
++            api_key=os.getenv("OPENAI_API_KEY"),
++            base_url=os.getenv("OPENAI_BASE_URL"),
++        )
+         # reasoning models do not support temperature and their "system" message is called "developer" message
+         if _is_oai_reasoning_model(model):
+-            llm = agent_pipeline.OpenAILLM(client, model.split(":")[1], reasoning_effort, None)
++            llm = agent_pipeline.OpenAILLM(client, _provider_model_name(model), reasoning_effort, None)
+         else:
+-            llm = agent_pipeline.OpenAILLM(client, model.split(":")[1], None)
++            llm = agent_pipeline.OpenAILLM(client, _provider_model_name(model), None)
+     elif "anthropic" in model:
+         client = anthropic.Anthropic(api_key=os.getenv("ANTHROPIC_API_KEY"))
+         if thinking_budget_tokens:
+@@ -121,12 +132,12 @@ def make_tools_pipeline(
+         else:
+             max_tokens = 8192
+         llm = agent_pipeline.AnthropicLLM(
+-            client, model.split(":")[1], thinking_budget_tokens=thinking_budget_tokens, max_tokens=max_tokens
++            client, _provider_model_name(model), thinking_budget_tokens=thinking_budget_tokens, max_tokens=max_tokens
+         )
+     else:
+         raise ValueError("Invalid model")
+
+-    llm.name = model.split(":")[1]
++    llm.name = _provider_model_name(model)
+
+     engine = _SECURITY_POLICY_ENGINES[suite]
