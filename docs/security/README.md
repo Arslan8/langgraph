@@ -8,6 +8,8 @@ preserves the existing execution path.
 
 Start with the [10-line HOWTO](HOWTO.md), then use the
 [behavior reference](reference.md) and [complete public API reference](api.md).
+The task-oriented [user guide](users/README.md) covers application integration,
+tool authorization, modules, session flow, operations, and deployment boundaries.
 Existing applications should follow the [migration guide](migration.md) and
 [worked patterns](workflows.md). The constructive DAC language is specified by
 the [frozen `.slp` profile grammar](profiles.md). The target path from mandatory

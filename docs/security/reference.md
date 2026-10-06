@@ -29,8 +29,9 @@ reserved value is stored in `RunnableConfig`, never graph state. Pass configured
 modules to `with_principal` so their credential-preparation hooks run.
 
 `SecurityConfig` accepts ordered modules, DAC overrides, an audit sink, an
-observer, a positive policy timeout, and `require_principal`. It can be supplied
-to `ToolNode(..., security=config)` or `StateGraph.compile(security=config)`.
+observer, a positive policy timeout, `require_principal`, and an optional
+`SessionFlowPolicy`. It can be supplied to `ToolNode(..., security=config)` or
+`StateGraph.compile(security=config)`.
 Modules that can escalate require a real checkpointer.
 
 `security=None` is a compatibility promise: no principal is required, no policy
@@ -89,6 +90,24 @@ Use `delegate(child_graph, scopes=[...], security=config)` to invoke a child
 with an explicit scope set. Scope growth is denied. Roles are retained, module
 blobs are independently copied, and every module can restrict credential
 transfer. The child principal records `delegated_by`.
+
+## Session information flow
+
+`SessionFlowPolicy` is an operator-configured, coarse program-counter policy for
+confidentiality across mediated calls. Every statically configured tool must
+have a `ToolFlowRule` describing its maximum possible output label and optional
+sink ceiling. The framework does not infer these classifications.
+
+Labels are keyed by authenticated user and session outside graph state. They are
+raised before parallel fan-out, persist across calls, and are checked before
+physical execution. Atomic reservations prevent incompatible sources and sinks
+from racing across independent invocations. `MemoryFlowStateStore` is
+process-local; `SqliteFlowStateStore` coordinates durable state across workers.
+
+This covers sinks crossing `ToolNode` or `guarded_tool`. It does not mediate
+model final text or arbitrary Python callbacks. See the
+[session-flow user guide](users/session-flow.md) for configuration and the exact
+boundary.
 
 ## Audit and observability
 
