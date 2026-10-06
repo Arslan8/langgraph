@@ -2,6 +2,9 @@
 
 Status: Accepted
 
+The operational lowering sequence and failure diagnostics are specified in
+[Grant lowering and host capability negotiation](../lowering.md).
+
 ## Context
 
 The existing security layer mediates configured `ToolNode` and `guarded_tool`

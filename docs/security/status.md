@@ -2,7 +2,8 @@
 
 This page is the authoritative distinction between code that exists on the
 branch and architecture accepted for later implementation. ADR 0007 describes
-the target design; an accepted ADR is not evidence that its adapters exist.
+the target design, and [grant lowering](lowering.md) specifies its negotiation
+sequence; accepted documentation is not evidence that its adapters exist.
 
 ## Shipped decision layer
 
