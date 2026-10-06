@@ -11,7 +11,11 @@ from typing import Any
 
 from .audit import AuditWriter
 from .instrument import (
+    ADVISORY_ADAPTER,
+    COMPOSED_ADAPTERS,
+    HOST_ADAPTER,
     Defense,
+    EnforcementAdapterModel,
     ResourceClass,
     TaintOrigin,
     ToolSpec,
@@ -28,16 +32,16 @@ class _ManifestTool:
     argument_origins: tuple[tuple[str, TaintOrigin], ...]
 
 
-_COLUMNS = (
-    ("none", Defense.NONE),
-    ("progent", Defense.PROGENT),
-    ("camel", Defense.CAMEL),
-    ("langchain-eydii", Defense.BOLT_ON),
-    ("langchain-forge", Defense.BOLT_ON),
-    ("langchain-nuggets", Defense.BOLT_ON),
-    ("slanggraph-advisory", Defense.SLANGGRAPH_ADVISORY),
-    ("slanggraph-landlock", Defense.SLANGGRAPH_LANDLOCK),
-    ("slanggraph-landlock-broker", Defense.SLANGGRAPH_LANDLOCK_BROKER),
+_COLUMNS: tuple[tuple[str, Defense, EnforcementAdapterModel | None], ...] = (
+    ("none", Defense.NONE, None),
+    ("progent", Defense.PROGENT, None),
+    ("camel", Defense.CAMEL, None),
+    ("langchain-eydii", Defense.BOLT_ON, None),
+    ("langchain-forge", Defense.BOLT_ON, None),
+    ("langchain-nuggets", Defense.BOLT_ON, None),
+    ("slanggraph-policy-only", Defense.SLANGGRAPH, ADVISORY_ADAPTER),
+    ("slanggraph-host-adapter", Defense.SLANGGRAPH, HOST_ADAPTER),
+    ("slanggraph-composed-adapters", Defense.SLANGGRAPH, COMPOSED_ADAPTERS),
 )
 
 
@@ -63,7 +67,10 @@ def generate_census(
         )
         if report.parse_errors:
             raise ValueError(f"cannot analyze {tool.name}: {report.parse_errors}")
-        scores = {label: score_defense(report, defense) for label, defense in _COLUMNS}
+        scores = {
+            label: score_defense(report, defense, adapters=adapters)
+            for label, defense, adapters in _COLUMNS
+        }
         row: dict[str, Any] = {
             "tool": tool.name,
             "cohort": tool.cohort,
@@ -124,7 +131,7 @@ def _write_json(
     evidence: list[dict[str, Any]],
 ) -> None:
     payload = {
-        "schema_version": "1.0.0",
+        "schema_version": "1.1.0",
         "experiment": "E1",
         "instrument": "shared-static-sink-report",
         "manifest": _display_path(manifest_path),
@@ -138,7 +145,7 @@ def _write_json(
 
 def _write_csv(path: Path, rows: list[dict[str, Any]]) -> None:
     with path.open("w", encoding="utf-8", newline="") as handle:
-        writer = csv.DictWriter(handle, fieldnames=tuple(rows[0]))
+        writer = csv.DictWriter(handle, fieldnames=tuple(rows[0]), lineterminator="\n")
         writer.writeheader()
         writer.writerows(rows)
 
@@ -148,7 +155,7 @@ def _write_markdown(path: Path, rows: list[dict[str, Any]]) -> None:
     lines = [
         "# E1 static exposure census",
         "",
-        "Counts are projections of one static report through documented mediation models. ",
+        "Counts are projections of one static report through documented mediation models.",
         "They are not runtime-blocking results. See `exposure.json` for every sink decision.",
         "",
         "| " + " | ".join(columns) + " |",

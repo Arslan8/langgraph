@@ -403,7 +403,7 @@ class BoundExecRule:
 
 @dataclass(frozen=True, slots=True)
 class ConstructiveGrant:
-    """DAC output before mandatory-policy filtering and backend lowering."""
+    """DAC output before mandatory-policy filtering and adapter lowering."""
 
     subject: tuple[str, str]
     fs: tuple[BoundFsRule, ...] = ()

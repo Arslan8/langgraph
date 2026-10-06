@@ -34,20 +34,22 @@ capability so partial results cannot be mistaken for completed experiments.
 - Run full E0 AgentDojo reproduction and E3 parity for both models.
 - Add InjecAgent and ASB thin adapters and execute their specified suites.
 - Build and execute E4 synthetic graph-shape completeness cases.
-- Run E5 only after executable backends exist; latency cannot be inferred from a
+- Run E5 only after executable adapters exist; latency cannot be inferred from a
   capability model.
 
 ## Blocked by core implementation, not evaluation code
 
-The LangGraph security layer currently lacks the planned `Grant` IR, Cedar request
-pipeline, backend contract, Landlock worker, and broker. Consequently:
+The LangGraph security layer currently lacks the planned final `Grant` IR, Cedar
+policy adapter, enforcement-adapter contract, Linux reference worker, and service
+adapters. Consequently:
 
-- E1 `slanggraph:landlock` and `slanggraph:landlock+broker` values are static
-  capability projections.
-- E2 cannot yet truthfully claim kernel `EACCES`, service re-check, credential
-  subset enforcement, or backend audit evidence.
-- E3 and E5 slangGraph backend rows cannot run.
+- E1 `slanggraph-host-adapter` and `slanggraph-composed-adapters` values are
+  static capability projections, independent of any particular platform lowering.
+- E2 cannot yet truthfully claim platform denial, service re-check, credential
+  subset enforcement, or adapter audit evidence.
+- E3 and E5 slangGraph adapter rows cannot run.
 
 These rows remain pending rather than being replaced by mocks. The local canaries
 and third-party wrappers may use doubles only to isolate their stated boundary;
-slangGraph kernel/broker enforcement requires the real implementation.
+slangGraph enforcement requires real, attested adapters for the selected platform
+and resource services.

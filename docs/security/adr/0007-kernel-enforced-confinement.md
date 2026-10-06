@@ -1,4 +1,4 @@
-# 0007: Enforce tool grants outside the Python process
+# 0007: Enforce tool grants through pluggable adapters
 
 Status: Accepted
 
@@ -14,9 +14,9 @@ arguments into privilege escalation.
 Python cannot repair this boundary from inside the same process. A Python
 timeout cannot reliably stop running native or synchronous code, a descriptor
 is only a claim about behavior, and wrappers do not mediate direct system calls.
-The framework must authorize a concrete least-privilege grant and place
-untrusted code in a security domain where the operating system or resource
-owner enforces that grant.
+The framework must authorize a concrete least-privilege grant and pass it to
+adapters that enforce it at the operating system, sandbox, service, or resource
+owner. No platform mechanism is part of the policy or grant abstraction.
 
 This decision refines ADRs 0001, 0003, 0004, and 0006. Their hook framework,
 ordering, private blobs, principal binding, approvals, auditing, delegation,
@@ -25,10 +25,11 @@ the enforcement boundary, this decision supersedes it.
 
 ## Trust model
 
-Trusted components are the framework, operator node code, evaluator, broker,
-kernel, backend implementation, and hook-placement gate. Untrusted components
-are the model, every tool implementation, all input and retrieved data, native
-tool dependencies, and every subagent.
+Trusted components are the framework, operator node code, policy evaluator,
+selected enforcement adapters, their underlying isolation mechanisms, resource
+owners, and the hook-placement gate. Untrusted components are the model, every
+tool implementation, all input and retrieved data, native tool dependencies,
+and every subagent.
 
 Operator node code is trusted to implement application computation, but its
 security-sensitive operations are still subject to the compile gate. An
@@ -42,14 +43,20 @@ Python interpreter.
 
 ## Decision
 
-Use one policy pipeline and three enforcement loci:
+Use one platform-neutral policy pipeline and independently selected enforcement
+adapters at three loci:
 
-1. Local code runs in a fresh worker confined by a kernel backend before any
+1. Local code runs in a fresh worker confined by a host adapter before any
    untrusted tool module is imported.
-2. Operations whose semantics or credentials cannot be represented by the
-   kernel go through a trusted broker.
-3. Remote operations use short-lived credentials whose remote permissions are
-   no broader than the authorized grant.
+2. Operations whose semantics or credentials cannot be represented by that host
+   adapter go through a trusted service adapter.
+3. Remote operations use resource adapters that mint short-lived credentials
+   whose remote permissions are no broader than the authorized grant.
+
+The default mandatory-policy adapter uses Cedar. Cedar syntax, platform APIs,
+Landlock rule types, Windows handles, and broker protocols do not appear in the
+`Grant` IR. Changing the policy engine or enforcement platform does not change
+profiles, module hooks, or grant semantics.
 
 The pipeline is:
 
@@ -69,13 +76,13 @@ profile + principal envelope + shares
           one approval per call
                   |
                   v
-         canonical, attributed Grant
+    canonical, platform-neutral Grant
              /          |          \
             v           v           v
-         kernel       broker     resource side
+       host adapter  service adapter  resource adapter
 ```
 
-Default deny applies at every stage. A backend that cannot enforce a required
+Default deny applies at every stage. An adapter set that cannot enforce a required
 rule class reports it instead of silently lowering the rule to something
 broader.
 
@@ -107,10 +114,12 @@ land. Property tests define monotonicity over set inclusion: reducing the tool
 profile, principal envelope, or applicable shares cannot enlarge the resulting
 candidate.
 
-## Mandatory policy with Cedar
+## Mandatory policy adapter
 
-Cedar is the default mandatory-policy engine. OPA may be supplied behind the
-same `Policy` interface by deployments that already operate it.
+Cedar is the default mandatory-policy adapter. OPA may be supplied behind the
+same `Policy` interface by deployments that already operate it. Policy adapters
+return restrictive decisions over typed candidate lines; they do not emit
+platform-specific enforcement objects.
 
 Each surviving DAC line is authorized independently. The evaluator creates one
 ephemeral Cedar `permit` matching exactly that candidate line, combines it with
@@ -136,18 +145,20 @@ policy sets. It is not run as a per-request containment proof for module output.
 
 Reference operator policy covers ceilings, per-tool confinement, typed-domain
 compartmentalization, non-exfiltration, integrity, delegation depth, human
-oversight, quotas, supply-chain manifests, backend attestation, separation of
+oversight, quotas, supply-chain manifests, adapter attestation, separation of
 duty, and audit requirements.
 
-## Grant IR
+## Platform-neutral Grant IR
 
 An allowed call becomes an immutable `Grant`. It identifies the subject domain
-as `(principal, tool)` and contains filesystem operations, TCP port operations,
-executable authority, syscall classes, resource limits, broker service rules,
-and provenance for every surviving line.
+as `(principal, tool)` and contains typed resource selectors, filesystem
+operations, network operations, executable authority, syscall classes, resource
+limits, service rules, and provenance for every surviving line. The IR expresses
+security semantics, not a platform lowering: it contains no Landlock access bits,
+Linux file descriptors, Windows handles, sandbox bytecode, or broker wire types.
 
 The `Grant` also contains an explicit runtime baseline supplied by the selected
-backend before mandatory policy runs. On Python this normally includes
+adapter set before mandatory policy runs. On Python this normally includes
 read-only access to the interpreter's runtime libraries, standard library,
 declared tool artifact and dependencies, `/dev/urandom`, and timezone data;
 execute authority is limited to the interpreter. Native extension `.so` files
@@ -155,51 +166,55 @@ need read access for `mmap`, not Landlock `EXECUTE`, which governs `execve`-styl
 execution. A private per-worker temporary directory receives only the minimum
 read, write, create, truncate, and delete rights required by the profile.
 
-Baseline lines have backend provenance, pass through the same operator forbids,
+Baseline lines have adapter provenance, pass through the same operator forbids,
 appear in the final `Grant`, and are included in the attestation and audit. A
-backend may not add hidden runtime authority during lowering. If its declared
+adapter may not add hidden runtime authority during lowering. If its declared
 baseline is insufficient to start the runtime, execution fails rather than
 silently expanding the sandbox.
 
-The IR does not treat a `realpath()` string as filesystem authority. The trusted
-spawner resolves an existing object relative to a trusted root with `openat2`
-using `RESOLVE_BENEATH | RESOLVE_NO_MAGICLINKS`, opens an `O_PATH` descriptor,
-and supplies that descriptor as the Landlock rule's `parent_fd`. Create rights
-are attached to the resolved parent directory. Display paths may be retained
-for audit, but enforcement is compiled from descriptors.
+The IR does not treat a `realpath()` string as sufficient proof of filesystem
+identity. It carries a canonical semantic selector and the provenance needed for
+an adapter to resolve it without widening authority. The Linux reference adapter
+uses `openat2` with `RESOLVE_BENEATH | RESOLVE_NO_MAGICLINKS` and `O_PATH`
+descriptors; a Windows adapter can use native handles and reparse-point-safe
+resolution; another sandbox may use its own object model. Native resolved objects
+belong to the adapter's compiled sandbox, not the portable `Grant`.
 
 The `Grant` type and Cedar request construction freeze together after the Cedar
 integration lands.
 
-## Backend capability contract
+## Enforcement-adapter capability contract
 
-A backend reports its supported rule classes, compiles a `Grant` into a
-`Sandbox`, and produces an attestation describing its enforcement features and
-how they were detected. Before execution:
+An adapter set reports its supported rule classes, compiles a `Grant` into an
+enforcement plan, and produces an attestation describing its enforcement features
+and how they were detected. Host, service, and resource adapters may be composed;
+the framework evaluates their union without depending on their platform APIs.
+Before execution:
 
 ```text
-missing = grant.classes() - backend.capabilities()
+missing = grant.classes() - adapters.capabilities()
 ```
 
 An empty set may run. A non-empty set denies with
-`backend_cannot_enforce:<classes>` unless operator policy marks every missing
+`adapter_cannot_enforce:<classes>` unless operator policy marks every missing
 class `advisory-ok` for that subject. An advisory exception records the complete
 `unenforced` set and attestation on every decision and execution audit record.
 
-Lowering is conservative. A backend may implement a rule exactly, implement a
+Lowering is conservative. An adapter may implement a rule exactly, implement a
 strict subset, or report the class missing. It may never implement a superset.
-Property tests compare each backend's effective authority with its input
+Property tests compare each adapter's effective authority with its input
 `Grant`.
 
-The `advisory` backend enforces nothing and makes that fact conspicuous in trace
+The `advisory` adapter enforces nothing and makes that fact conspicuous in trace
 output. It exists for development and laptop compatibility, not as evidence of
-confinement. The backend and audit contracts freeze after this capability
-contract, advisory backend, and attestation path land.
+confinement. The adapter and audit contracts freeze after this capability
+contract, advisory adapter, and attestation path land.
 
-## Linux kernel backend
+## Linux reference adapter
 
-The first enforcing backend targets Landlock, seccomp-BPF, cgroup v2, rlimits,
-and a trusted supervisor:
+The first enforcing host adapter targets Landlock, seccomp-BPF, cgroup v2,
+rlimits, and a trusted supervisor. These mechanisms are an implementation of the
+generic adapter contract, not slangGraph's policy or Grant format:
 
 | Rule | Enforcement |
 | --- | --- |
@@ -213,7 +228,7 @@ and a trusted supervisor:
 | open-file count | `RLIMIT_NOFILE` |
 | wall clock | supervisor timer followed by pidfd or cgroup termination |
 
-The backend queries `LANDLOCK_CREATE_RULESET_VERSION` and derives capabilities
+The Linux adapter queries `LANDLOCK_CREATE_RULESET_VERSION` and derives capabilities
 from the returned ABI. It never infers Landlock features from a kernel release
 number. TCP port rules require ABI 4 or later. Domain and destination-address
 policy is not represented as Landlock network authority; it requires the broker
@@ -224,7 +239,7 @@ trusted spawner before the framework creates event loops, telemetry exporters,
 or any other threads. The spawner is the only component that forks workers. It
 contains no untrusted tool code and forks a fresh worker for every call.
 
-The spawner resolves paths, opens the `O_PATH` descriptors, creates the Landlock
+The Linux adapter's spawner resolves paths, opens the `O_PATH` descriptors, creates the Landlock
 ruleset, adds every filesystem and network rule, and then closes the `O_PATH`
 descriptors. The worker inherits one ruleset descriptor, the result pipe, and
 the broker socket only. Where cgroup delegation is available, the spawner holds
@@ -238,7 +253,7 @@ Phase one does not require Linux namespaces. PID isolation is a separately
 attested capability because unprivileged PID namespaces generally depend on a
 user namespace and host policy may prohibit their creation. Likewise, cgroup v2
 limits are capabilities only when the service manager delegated a subtree to
-the spawner. The backend detects delegation and `cgroup.kill` independently. If
+the spawner. The Linux adapter detects delegation and `cgroup.kill` independently. If
 cgroup enforcement is unavailable, it reports the missing limit capabilities
 and may conservatively lower supported limits to `RLIMIT_CPU`, `RLIMIT_AS`,
 `RLIMIT_NPROC`, and `RLIMIT_NOFILE`. The capability contract decides whether the
@@ -272,9 +287,10 @@ active. On older or non-auditing hosts, evidence consists of the worker-visible
 `errno`, attempted operation metadata available to the supervisor, and worker
 exit status; the audit must not claim a kernel-generated denial event.
 
-## Broker and remote enforcement
+## Service and resource adapters
 
-At fork time, the broker binds its socketpair endpoint to a spawn record
+The reference service adapter uses a broker. At fork time, that broker binds its
+socketpair endpoint to a spawn record
 containing the principal, tool identity, `Grant` hash, and nonce. Worker
 requests name only the desired broker operation and arguments. The broker
 ignores any worker-supplied identity, grant, or claimed scope and re-evaluates
@@ -331,16 +347,16 @@ The tool manifest selects the locus through its `runs` field:
 
 | Tool form | Route |
 | --- | --- |
-| Python function or native extension | fresh worker under the kernel backend |
-| CLI or subprocess | confined worker with Landlock executable authority |
+| Python function or native extension | fresh worker under the selected host adapter |
+| CLI or subprocess | confined worker with adapter-provided executable authority |
 | local MCP server | server envelope plus MCP proxy; strict mode starts a server per call |
-| code execution | WASI or microVM backend |
+| code execution | WASI or microVM host adapter |
 | browser or computer use | confined launcher plus URL proxy |
 | database | broker-selected database role and row-level security |
 | HTTP API, SaaS, remote MCP | broker-held credential and resource-side token |
 | non-Python runtime | language-neutral `slanggraph-exec` launcher |
 
-Local MCP per-call narrowing is broker enforcement inside a kernel-enforced
+Local MCP per-call narrowing is service-adapter enforcement inside a host-confined
 server envelope. It does not claim that an already-running server's kernel
 domain can be widened or reset.
 
@@ -348,12 +364,12 @@ domain can be widened or reset.
 
 The audit chain records candidate lines, removed lines and policy identifiers,
 normalization and descriptor-resolution failures, approval state, final grant
-and provenance, backend capabilities, attestation, unenforced classes,
+and provenance, adapter capabilities, attestation, unenforced classes,
 delegation subset results, broker requests, effective token scope, worker exit,
 supervisor termination, and kernel denial evidence when available.
 
 Failure to parse, bind, normalize, resolve, authorize, lower, attest, isolate,
-or audit denies execution. No platform backend silently degrades. Policy hook
+or audit denies execution. No enforcement adapter silently degrades. Policy hook
 timeouts still deny the decision, but timeout of untrusted tool execution is
 enforced by the supervisor rather than a Python thread timeout.
 
@@ -362,46 +378,46 @@ enforced by the supervisor rather than a Python thread timeout.
 Phase one is five weeks and contains:
 
 1. profile grammar and monotonic constructive DAC evaluator;
-2. attributed `Grant` IR with descriptor-based path compilation;
+2. attributed platform-neutral `Grant` IR and resource selectors;
 3. Cedar integration and reference mandatory policies;
-4. backend interface, capability contract, attestation, audit changes, and
+4. enforcement-adapter interface, capability contract, attestation, audit changes, and
    `advisory`; and
-5. the dedicated spawner and Linux Landlock backend.
+5. the dedicated spawner and Linux reference adapter.
 
-Broker custody, MCP proxying, the native launcher, a second enforcing backend,
+Service credential custody, MCP proxying, the native launcher, a second host adapter,
 and benchmark evaluation are phase two and are scoped after phase one.
 
 The seven existing hook names and their invocation structure remain stable.
 The course contract promises that modules return a verdict and may optionally
 emit forbid policies. The detailed return type is not frozen until Cedar
 integration. The profile grammar freezes after step 1; `Grant` and Cedar request
-construction freeze after step 3; backend and audit contracts freeze after step
+construction freeze after step 3; adapter and audit contracts freeze after step
 4.
 
 ## Consequences
 
 Tool startup becomes more expensive and platform-specific. Correctness takes
 priority over the provisional 1-to-3 millisecond estimate: the phase-one target
-is less than 5 milliseconds of Landlock-backend overhead per call and less than
+is less than 5 milliseconds of Linux-reference-adapter overhead per call and less than
 2 percent of an AgentDojo run, measured before pooling is considered. Advisory
 mode retains the previous sub-millisecond decision target but provides no
 resource confinement.
 
-Profiles, normalizers, path resolution, backend feature detection, and broker
+Profiles, normalizers, path resolution, adapter feature detection, and service-adapter
 authentication become security-critical code. Operators must provision Linux
 hosts with the required LSM, cgroup, namespace, and seccomp support. Portable
-deployments must either select another enforcing backend or explicitly accept
+deployments must either select another enforcing adapter or explicitly accept
 advisory classes.
 
 The architecture gains a defensible distinction between authorization and
-enforcement: interface mediation decides what should happen, while the kernel,
-broker, or remote resource bounds what can happen when tool code is buggy or
-hostile.
+enforcement: interface mediation decides what should happen, while the selected
+host, service, and resource adapters bound what can happen when tool code is
+buggy or hostile.
 
 ## Non-goals
 
 This decision does not claim confinement of model final text, domain-level
-network policy without a broker or proxy, protection against kernel or backend
+network policy without a service adapter or proxy, protection against kernel or adapter
 bugs, or enforcement by a remote service whose API provides no suitable scoping
 mechanism.
 

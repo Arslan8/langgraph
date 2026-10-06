@@ -137,5 +137,5 @@ than argument values. Keep tool results, credentials, approval secrets, and raw
 arguments out of logs and telemetry.
 
 Current audit proves the recorded decision sequence and detects chain
-tampering. Kernel denials, backend attestation, final grants, and unenforced
-classes will be added with the backend contract; they do not exist today.
+tampering. Enforcement denials, adapter attestation, final grants, and unenforced
+classes will be added with the adapter contract; they do not exist today.

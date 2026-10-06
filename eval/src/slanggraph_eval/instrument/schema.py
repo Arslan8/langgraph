@@ -7,7 +7,7 @@ from dataclasses import asdict, dataclass
 from enum import Enum
 from typing import Any
 
-SCHEMA_VERSION = "1.0.0"
+SCHEMA_VERSION = "1.1.0"
 
 
 class SinkClass(str, Enum):
@@ -74,9 +74,20 @@ class Defense(str, Enum):
     PROGENT = "progent"
     CAMEL = "camel"
     BOLT_ON = "bolt_on"
-    SLANGGRAPH_ADVISORY = "slanggraph_advisory"
-    SLANGGRAPH_LANDLOCK = "slanggraph_landlock"
-    SLANGGRAPH_LANDLOCK_BROKER = "slanggraph_landlock_broker"
+    SLANGGRAPH = "slanggraph"
+
+
+@dataclass(frozen=True, slots=True)
+class EnforcementAdapterModel:
+    """Named capability set for one projected slangGraph deployment.
+
+    The model is deliberately independent of a concrete implementation. A
+    Linux, Windows, WASI, microVM, service, or remote-resource adapter may
+    provide any subset of the same resource capabilities.
+    """
+
+    name: str
+    capabilities: frozenset[ResourceClass]
 
 
 @dataclass(frozen=True, slots=True)
@@ -178,6 +189,8 @@ class ExposureScore:
     exposed: tuple[str, ...]
     mediated: tuple[str, ...]
     decisions: tuple[SinkDecision, ...]
+    adapter_model: str | None = None
+    adapter_capabilities: tuple[ResourceClass, ...] = ()
     schema_version: str = SCHEMA_VERSION
 
     def to_dict(self) -> dict[str, Any]:

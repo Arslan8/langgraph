@@ -3,7 +3,7 @@
 Counts are projections of one static report through documented mediation models.
 They are not runtime-blocking results. See `exposure.json` for every sink decision.
 
-| tool | cohort | static_sinks | none | progent | camel | langchain-eydii | langchain-forge | langchain-nuggets | slanggraph-advisory | slanggraph-landlock | slanggraph-landlock-broker |
+| tool | cohort | static_sinks | none | progent | camel | langchain-eydii | langchain-forge | langchain-nuggets | slanggraph-policy-only | slanggraph-host-adapter | slanggraph-composed-adapters |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
 | read_file | headline | 1 | 1 | 1 | 0 | 1 | 1 | 1 | 1 | 0 | 0 |
 | write_file | headline | 1 | 1 | 1 | 0 | 1 | 1 | 1 | 1 | 0 | 0 |

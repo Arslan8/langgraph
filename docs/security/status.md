@@ -2,7 +2,7 @@
 
 This page is the authoritative distinction between code that exists on the
 branch and architecture accepted for later implementation. ADR 0007 describes
-the target design; an accepted ADR is not evidence that its backend exists.
+the target design; an accepted ADR is not evidence that its adapters exist.
 
 ## Shipped decision layer
 
@@ -26,10 +26,10 @@ the target design; an accepted ADR is not evidence that its backend exists.
 | Step | Status | Freeze consequence |
 | --- | --- | --- |
 | 1. Profile grammar and monotonic DAC evaluator | Complete | The `.slp` grammar is frozen. |
-| 2. Attributed kernel-facing `Grant` IR and descriptor path compilation | Not implemented | No `Grant` API is frozen. `ConstructiveGrant` is only the DAC candidate. |
+| 2. Attributed platform-neutral `Grant` IR and resource selectors | Not implemented | No `Grant` API is frozen. `ConstructiveGrant` is only the DAC candidate. |
 | 3. Cedar integration and reference forbid policies | Not implemented | Cedar request construction and module forbid emission are not frozen. |
-| 4. Backend interface, capability contract, attestation, audit changes, and `advisory` | Not implemented | Backend and expanded audit contracts are not frozen. |
-| 5. Dedicated spawner and Landlock backend | Not implemented | There is no kernel confinement claim. |
+| 4. Enforcement-adapter interface, capability contract, attestation, audit changes, and `advisory` | Not implemented | Adapter and expanded audit contracts are not frozen. |
+| 5. Dedicated spawner and Linux reference adapter | Not implemented | There is no host-confinement claim. |
 
 The seven hook names and invocation structure are frozen. The detailed
 `tool_call_permission` return contract remains open for the planned forbid-only
@@ -41,11 +41,11 @@ policies once Cedar integration lands.
 The following accepted components are intentionally deferred until phase one
 lands and is measured:
 
-- broker credential custody and authenticated spawn records;
+- service-adapter credential custody and authenticated spawn records;
 - AWS STS session policies and GitHub App installation token issuers;
 - MCP per-call proxying;
 - the native `slanggraph-exec` launcher;
-- a second enforcing backend such as WASI or a microVM;
+- a second host adapter such as Windows isolation, WASI, or a microVM;
 - AgentDojo, InjecAgent, and ASB evaluation harnesses; and
 - the vulnerable-tool comparison used by the paper.
 
@@ -67,7 +67,7 @@ kernel enforcement.
 ## Target security claim
 
 After phase-one steps 2 through 5 land and their capability contract passes,
-local untrusted tool code will run only under an attested backend or an explicit
+local untrusted tool code will run only under an attested adapter set or an explicit
 audited advisory exception. The final claim still excludes model final text,
 domain-level egress without a broker or proxy, kernel bugs, and remote APIs that
 cannot scope credentials.

@@ -20,6 +20,7 @@ uv run python ../../docs/security/examples/constructive_profile.py
 ```
 
 These programs demonstrate in-process decisions, mediation, and audit. They do
-not claim to confine arbitrary Python. The kernel backend described by
-[ADR 0007](../adr/0007-kernel-enforced-confinement.md) is separate work; until
-it lands, use operating-system isolation when tool code itself is untrusted.
+not claim to confine arbitrary Python. The pluggable enforcement architecture
+described by [ADR 0007](../adr/0007-kernel-enforced-confinement.md) is separate
+work; until an enforcing adapter lands, use operating-system isolation when tool
+code itself is untrusted.

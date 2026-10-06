@@ -144,7 +144,7 @@ lower-level records directly.
 | `BoundNetRule` | Surviving TCP operation and integer port with source provenance. |
 | `BoundExecRule` | Surviving executable path with source provenance. |
 | `BoundNamedRule` | Surviving service kind and bound attributes with source provenance. |
-| `ConstructiveGrant` | Result of DAC intersection before mandatory policy and backend lowering. It is not the kernel-facing `Grant` planned by ADR 0007. |
+| `ConstructiveGrant` | Result of DAC intersection before mandatory policy and adapter lowering. It is not the platform-neutral final `Grant` planned by ADR 0007. |
 | `RemovedLine` | Resource class, need/want requirement, reason, and source for a candidate removed during intersection. |
 | `DacEvaluation` | Constructive grant, removed lines, denial flag, and optional denial reason. |
 | `ProfileDocument` | Immutable tool and principal maps. `evaluate()` also gathers applicable inbound shares and supports full operator overrides. |
@@ -153,8 +153,9 @@ lower-level records directly.
 | `evaluate_dac` | Low-level intersection of one `ToolProfile`, one `PrincipalProfile`, normalized arguments, principal bindings, and prefiltered inbound shares. |
 
 Canonical path strings are a parser/evaluator invariant, not a TOCTOU defense.
-The future Landlock backend will resolve enforcement objects with descriptors as
-specified by ADR 0007.
+Each enforcing adapter must resolve resource objects safely for its platform. The
+Linux reference adapter will use descriptors as specified by ADR 0007; other
+platforms may use different native object identities behind the same contract.
 
 ## Exceptions and fail-closed behavior
 

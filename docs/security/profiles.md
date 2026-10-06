@@ -6,8 +6,8 @@ resources they may use or share. Evaluation computes:
 
 `tool profile with bound arguments ∩ principal envelope ∩ inbound shares`
 
-This result is a `ConstructiveGrant`. It is not the kernel-facing `Grant` from
-ADR 0007; mandatory policy still filters it before backend lowering.
+This result is a `ConstructiveGrant`. It is not the platform-neutral final `Grant`
+from ADR 0007; mandatory policy still filters it before adapter lowering.
 
 ## Complete example
 
@@ -100,4 +100,3 @@ they do not merge individual lines.
 
 Construction is monotone in each authority input: removing a tool request,
 principal envelope line, or share cannot add a surviving resource line.
-

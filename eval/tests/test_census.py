@@ -16,7 +16,7 @@ def test_vulntool_census_has_one_sink_per_case(tmp_path: Path) -> None:
 
     assert len(rows) == 9
     assert all(row["static_sinks"] == 1 for row in rows)
-    assert all(row["slanggraph-landlock-broker"] == 0 for row in rows)
+    assert all(row["slanggraph-composed-adapters"] == 0 for row in rows)
 
 
 def test_camel_hijack_is_separate_and_exposed(tmp_path: Path) -> None:

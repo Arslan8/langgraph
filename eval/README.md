@@ -8,9 +8,16 @@ Nothing in this directory is required by the LangGraph libraries at runtime.
 ## Claim and primary measure
 
 The primary claim is structural: interface-level defenses leave security-sensitive
-sinks below their mediation point, while a sufficiently capable kernel or broker
-backend can mediate the resulting resource operation. The headline measure is
+sinks below their mediation point, while a sufficiently capable set of enforcement
+adapters can mediate the resulting resource operation. The headline measure is
 **sink exposure**, not attack-success rate.
+
+slangGraph itself is not a Landlock system. Its policy pipeline constructs a
+platform-neutral grant, and a selected adapter set lowers that grant to enforcement
+available on the deployment. Landlock plus seccomp is the planned Linux reference
+adapter; Windows isolation, WASI, microVM, service-broker, and resource-side adapters
+can implement the same capability contract. E1 therefore names slangGraph adapter
+models by capability rather than treating a Linux mechanism as the architecture.
 
 The shared static instrument emits one record for every filesystem, network,
 process, database/service, native, or dynamic sink reachable from a tool argument.
@@ -62,11 +69,12 @@ CaMeL's released tests and a local-Ollama plumbing smoke test also run at the pi
 See `STATUS.md` for the exact completed/pending boundary and `reproduction/E0.md`
 for baseline qualifications.
 
-The repository's current security layer does **not** yet contain the planned Grant,
-Cedar, Landlock, or broker implementations. Therefore a zero-exposure static
-projection for `landlock+broker` is a capability-model result, not runtime blocking
-evidence. No report may label those slangGraph conditions as dynamically verified
-until those backends exist and emit enforcement audit records.
+The repository's current security layer does **not** yet contain the planned final
+Grant, Cedar policy adapter, enforcement-adapter contract, Linux reference adapter,
+or service adapters. Therefore a zero-exposure static projection for the composed
+adapter model is a capability-model result, not runtime blocking evidence. No report
+may label a slangGraph adapter condition as dynamically verified until the selected
+adapters exist and emit enforcement audit records.
 
 ## Local commands
 
