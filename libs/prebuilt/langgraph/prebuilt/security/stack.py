@@ -89,7 +89,13 @@ class SecurityStack:
         """Cancel queued policy work and release executor resources."""
         self._executor.shutdown(wait=False, cancel_futures=True)
 
-    def permission(self, principal: Principal, call: ToolCall) -> Decision:
+    def permission(
+        self,
+        principal: Principal,
+        call: ToolCall,
+        *,
+        approval: Approval | None = None,
+    ) -> Decision:
         """Run DAC first, then stop on the first module objection."""
         started = self._started()
         author = dac_check(principal, call.tool, call.normalized)
@@ -101,12 +107,20 @@ class SecurityStack:
             decision = self._sync_decision(
                 module, partial(module.tool_call_permission, principal, call)
             )
+            if _matches_approval(decision, call, approval):
+                decision = Decision(Verdict.ALLOW, f"approval:{module.name}")
             self._observe(principal, call, "permission", module.name, decision, started)
             if decision.verdict is not Verdict.ALLOW:
                 return decision
         return Decision(Verdict.ALLOW, "stack:allow")
 
-    async def apermission(self, principal: Principal, call: ToolCall) -> Decision:
+    async def apermission(
+        self,
+        principal: Principal,
+        call: ToolCall,
+        *,
+        approval: Approval | None = None,
+    ) -> Decision:
         """Asynchronously run DAC and module permission hooks."""
         started = self._started()
         author = dac_check(principal, call.tool, call.normalized)
@@ -118,6 +132,8 @@ class SecurityStack:
             decision = await self._async_decision(
                 module, partial(module.tool_call_permission, principal, call)
             )
+            if _matches_approval(decision, call, approval):
+                decision = Decision(Verdict.ALLOW, f"approval:{module.name}")
             self._observe(principal, call, "permission", module.name, decision, started)
             if decision.verdict is not Verdict.ALLOW:
                 return decision
@@ -348,6 +364,7 @@ class SecurityStack:
                 reason=decision.reason,
                 latency_ms=(perf_counter() - started) * 1000,
                 user_id=principal.user_id,
+                session_id=principal.session_id,
                 tool_name=call.tool.name if call is not None else None,
                 call_index=call.call_index if call is not None else None,
                 args_hash=hash_args(call.args) if call is not None else "",
@@ -399,6 +416,26 @@ class SecurityStack:
         if not isinstance(result, Decision):
             return Decision(Verdict.DENY, f"module_error:{module.name}")
         return result
+
+
+def record_approval(principal: Principal, approval: Approval) -> None:
+    """Store redacted approval input in the framework-owned capability slot."""
+    principal.security.allocate("cap")[f"approval:{approval.request_id}"] = approval
+
+
+def _matches_approval(
+    decision: Decision, call: ToolCall, approval: Approval | None
+) -> bool:
+    escalation = decision.escalation
+    return bool(
+        approval is not None
+        and approval.approved
+        and decision.verdict is Verdict.ESCALATE
+        and escalation is not None
+        and escalation.request_id == approval.request_id
+        and escalation.call_id == call.call_id
+        and escalation.tool_name == call.tool.name
+    )
 
 
 def _replace_call_args(call: ToolCall, args: Mapping[str, Any]) -> ToolCall:

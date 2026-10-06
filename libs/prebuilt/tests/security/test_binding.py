@@ -8,14 +8,18 @@ import pytest
 
 from langgraph.prebuilt.security import (
     PRINCIPAL_CONFIG_KEY,
+    AuditRecord,
+    MemoryAuditSink,
     Principal,
     SecurityBindingError,
     SecurityModule,
+    Verdict,
     allocate_blobs,
     copy_blobs,
     principal_from,
     with_principal,
 )
+from langgraph.prebuilt.security.binding import history_for, next_call_index
 
 
 def _principal() -> Principal:
@@ -87,3 +91,41 @@ def test_cred_prepare_error_aborts_binding() -> None:
 
     with pytest.raises(SecurityBindingError, match="broken"):
         with_principal({}, _principal(), modules=[Broken()])
+
+
+def test_call_indexes_are_shared_by_copied_runtime_configs() -> None:
+    """Every execution route draws indexes from one bound-session counter."""
+    bound = with_principal({}, _principal())
+    copied = {**bound, "metadata": {"route": "subgraph"}}
+
+    assert next_call_index(bound) == 0
+    assert next_call_index(copied) == 1
+
+
+def test_history_is_scoped_to_user_and_session() -> None:
+    """Policies cannot observe audit decisions from another authenticated session."""
+    sink = MemoryAuditSink()
+    for user_id, session_id in (
+        ("alice", "session"),
+        ("alice", "other-session"),
+        ("bob", "session"),
+    ):
+        sink.write(
+            AuditRecord(
+                call_index=0,
+                tool_name="read_file",
+                user_id=user_id,
+                args_hash="redacted",
+                stage="permission",
+                module="paths",
+                verdict=Verdict.ALLOW,
+                reason="allow",
+                session_id=session_id,
+            )
+        )
+
+    history = history_for(sink, _principal())
+
+    assert len(history) == 1
+    assert history[0].user_id == "alice"
+    assert history[0].session_id == "session"

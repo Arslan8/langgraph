@@ -54,6 +54,7 @@ class SqliteAuditSink:
                 call_index INTEGER NOT NULL,
                 tool_name TEXT NOT NULL,
                 user_id TEXT NOT NULL,
+                session_id TEXT NOT NULL DEFAULT '',
                 args_hash TEXT NOT NULL,
                 stage TEXT NOT NULL,
                 module TEXT NOT NULL,
@@ -64,6 +65,15 @@ class SqliteAuditSink:
             )
             """
         )
+        columns = {
+            str(row[1])
+            for row in self._connection.execute("PRAGMA table_info(audit_records)")
+        }
+        if "session_id" not in columns:
+            self._connection.execute(
+                "ALTER TABLE audit_records "
+                "ADD COLUMN session_id TEXT NOT NULL DEFAULT ''"
+            )
         self._connection.commit()
 
     def write(self, record: AuditRecord) -> AuditRecord:
@@ -77,14 +87,15 @@ class SqliteAuditSink:
             self._connection.execute(
                 """
                 INSERT INTO audit_records (
-                    call_index, tool_name, user_id, args_hash, stage, module,
-                    verdict, reason, prev_hash, hash
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    call_index, tool_name, user_id, session_id, args_hash, stage,
+                    module, verdict, reason, prev_hash, hash
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 (
                     finalized.call_index,
                     finalized.tool_name,
                     finalized.user_id,
+                    finalized.session_id,
                     finalized.args_hash,
                     finalized.stage,
                     finalized.module,
@@ -102,7 +113,7 @@ class SqliteAuditSink:
             rows = self._connection.execute(
                 """
                 SELECT call_index, tool_name, user_id, args_hash, stage, module,
-                       verdict, reason, prev_hash, hash
+                       verdict, reason, prev_hash, hash, session_id
                 FROM audit_records ORDER BY sequence
                 """
             ).fetchall()
@@ -118,6 +129,7 @@ class SqliteAuditSink:
                 reason=row[7],
                 prev_hash=row[8],
                 hash=row[9],
+                session_id=row[10],
             )
             for row in rows
         )
@@ -149,6 +161,8 @@ def _record_hash(record: AuditRecord) -> str:
         "user_id": record.user_id,
         "verdict": record.verdict.value,
     }
+    if record.session_id:
+        payload["session_id"] = record.session_id
     encoded = json.dumps(
         payload, sort_keys=True, separators=(",", ":"), ensure_ascii=False
     ).encode()

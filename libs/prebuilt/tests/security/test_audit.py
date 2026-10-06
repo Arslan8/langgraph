@@ -27,6 +27,7 @@ def _record(index: int) -> AuditRecord:
         module="paths",
         verdict=Verdict.ALLOW,
         reason="policy:allow",
+        session_id="session-a",
     )
 
 
@@ -67,6 +68,53 @@ def test_sqlite_uses_wal_mode(tmp_path: Path) -> None:
             assert connection.execute("PRAGMA journal_mode").fetchone()[0] == "wal"
         finally:
             connection.close()
+    finally:
+        sink.close()
+
+
+def test_sqlite_round_trips_session_identity(tmp_path: Path) -> None:
+    """Session identity is persisted and protected by the record hash."""
+    sink = SqliteAuditSink(tmp_path / "audit.db")
+    try:
+        written = sink.write(_record(0))
+
+        assert sink.records() == (written,)
+        assert sink.records()[0].session_id == "session-a"
+        assert sink.verify() == (True, None)
+    finally:
+        sink.close()
+
+
+def test_sqlite_migrates_legacy_schema(tmp_path: Path) -> None:
+    """Opening a pre-session audit database adds the identity column safely."""
+    path = tmp_path / "legacy.db"
+    connection = sqlite3.connect(path)
+    try:
+        connection.execute(
+            """
+            CREATE TABLE audit_records (
+                sequence INTEGER PRIMARY KEY AUTOINCREMENT,
+                call_index INTEGER NOT NULL,
+                tool_name TEXT NOT NULL,
+                user_id TEXT NOT NULL,
+                args_hash TEXT NOT NULL,
+                stage TEXT NOT NULL,
+                module TEXT NOT NULL,
+                verdict TEXT NOT NULL,
+                reason TEXT NOT NULL,
+                prev_hash TEXT NOT NULL,
+                hash TEXT NOT NULL
+            )
+            """
+        )
+        connection.commit()
+    finally:
+        connection.close()
+
+    sink = SqliteAuditSink(path)
+    try:
+        assert sink.write(_record(0)).session_id == "session-a"
+        assert sink.verify() == (True, None)
     finally:
         sink.close()
 

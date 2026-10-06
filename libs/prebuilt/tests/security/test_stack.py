@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import time
 from collections.abc import Sequence
 
@@ -13,6 +14,8 @@ from langgraph.prebuilt.security import (
     Approval,
     Decision,
     Effect,
+    EscalationRequest,
+    MemorySecurityObserver,
     Principal,
     ResourceArg,
     SecurityModule,
@@ -22,6 +25,7 @@ from langgraph.prebuilt.security import (
     ToolDac,
     Verdict,
 )
+from langgraph.prebuilt.security.stack import _matches_approval, _replace_call_args
 
 
 def _principal(scopes: Sequence[str] = ("fs:read",)) -> Principal:
@@ -201,3 +205,194 @@ def test_no_module_sequence_allows_after_dac_denial(
     finally:
         stack.close()
     assert (decision.verdict is Verdict.ALLOW) is (dac_allows and all(module_allows))
+
+
+@pytest.mark.parametrize(
+    ("modules", "timeout", "message"),
+    [
+        ([], 0, "positive"),
+        ([FixedModule("cap", Decision(Verdict.ALLOW, "allow"))], 1, "framework"),
+        (
+            [
+                FixedModule("duplicate", Decision(Verdict.ALLOW, "allow")),
+                FixedModule("duplicate", Decision(Verdict.ALLOW, "allow")),
+            ],
+            1,
+            "unique",
+        ),
+        ([FixedModule("", Decision(Verdict.ALLOW, "allow"))], 1, "unique"),
+    ],
+)
+def test_stack_rejects_invalid_configuration(
+    modules: list[SecurityModule], timeout: float, message: str
+) -> None:
+    """Invalid timeout and module identities fail before an executor is exposed."""
+    with pytest.raises(ValueError, match=message):
+        SecurityStack(modules, policy_timeout_s=timeout)
+
+
+class PostModule(SecurityModule):
+    """Configurable post hook used to exercise failure conversion."""
+
+    name = "post"
+
+    def __init__(self, behavior: str) -> None:
+        self.behavior = behavior
+
+    def tool_call_post(self, principal, call, result, slot):
+        slot["result"] = result
+        if self.behavior == "raise":
+            raise RuntimeError("broken")
+        if self.behavior == "malformed":
+            return "unexpected"
+        if self.behavior == "slow":
+            time.sleep(0.05)
+        if self.behavior == "awaitable":
+
+            async def complete() -> None:
+                await asyncio.sleep(0)
+
+            return complete()
+        return None
+
+
+@pytest.mark.parametrize(
+    ("behavior", "reason"),
+    [
+        ("ok", "post:complete"),
+        ("raise", "module_error:post"),
+        ("malformed", "module_error:post"),
+        ("slow", "module_timeout:post"),
+    ],
+)
+def test_sync_post_hooks_fail_closed(behavior: str, reason: str) -> None:
+    """Sync post hooks convert exceptions, malformed values, and timeouts."""
+    stack = SecurityStack([PostModule(behavior)], policy_timeout_s=0.01)
+    try:
+        decision = stack.post(_principal(), _call(), "result")
+    finally:
+        stack.close()
+    assert decision.reason == reason
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("behavior", "reason"),
+    [
+        ("ok", "post:complete"),
+        ("raise", "module_error:post"),
+        ("malformed", "module_error:post"),
+        ("slow", "module_timeout:post"),
+        ("awaitable", "post:complete"),
+    ],
+)
+async def test_async_post_hooks_fail_closed(behavior: str, reason: str) -> None:
+    """Async post execution has the same failure semantics as sync execution."""
+    stack = SecurityStack([PostModule(behavior)], policy_timeout_s=0.01)
+    try:
+        decision = await stack.apost(_principal(), _call(), "result")
+    finally:
+        stack.close()
+    assert decision.reason == reason
+
+
+@pytest.mark.asyncio
+async def test_async_prepare_covers_dac_transform_and_module_denial() -> None:
+    """Async prepare stops on DAC and module denial and normalizes transforms."""
+
+    class Transform(SecurityModule):
+        name = "transform"
+
+        def tool_call_prepare(self, principal, call):
+            return Decision(Verdict.TRANSFORM, "narrow", new_args={"path": "/safe"})
+
+    denied_stack = SecurityStack([Transform()])
+    strict_stack = SecurityStack(
+        [
+            type(
+                "StrictPrepare",
+                (SecurityModule,),
+                {
+                    "name": "strict_prepare",
+                    "tool_call_prepare": lambda self, principal, call: Decision(
+                        Verdict.DENY, "blocked"
+                    ),
+                },
+            )()
+        ]
+    )
+    try:
+        denied, _ = await denied_stack.aprepare(_principal(scopes=()), _call())
+        allowed, transformed = await denied_stack.aprepare(_principal(), _call())
+        strict, _ = await strict_stack.aprepare(_principal(), _call())
+    finally:
+        denied_stack.close()
+        strict_stack.close()
+    assert denied.reason == "dac:scope"
+    assert allowed.verdict is Verdict.ALLOW
+    assert transformed.normalized["path"] == "/safe"
+    assert strict.reason == "blocked"
+
+
+def test_approval_matches_only_the_exact_escalated_call() -> None:
+    """An approval cannot authorize another request, call, or tool."""
+    call = _call()
+    escalation = EscalationRequest("request", "review", "read_file", "call")
+    decision = Decision(Verdict.ESCALATE, "review", escalation=escalation)
+
+    assert _matches_approval(decision, call, Approval("request", True, "reviewer"))
+    assert not _matches_approval(decision, call, Approval("request", False, "reviewer"))
+    assert not _matches_approval(decision, call, Approval("other", True, "reviewer"))
+    assert not _matches_approval(Decision(Verdict.ALLOW, "ok"), call, None)
+
+
+def test_replace_call_args_normalizes_each_resource_shape() -> None:
+    """Transforms rebuild all derived normalizer keys used by DAC."""
+    tool = Tool(
+        "multi",
+        ToolDac("analyst", {"analyst": "x"}),
+        frozenset({Effect.READ}),
+        (
+            ResourceArg("url", "url", "domain"),
+            ResourceArg("email", "email", "email_domain"),
+            ResourceArg("sql", "table", "sql_statement_kind"),
+            ResourceArg("command", "command", "shell_argv0"),
+            ResourceArg("missing", "path", "realpath"),
+        ),
+    )
+    call = ToolCall(tool, {}, {}, "call", 0)
+
+    replaced = _replace_call_args(
+        call,
+        {
+            "url": "https://EXAMPLE.com/path",
+            "email": "a@CORP.example",
+            "sql": "SELECT 1",
+            "command": "printf ok",
+        },
+    )
+
+    assert replaced.normalized == {
+        "url": "example.com",
+        "url_domain": "example.com",
+        "email": "corp.example",
+        "email_domain": "corp.example",
+        "sql": "select",
+        "sql_statement_kind": "select",
+        "command": "printf",
+        "command_argv0": "printf",
+    }
+
+
+def test_observer_records_credential_stage_without_call_attributes() -> None:
+    """Credential decisions remain observable without inventing tool metadata."""
+    observer = MemorySecurityObserver()
+    stack = SecurityStack([], observer=observer)
+    try:
+        decision = stack.cred_transfer(_principal(), _principal())
+    finally:
+        stack.close()
+    event = observer.events()[-1]
+    assert decision.verdict is Verdict.ALLOW
+    assert event.tool_name is None
+    assert event.call_index is None

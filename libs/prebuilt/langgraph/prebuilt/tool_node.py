@@ -46,8 +46,6 @@ import json
 from collections.abc import Awaitable, Callable, Mapping
 from copy import copy, deepcopy
 from dataclasses import dataclass, field, replace
-from itertools import count
-from threading import Lock
 from types import UnionType
 from typing import (
     TYPE_CHECKING,
@@ -96,7 +94,11 @@ from langgraph.types import Command, Send, StreamWriter, interrupt
 from pydantic import BaseModel, ValidationError
 from typing_extensions import TypeVar, Unpack
 
-from langgraph.prebuilt.security.binding import principal_from
+from langgraph.prebuilt.security.binding import (
+    history_for,
+    next_call_index,
+    principal_from,
+)
 from langgraph.prebuilt.security.config import SecurityConfig
 from langgraph.prebuilt.security.descriptor import (
     ToolDac,
@@ -104,7 +106,7 @@ from langgraph.prebuilt.security.descriptor import (
     normalize_resource,
     security_for_tool,
 )
-from langgraph.prebuilt.security.stack import SecurityStack
+from langgraph.prebuilt.security.stack import SecurityStack, record_approval
 from langgraph.prebuilt.security.types import (
     Approval,
     AuditRecord,
@@ -817,8 +819,6 @@ class ToolNode(RunnableCallable):
         self._security_config: SecurityConfig | None = None
         self._security_audit_sink: AuditSink | None = None
         self._security_require_principal = True
-        self._security_call_counter = count()
-        self._security_counter_lock = Lock()
         self._handle_tool_errors = handle_tool_errors
         self._messages_key = messages_key
         self._wrap_tool_call = wrap_tool_call
@@ -901,13 +901,8 @@ class ToolNode(RunnableCallable):
             security=security_tool.security,
         )
         args = request.tool_call.get("args", {})
-        with self._security_counter_lock:
-            call_index = next(self._security_call_counter)
-        history = (
-            self._security_audit_sink.records()
-            if self._security_audit_sink is not None
-            else ()
-        )
+        call_index = next_call_index(request.runtime.config)
+        history = history_for(self._security_audit_sink, principal)
         try:
             normalized = self._normalize_security_args(security_tool, args)
         except Exception:
@@ -986,6 +981,7 @@ class ToolNode(RunnableCallable):
                 module=stage,
                 verdict=decision.verdict,
                 reason=decision.reason,
+                session_id=principal.session_id,
             )
         )
 
@@ -1026,9 +1022,14 @@ class ToolNode(RunnableCallable):
             return Decision(Verdict.DENY, "invalid_escalation")
         response = interrupt(dict(escalation.to_payload()))
         approval = self._coerce_approval(response, escalation.request_id)
+        record_approval(principal, approval)
         resumed = stack.resume_permission(principal, approval)
         self._audit_security(principal, call, "resume", resumed)
-        return resumed
+        if resumed.verdict is not Verdict.ALLOW:
+            return resumed
+        rechecked = stack.permission(principal, call, approval=approval)
+        self._audit_security(principal, call, "permission_after_resume", rechecked)
+        return rechecked
 
     async def _aresume_security(
         self,
@@ -1042,9 +1043,14 @@ class ToolNode(RunnableCallable):
             return Decision(Verdict.DENY, "invalid_escalation")
         response = interrupt(dict(escalation.to_payload()))
         approval = self._coerce_approval(response, escalation.request_id)
+        record_approval(principal, approval)
         resumed = await stack.aresume_permission(principal, approval)
         self._audit_security(principal, call, "resume", resumed)
-        return resumed
+        if resumed.verdict is not Verdict.ALLOW:
+            return resumed
+        rechecked = await stack.apermission(principal, call, approval=approval)
+        self._audit_security(principal, call, "permission_after_resume", rechecked)
+        return rechecked
 
     def _coerce_approval(self, response: Any, request_id: str) -> Approval:
         if isinstance(response, Approval):

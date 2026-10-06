@@ -4,14 +4,18 @@ from __future__ import annotations
 
 import inspect
 from collections.abc import Callable, Mapping, Sequence
-from itertools import count
-from threading import Lock
 from typing import Any, overload
 
 from langchain_core.runnables import Runnable, RunnableConfig
 from langchain_core.tools import BaseTool, StructuredTool
+from langgraph.types import interrupt
 
-from langgraph.prebuilt.security.binding import principal_from, with_principal
+from langgraph.prebuilt.security.binding import (
+    _bind_principal,
+    history_for,
+    next_call_index,
+    principal_from,
+)
 from langgraph.prebuilt.security.blobs import copy_blobs
 from langgraph.prebuilt.security.config import SecurityConfig
 from langgraph.prebuilt.security.descriptor import normalize_resource, security_for_tool
@@ -19,8 +23,10 @@ from langgraph.prebuilt.security.introspect import (
     ToolInventoryEntry,
     _register_guarded_tool,
 )
-from langgraph.prebuilt.security.stack import SecurityStack
+from langgraph.prebuilt.security.stack import SecurityStack, record_approval
 from langgraph.prebuilt.security.types import (
+    Approval,
+    Decision,
     Principal,
     Tool,
     ToolCall,
@@ -59,8 +65,6 @@ class _GuardedExecutor:
         for module in self.stack.modules:
             slot = self.tool.security.allocate(module.name)
             module.tool_alloc_security(self.tool, slot)
-        self._counter = count()
-        self._lock = Lock()
         _register_guarded_tool(
             ToolInventoryEntry(
                 name=target.name,
@@ -79,6 +83,8 @@ class _GuardedExecutor:
         decision, call = self.stack.prepare(principal, call)
         if decision.verdict is Verdict.ALLOW:
             decision = self.stack.permission(principal, call)
+        if decision.verdict is Verdict.ESCALATE:
+            decision = self._resume(principal, call, decision)
         if decision.verdict is not Verdict.ALLOW:
             raise SecurityDeniedError(decision.reason)
         result: Any = None
@@ -93,6 +99,8 @@ class _GuardedExecutor:
         decision, call = await self.stack.aprepare(principal, call)
         if decision.verdict is Verdict.ALLOW:
             decision = await self.stack.apermission(principal, call)
+        if decision.verdict is Verdict.ESCALATE:
+            decision = await self._aresume(principal, call, decision)
         if decision.verdict is not Verdict.ALLOW:
             raise SecurityDeniedError(decision.reason)
         result: Any = None
@@ -112,13 +120,12 @@ class _GuardedExecutor:
             principal = Principal(
                 "__anonymous__", frozenset(), frozenset(), "anonymous"
             )
-        with self._lock:
-            call_index = next(self._counter)
+        call_index = next_call_index(config)
         try:
             normalized = _normalize_args(self.tool, args)
         except Exception as exc:
             raise SecurityDeniedError("normalization_error") from exc
-        history = self.security.audit_sink.records() if self.security.audit_sink else ()
+        history = history_for(self.security.audit_sink, principal)
         return principal, ToolCall(
             self.tool,
             args,
@@ -127,6 +134,34 @@ class _GuardedExecutor:
             call_index,
             history,
         )
+
+    def _resume(
+        self, principal: Principal, call: ToolCall, decision: Decision
+    ) -> Decision:
+        escalation = decision.escalation
+        if escalation is None:
+            return Decision(Verdict.DENY, "invalid_escalation")
+        response = interrupt(dict(escalation.to_payload()))
+        approval = _coerce_approval(response, escalation.request_id)
+        record_approval(principal, approval)
+        resumed = self.stack.resume_permission(principal, approval)
+        if resumed.verdict is not Verdict.ALLOW:
+            return resumed
+        return self.stack.permission(principal, call, approval=approval)
+
+    async def _aresume(
+        self, principal: Principal, call: ToolCall, decision: Decision
+    ) -> Decision:
+        escalation = decision.escalation
+        if escalation is None:
+            return Decision(Verdict.DENY, "invalid_escalation")
+        response = interrupt(dict(escalation.to_payload()))
+        approval = _coerce_approval(response, escalation.request_id)
+        record_approval(principal, approval)
+        resumed = await self.stack.aresume_permission(principal, approval)
+        if resumed.verdict is not Verdict.ALLOW:
+            return resumed
+        return await self.stack.apermission(principal, call, approval=approval)
 
 
 @overload
@@ -210,10 +245,24 @@ class _DelegatedRunnable(Runnable[Any, Any]):
     async def ainvoke(
         self, input: Any, config: RunnableConfig | None = None, **kwargs: Any
     ) -> Any:
-        child_config = self._child_config(config)
+        child_config = await self._achild_config(config)
         return await self.graph.ainvoke(input, config=child_config, **kwargs)
 
     def _child_config(self, config: RunnableConfig | None) -> RunnableConfig:
+        parent, child = self._principals(config)
+        decision = self.stack.cred_transfer(parent, child)
+        if decision.verdict is not Verdict.ALLOW:
+            raise SecurityDeniedError(decision.reason)
+        return _bind_principal(config, child)
+
+    async def _achild_config(self, config: RunnableConfig | None) -> RunnableConfig:
+        parent, child = self._principals(config)
+        decision = await self.stack.acred_transfer(parent, child)
+        if decision.verdict is not Verdict.ALLOW:
+            raise SecurityDeniedError(decision.reason)
+        return _bind_principal(config, child)
+
+    def _principals(self, config: RunnableConfig | None) -> tuple[Principal, Principal]:
         parent = principal_from(config)
         if parent is None:
             raise SecurityDeniedError("delegation requires a principal")
@@ -225,10 +274,7 @@ class _DelegatedRunnable(Runnable[Any, Any]):
             delegated_by=parent.user_id,
             security=copy_blobs(parent.security),
         )
-        decision = self.stack.cred_transfer(parent, child)
-        if decision.verdict is not Verdict.ALLOW:
-            raise SecurityDeniedError(decision.reason)
-        return with_principal(config, child, modules=self.security.modules)
+        return parent, child
 
 
 def delegate(
@@ -262,3 +308,23 @@ def _normalize_args(tool: Tool, args: Mapping[str, Any]) -> dict[str, Any]:
         elif resource.normalizer == "shell_argv0":
             normalized[f"{resource.arg}_argv0"] = value
     return normalized
+
+
+def _coerce_approval(response: Any, request_id: str) -> Approval:
+    if isinstance(response, Approval):
+        if response.request_id == request_id:
+            return response
+        return Approval(request_id, False, "framework", "request_id_mismatch")
+    if isinstance(response, bool):
+        return Approval(request_id, response, "human")
+    if isinstance(response, Mapping):
+        response_id = str(response.get("request_id", request_id))
+        if response_id != request_id:
+            return Approval(request_id, False, "framework", "request_id_mismatch")
+        return Approval(
+            request_id,
+            response.get("approved") is True,
+            str(response.get("approver", "human")),
+            str(response.get("reason", "")),
+        )
+    return Approval(request_id, False, "framework", "invalid_response")

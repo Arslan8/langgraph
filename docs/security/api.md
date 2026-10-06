@@ -89,7 +89,7 @@ normalized and checked by DAC again before permission hooks run.
 
 | Name | Contract |
 | --- | --- |
-| `AuditRecord` | One hash-chainable stage record: call index, tool, user, argument hash, stage, module, verdict, reason, previous hash, and record hash. |
+| `AuditRecord` | One hash-chainable stage record: call index, tool, user and session IDs, argument hash, stage, module, verdict, reason, previous hash, and record hash. |
 | `AuditSink` | Protocol requiring `write`, `records`, and `verify`. |
 | `MemoryAuditSink` | Thread-safe process-local hash-chained sink. Useful for tests and short-lived runs. |
 | `SqliteAuditSink` | Thread-safe SQLite WAL sink using full synchronization and a SHA-256 chain. Call `close()` during shutdown. |

@@ -35,6 +35,10 @@ request = {"messages": [AIMessage(content="", tool_calls=[{"name": "lookup_recor
 result = graph.invoke(request, config=config)
 ```
 
+The companion LangChain fork accepts the same configuration through
+`create_agent(..., security=security)`. Passing `None` preserves upstream agent
+construction behavior.
+
 The principal comes from authentication, never from `request` or graph state.
 A denial becomes an error `ToolMessage`; the tool body does not execute.
 

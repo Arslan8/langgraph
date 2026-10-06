@@ -3,15 +3,32 @@
 from __future__ import annotations
 
 from collections.abc import Mapping, MutableMapping, Sequence
+from threading import Lock
 from typing import Any, cast
 
 from langchain_core.runnables import RunnableConfig
 
 from langgraph.prebuilt.security.hooks import SecurityModule
 from langgraph.prebuilt.security.stack import CapModule
-from langgraph.prebuilt.security.types import Principal
+from langgraph.prebuilt.security.types import AuditRecord, AuditSink, Principal
 
 PRINCIPAL_CONFIG_KEY = "__principal__"
+_CALL_COUNTER_CONFIG_KEY = "__security_call_counter__"
+_COUNTER_INIT_LOCK = Lock()
+
+
+class _CallCounter:
+    """Allocate monotonically increasing indexes across one bound session."""
+
+    def __init__(self) -> None:
+        self._value = 0
+        self._lock = Lock()
+
+    def next(self) -> int:
+        with self._lock:
+            value = self._value
+            self._value += 1
+            return value
 
 
 class SecurityBindingError(RuntimeError):
@@ -44,6 +61,13 @@ def with_principal(
         except BaseException as exc:
             raise SecurityBindingError(f"cred_prepare failed:{module.name}") from exc
 
+    return _bind_principal(config, principal)
+
+
+def _bind_principal(
+    config: RunnableConfig | None, principal: Principal
+) -> RunnableConfig:
+    """Bind an already-prepared principal without rerunning credential hooks."""
     copied = dict(config or {})
     raw_configurable = copied.get("configurable")
     if raw_configurable is None:
@@ -53,9 +77,38 @@ def with_principal(
     else:
         raise TypeError("configurable config must be a mapping")
     configurable[PRINCIPAL_CONFIG_KEY] = principal
+    configurable.setdefault(_CALL_COUNTER_CONFIG_KEY, _CallCounter())
     copied["configurable"] = configurable
     _bind_runtime_context(configurable, principal)
     return cast("RunnableConfig", copied)
+
+
+def next_call_index(config: Mapping[str, Any]) -> int:
+    """Return the next framework-owned call index for a bound configuration."""
+    configurable = config.get("configurable")
+    if not isinstance(configurable, MutableMapping):
+        raise SecurityBindingError("security call counter requires configurable config")
+    counter = configurable.get(_CALL_COUNTER_CONFIG_KEY)
+    if counter is None:
+        with _COUNTER_INIT_LOCK:
+            counter = configurable.setdefault(_CALL_COUNTER_CONFIG_KEY, _CallCounter())
+    if not isinstance(counter, _CallCounter):
+        raise SecurityBindingError("security call counter is missing or invalid")
+    return counter.next()
+
+
+def history_for(
+    sink: AuditSink | None, principal: Principal
+) -> tuple[AuditRecord, ...]:
+    """Return prior audit decisions belonging only to this principal session."""
+    if sink is None:
+        return ()
+    return tuple(
+        record
+        for record in sink.records()
+        if record.user_id == principal.user_id
+        and record.session_id == principal.session_id
+    )
 
 
 def principal_from(config: Mapping[str, Any] | None) -> Principal | None:

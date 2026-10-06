@@ -211,6 +211,7 @@ class AuditRecord:
     reason: str
     prev_hash: str = ""
     hash: str = ""
+    session_id: str = ""
 
     def __post_init__(self) -> None:
         if self.call_index < 0:

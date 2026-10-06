@@ -27,6 +27,7 @@ class SecurityEvent:
     tool_name: str | None = None
     call_index: int | None = None
     args_hash: str = ""
+    session_id: str = ""
 
     def attributes(self) -> Mapping[str, str | int | float]:
         """Return low-cardinality attributes suitable for traces and logs."""
@@ -144,6 +145,7 @@ class _AuditSecurityObserver:
                 module=event.module,
                 verdict=event.verdict,
                 reason=event.reason,
+                session_id=event.session_id,
             )
         )
 
