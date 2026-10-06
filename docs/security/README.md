@@ -9,9 +9,9 @@ Start with the [10-line HOWTO](HOWTO.md), then use the
 [behavior reference](reference.md) and [complete public API reference](api.md).
 Existing applications should follow the [migration guide](migration.md) and
 [worked patterns](workflows.md). The constructive DAC language is specified by
-the [frozen `.slp` profile grammar](profiles.md). The target path from Cedar to a
-platform-neutral grant, host capability negotiation, and adapter enforcement is
-specified in [grant lowering](lowering.md). The [implementation status](status.md)
+the [frozen `.slp` profile grammar](profiles.md). The target path from mandatory
+policy to a platform-neutral grant, exact enforcement obligations, verified host
+evidence, and worker activation is specified in [grant lowering](lowering.md). The [implementation status](status.md)
 separates shipped behavior from the enforcement roadmap. The design rationale is
 recorded in the [`adr/`](adr/) directory. Three runnable examples live in
 [`examples/`](examples/README.md).

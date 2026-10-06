@@ -70,24 +70,32 @@ profile + principal envelope + shares
        constructive DAC candidates
                   |
                   v
-      Cedar operator forbids, per line
+  mandatory line + aggregate filtering
                   |
                   v
        assemble surviving call grant
                   |
                   v
-          one approval per call
+   requirement-ledger revalidation
                   |
                   v
     canonical, platform-neutral Grant
+                  |
+                  v
+       enforcement-obligation DAG
              /          |          \
             v           v           v
        host adapter  service adapter  resource adapter
+             \          |          /
+                  v
+       worker activation receipt
 ```
 
-Default deny applies at every stage. An adapter set that cannot enforce a required
-rule class reports it instead of silently lowering the rule to something
-broader.
+Default deny applies at every stage. Resource classes are discovery hints, not
+security guarantees. Adapters negotiate every exact obligation, including its
+resource scope and conditions, and the obligation DAG includes closed-world
+denial of unlisted authority. An adapter set that cannot enforce a required
+obligation reports it instead of silently lowering the rule to something broader.
 
 ## Constructive DAC profiles
 
@@ -131,12 +139,21 @@ and call context. A line survives only when Cedar returns `Allow` and reports no
 diagnostic or evaluation error. Any error denies that line. A removed `need`
 line denies the call.
 
-`forbid` always wins. Student modules may set labels and emit syntactically
-validated `forbid` policies only. They cannot emit `permit`, alter the ephemeral
-base permit, or contribute escalation policy. A module requests human review by
-returning the existing `ESCALATE` verdict. The escalation policy set is
-operator-owned and is consulted only after no mandatory policy forbids the
-candidate.
+The evaluator also performs an aggregate authorization over the complete
+candidate so mandatory policy can reject combinations that would be unsafe even
+when each line survives separately. Broad resource sets are subtracted using a
+typed, sound resource algebra, checked at each concrete broker operation, or
+rejected; authorizing one representative resource never authorizes a set.
+
+`forbid` always wins. Student modules may set typed, namespaced labels and emit a
+bounded forbid-only constraint IR. They cannot submit arbitrary Cedar text,
+emit `permit`, alter the ephemeral base permit, invent entities, or contribute
+escalation policy. The framework validates ownership, types, references, scope,
+and complexity before translating the IR to Cedar. Authorization-affecting
+modules and the translator are in the TCB and are artifact-pinned. A module
+requests human review by returning the existing `ESCALATE` verdict. The
+escalation policy set is operator-owned and is consulted only after no mandatory
+policy forbids the candidate.
 
 A type or evaluation error in a student policy is attributed to the module and
 denies the affected line. A module used by every line can therefore deny the
@@ -160,8 +177,10 @@ limits, service rules, and provenance for every surviving line. The IR expresses
 security semantics, not a platform lowering: it contains no Landlock access bits,
 Linux file descriptors, Windows handles, sandbox bytecode, or broker wire types.
 
-The `Grant` also contains an explicit runtime baseline supplied by the selected
-adapter set before mandatory policy runs. On Python this normally includes
+The `Grant` is a closed-world allowlist: operations outside it are denied, rather
+than left as ambient worker authority. It also contains an explicit runtime
+baseline supplied by the selected adapter set before mandatory policy runs. On
+Python this normally includes
 read-only access to the interpreter's runtime libraries, standard library,
 declared tool artifact and dependencies, `/dev/urandom`, and timezone data;
 execute authority is limited to the interpreter. Native extension `.so` files
@@ -170,7 +189,7 @@ execution. A private per-worker temporary directory receives only the minimum
 read, write, create, truncate, and delete rights required by the profile.
 
 Baseline lines have adapter provenance, pass through the same operator forbids,
-appear in the final `Grant`, and are included in the attestation and audit. A
+appear in the final `Grant`, and are included in the attestation and audit. An
 adapter may not add hidden runtime authority during lowering. If its declared
 baseline is insufficient to start the runtime, execution fails rather than
 silently expanding the sandbox.
@@ -191,12 +210,15 @@ integration lands.
 An immutable `HostModel` describes the semantic enforcement capabilities that a
 particular machine currently provides. It is produced by trusted runtime probes,
 not supplied by graph state, tool metadata, policy data, or the model. Platform,
-architecture, capability evidence, probe versions, and an attestation digest are
+architecture, capability evidence, probe versions, and a canonical digest are
 recorded for audit, while the capability names themselves remain platform-neutral.
+The digest authenticates nothing by itself: a `HostAttestation` must be verified
+against a configured trust anchor and bound to boot, namespaces, credentials,
+cgroup placement, adapter identity, freshness, and a challenge nonce.
 
 The host model is distinct from the adapter contract. A host can provide a
 primitive for which no selected adapter exists, and an adapter can support a
-capability that is unavailable on the current host. For each call, the framework
+capability that is unavailable on the current host. Class-level discovery first
 computes:
 
 ```text
@@ -206,42 +228,47 @@ adapter_missing = required - adapters.declared_capabilities()
 effective      = adapters.capabilities(host)
 ```
 
-Any host-bound requirement absent from `effective` denies execution. Diagnostics
-attribute the failure precisely as `host_cannot_enforce:<classes>`,
-`adapter_not_selected:<classes>`, or both. Service and resource-side capabilities
-are checked against their adapters rather than the host set.
+This calculation only finds candidate adapters and produces diagnostics. It does
+not authorize execution. Every exact operation, selector, condition, dependency,
+and closed-world complement is then assessed as an obligation. Any unsupported
+host-bound obligation denies execution. Diagnostics attribute whether the host
+primitive, selected adapter, or exact rule representation is missing. Service
+and resource-side obligations are checked against their adapters rather than the
+host set.
 
 The host model used at compile time is an expectation, not a permanent fact. The
 selected adapters re-probe or validate attestation before dispatch. A stale model,
 changed host feature, failed probe, or unverifiable attestation denies execution;
 none silently selects advisory mode.
 
-## Enforcement-adapter capability contract
+## Enforcement-adapter obligation contract
 
-An adapter set reports its supported rule classes for a `HostModel`, compiles a `Grant` into an
-enforcement plan, and produces an attestation describing its enforcement features
-and how they were detected. Host, service, and resource adapters may be composed;
-the framework evaluates their union without depending on their platform APIs.
-Before execution:
+An adapter's supported rule classes are only discovery hints. The framework
+expands the `Grant` into exact enforcement obligations and asks adapters to assess
+each operation, selector, condition, dependency, and closed-world complement as
+`EXACT`, `STRICTER`, or `UNSUPPORTED`. Host, service, and resource adapters may be
+composed through an obligation DAG; each obligation has one primary enforcer and
+one grant rule may depend on several enforcers. A call may run as enforced only
+when every required obligation and dependency has worker-bound activation
+evidence.
 
-```text
-missing = grant.classes() - adapters.capabilities(host)
-```
+Lowering is conservative. An adapter may implement an obligation exactly,
+implement a strict subset, or report it unsupported. It may never implement a
+superset. Property tests compare each adapter's effective authority with its
+input obligations and recheck `need`/`want` after every reduction.
 
-An empty set may run. A non-empty set denies with
-`adapter_cannot_enforce:<classes>` unless operator policy marks every missing
-class `advisory-ok` for that subject. An advisory exception records the complete
-`unenforced` set and attestation on every decision and execution audit record.
-
-Lowering is conservative. An adapter may implement a rule exactly, implement a
-strict subset, or report the class missing. It may never implement a superset.
-Property tests compare each adapter's effective authority with its input
-`Grant`.
+An operator may explicitly waive only an obligation declared waivable. Such an
+execution is `DEGRADED`, never `ENFORCED`, and carries the complete missing
+guarantee set and known authority upper bound. Identity/artifact binding,
+closed-world default deny, isolation before import, grant integrity, credential
+custody, `need` satisfaction, approval binding, and audit precommit are
+non-waivable.
 
 The `advisory` adapter enforces nothing and makes that fact conspicuous in trace
-output. It exists for development and laptop compatibility, not as evidence of
-confinement. The adapter and audit contracts freeze after this capability
-contract, advisory adapter, and attestation path land.
+output. It exists for development and laptop compatibility, cannot satisfy a
+non-waivable obligation, and never produces an enforced result. The adapter and
+audit contracts freeze after the obligation, activation-receipt, degradation,
+and attestation paths land.
 
 ## Linux reference adapter
 
@@ -345,9 +372,12 @@ contract unless operator policy explicitly permits advisory execution.
 ## Delegation and worker lifecycle
 
 The evaluator and broker perform an explicit subset check for every delegated
-grant and minted credential. A child must be no more authoritative than its
-parent. Inherited kernel restrictions reinforce this property only for local
-kernel resources.
+grant and minted credential. Typed labels use a registered attenuation partial
+order and meet; opaque labels are copied unchanged or are nondelegable. Shared
+budgets use an atomic escrow ledger so siblings cannot each consume the parent's
+entire limit. A child grant, labels, budget, baseline, leases, and credentials
+must all be no more authoritative than the parent. Inherited kernel restrictions
+reinforce this property only for local kernel resources.
 
 The dedicated single-threaded spawner is the only worker creation path and
 always produces one fresh worker per call. It is part of phase one. If later
@@ -397,14 +427,19 @@ domain can be widened or reset.
 
 The audit chain records candidate lines, removed lines and policy identifiers,
 normalization and descriptor-resolution failures, approval state, final grant
-and provenance, adapter capabilities, attestation, unenforced classes,
+and provenance, exact obligations, adapter assessments, verified host evidence,
+activation receipt, retained ambient authority, unenforced guarantees,
 delegation subset results, broker requests, effective token scope, worker exit,
 supervisor termination, and kernel denial evidence when available.
 
 Failure to parse, bind, normalize, resolve, authorize, lower, attest, isolate,
-or audit denies execution. No enforcement adapter silently degrades. Policy hook
-timeouts still deny the decision, but timeout of untrusted tool execution is
-enforced by the supervisor rather than a Python thread timeout.
+or write the pre-dispatch audit record denies execution. After dispatch, an
+uncertain side effect or completion-audit failure is `INDETERMINATE`, not a
+denial. The chain is sealed with a terminal count/head and independently
+witnessed so valid-prefix truncation is detectable. No enforcement adapter
+silently degrades. Policy hook timeouts still deny the decision, but timeout of
+untrusted tool execution is enforced by the supervisor rather than a Python
+thread timeout.
 
 ## Delivery and freeze
 
@@ -413,8 +448,8 @@ Phase one is five weeks and contains:
 1. profile grammar and monotonic constructive DAC evaluator;
 2. attributed platform-neutral `Grant` IR and resource selectors;
 3. Cedar integration and reference mandatory policies;
-4. enforcement-adapter interface, capability contract, attestation, audit changes, and
-   `advisory`; and
+4. obligation and adapter interfaces, host attestation, activation receipts,
+   transactional audit changes, and explicit degradation; and
 5. the dedicated spawner and Linux reference adapter.
 
 Service credential custody, MCP proxying, the native launcher, a second host adapter,
@@ -422,8 +457,8 @@ and benchmark evaluation are phase two and are scoped after phase one.
 
 The seven existing hook names and their invocation structure remain stable.
 The course contract promises that modules return a verdict and may optionally
-emit forbid policies. The detailed return type is not frozen until Cedar
-integration. The profile grammar freezes after step 1; `Grant` and Cedar request
+emit typed forbid constraints and labels. The detailed return type is not frozen
+until Cedar integration. The profile grammar freezes after step 1; `Grant` and Cedar request
 construction freeze after step 3; adapter and audit contracts freeze after step
 4.
 
@@ -433,8 +468,8 @@ Tool startup becomes more expensive and platform-specific. Correctness takes
 priority over the provisional 1-to-3 millisecond estimate: the phase-one target
 is less than 5 milliseconds of Linux-reference-adapter overhead per call and less than
 2 percent of an AgentDojo run, measured before pooling is considered. Advisory
-mode retains the previous sub-millisecond decision target but provides no
-resource confinement.
+mode retains the previous sub-millisecond decision target but is explicitly
+degraded and provides no resource-confinement claim.
 
 Profiles, normalizers, path resolution, adapter feature detection, and service-adapter
 authentication become security-critical code. Operators must provision Linux
