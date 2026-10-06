@@ -3,13 +3,39 @@
 from __future__ import annotations
 
 import hashlib
+import hmac
 import json
 import sqlite3
+import time
+import uuid
 from dataclasses import replace
 from pathlib import Path
 from threading import RLock
 
-from langgraph.prebuilt.security.types import AuditRecord, ExecutionOutcome, Verdict
+from langgraph.prebuilt.security.types import (
+    AuditRecord,
+    AuditSeal,
+    AuditWitness,
+    ExecutionOutcome,
+    Verdict,
+)
+
+
+class HmacAuditWitness:
+    """HMAC trust anchor suitable for a separately held audit witness key."""
+
+    def __init__(self, key: bytes) -> None:
+        if len(key) < 32:
+            raise ValueError("audit witness keys must contain at least 32 bytes")
+        self._key = bytes(key)
+
+    def sign(self, payload: bytes) -> str:
+        """Return a SHA-256 HMAC over a canonical seal payload."""
+        return hmac.new(self._key, payload, hashlib.sha256).hexdigest()
+
+    def verify(self, payload: bytes, signature: str) -> bool:
+        """Verify a seal signature without timing-dependent comparison."""
+        return hmac.compare_digest(self.sign(payload), signature)
 
 
 class MemoryAuditSink:
@@ -18,6 +44,7 @@ class MemoryAuditSink:
     def __init__(self) -> None:
         self._records: list[AuditRecord] = []
         self._lock = RLock()
+        self._stream_id = str(uuid.uuid4())
 
     def write(self, record: AuditRecord) -> AuditRecord:
         """Append and finalize one record under the current chain head."""
@@ -36,6 +63,16 @@ class MemoryAuditSink:
         """Verify the chain and return the first invalid record index."""
         with self._lock:
             return _verify(self._records)
+
+    def seal(self, witness: AuditWitness) -> AuditSeal:
+        """Commit the current chain head for retention outside this sink."""
+        with self._lock:
+            return _seal(self._stream_id, self._records, witness)
+
+    def verify_seal(self, seal: AuditSeal, witness: AuditWitness) -> bool:
+        """Detect modification and valid-prefix or suffix truncation."""
+        with self._lock:
+            return _verify_seal(self._stream_id, self._records, seal, witness)
 
 
 class SqliteAuditSink:
@@ -66,6 +103,25 @@ class SqliteAuditSink:
             )
             """
         )
+        self._connection.execute(
+            """
+            CREATE TABLE IF NOT EXISTS audit_metadata (
+                key TEXT PRIMARY KEY,
+                value TEXT NOT NULL
+            )
+            """
+        )
+        row = self._connection.execute(
+            "SELECT value FROM audit_metadata WHERE key = 'stream_id'"
+        ).fetchone()
+        if row is None:
+            self._stream_id = str(uuid.uuid4())
+            self._connection.execute(
+                "INSERT INTO audit_metadata (key, value) VALUES ('stream_id', ?)",
+                (self._stream_id,),
+            )
+        else:
+            self._stream_id = str(row[0])
         columns = {
             str(row[1])
             for row in self._connection.execute("PRAGMA table_info(audit_records)")
@@ -145,6 +201,16 @@ class SqliteAuditSink:
         """Verify the persisted chain and name the first invalid index."""
         return _verify(self.records())
 
+    def seal(self, witness: AuditWitness) -> AuditSeal:
+        """Commit the current persisted chain for an external witness."""
+        with self._lock:
+            return _seal(self._stream_id, self.records(), witness)
+
+    def verify_seal(self, seal: AuditSeal, witness: AuditWitness) -> bool:
+        """Verify the external commitment against the current database."""
+        with self._lock:
+            return _verify_seal(self._stream_id, self.records(), seal, witness)
+
     def close(self) -> None:
         """Flush and close the SQLite connection."""
         with self._lock:
@@ -187,3 +253,56 @@ def _verify(
             return False, index
         previous = record.hash
     return True, None
+
+
+def _seal(
+    stream_id: str,
+    records: list[AuditRecord] | tuple[AuditRecord, ...],
+    witness: AuditWitness,
+) -> AuditSeal:
+    issued_at = time.time()
+    head = records[-1].hash if records else ""
+    payload = _seal_payload(stream_id, len(records), head, issued_at)
+    return AuditSeal(
+        stream_id,
+        len(records),
+        head,
+        issued_at,
+        witness.sign(payload),
+    )
+
+
+def _verify_seal(
+    stream_id: str,
+    records: list[AuditRecord] | tuple[AuditRecord, ...],
+    seal: AuditSeal,
+    witness: AuditWitness,
+) -> bool:
+    valid, _ = _verify(records)
+    head = records[-1].hash if records else ""
+    if (
+        not valid
+        or seal.stream_id != stream_id
+        or seal.record_count != len(records)
+        or seal.chain_head != head
+    ):
+        return False
+    payload = _seal_payload(
+        seal.stream_id, seal.record_count, seal.chain_head, seal.issued_at
+    )
+    return witness.verify(payload, seal.signature)
+
+
+def _seal_payload(
+    stream_id: str, record_count: int, chain_head: str, issued_at: float
+) -> bytes:
+    return json.dumps(
+        {
+            "chain_head": chain_head,
+            "issued_at": issued_at,
+            "record_count": record_count,
+            "stream_id": stream_id,
+        },
+        sort_keys=True,
+        separators=(",", ":"),
+    ).encode()

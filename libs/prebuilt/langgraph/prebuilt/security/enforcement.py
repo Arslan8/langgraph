@@ -152,8 +152,8 @@ class RequirementEntry:
     rule_ids: frozenset[str]
 
     def __post_init__(self) -> None:
-        if not self.source_id or not self.rule_ids:
-            raise ValueError("requirement entries need a source and descendant rules")
+        if not self.source_id:
+            raise ValueError("requirement entries need a source identity")
         object.__setattr__(self, "rule_ids", frozenset(self.rule_ids))
 
 

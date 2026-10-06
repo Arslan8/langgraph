@@ -122,12 +122,31 @@ TCB component and must pass its platform contract suite.
 | `ActivationReceipt` | Verified evidence bundle covering every assigned obligation before worker release. |
 | `EnforcementCoordinator` | Verifies host evidence, negotiates exact obligations, lowers plans, and validates worker-specific activation. |
 
+Mandatory policy modules return bounded typed restrictions on an `ALLOW`
+decision; they never return Cedar source or another backend's policy text. The
+framework attributes each restriction to the emitting module before passing it
+to the configured backend.
+
+| Name | Purpose |
+| --- | --- |
+| `RulePredicate` | Matches a bounded authority domain, operation set, selector relation, and immutable conditions. |
+| `SelectorMatch` | Selects any, exact, or canonical filesystem-subtree matching. |
+| `ForbidConstraint` | Removes or soundly subtracts matching authority from the candidate grant. |
+| `ForbidCombination` | Rejects combinations such as sensitive reads plus outbound communication. |
+| `PolicyConstraint` | Union of the two accepted forbid-only constraint records. |
+| `MandatoryPolicyBackend` | Replaceable filtering interface used by Cedar or another policy engine. |
+| `TypedPolicyBackend` | Built-in fail-closed reference backend with broad-path subtraction, conservative rejection of unrepresentable differences, aggregate checks, and requirement revalidation. |
+| `PolicyFilterResult` | Filtered no-broader grant, remapped requirement ledger, removals, and fail-closed diagnostics. |
+
 ## Audit and observability
 
 | Name | Contract |
 | --- | --- |
 | `AuditRecord` | One hash-chainable stage record: call index, tool, user and session IDs, argument hash, stage, module, verdict, optional execution outcome, reason, previous hash, and record hash. |
-| `AuditSink` | Protocol requiring `write`, `records`, and `verify`. |
+| `AuditSink` | Protocol requiring append, chain verification, external sealing, and seal verification. |
+| `AuditSeal` | Signed commitment to a stream identity, retained record count, chain head, and issuance time. |
+| `AuditWitness` | External signing and verification protocol for detecting valid-prefix truncation. |
+| `HmacAuditWitness` | SHA-256 HMAC witness implementation; production deployments keep its key outside the audited process. |
 | `MemoryAuditSink` | Thread-safe process-local hash-chained sink. Useful for tests and short-lived runs. |
 | `SqliteAuditSink` | Thread-safe SQLite WAL sink using full synchronization and a SHA-256 chain. Call `close()` during shutdown. |
 | `SecurityEvent` | Redacted policy observation with stage, module, verdict, reason, latency, identity, call index, and argument hash. |

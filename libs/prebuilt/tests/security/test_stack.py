@@ -15,9 +15,11 @@ from langgraph.prebuilt.security import (
     Decision,
     Effect,
     EscalationRequest,
+    ForbidConstraint,
     MemorySecurityObserver,
     Principal,
     ResourceArg,
+    RulePredicate,
     SecurityModule,
     SecurityStack,
     Tool,
@@ -86,6 +88,46 @@ def test_module_order_cannot_turn_deny_into_allow(reverse: bool) -> None:
     finally:
         stack.close()
     assert decision == Decision(Verdict.DENY, "strict")
+
+
+def test_permission_attributes_and_accumulates_typed_constraints() -> None:
+    """Allow means no objection while retaining every module restriction."""
+    first = ForbidConstraint("one", RulePredicate(domain="network"), "offline")
+    second = ForbidConstraint("two", RulePredicate(domain="process"), "no_exec")
+    stack = SecurityStack(
+        [
+            FixedModule("network", Decision(Verdict.ALLOW, "ok", constraints=(first,))),
+            FixedModule(
+                "process", Decision(Verdict.ALLOW, "ok", constraints=(second,))
+            ),
+        ]
+    )
+    try:
+        decision = stack.permission(_principal(), _call())
+    finally:
+        stack.close()
+
+    assert decision.verdict is Verdict.ALLOW
+    assert [(item.module, item.constraint_id) for item in decision.constraints] == [
+        ("network", "one"),
+        ("process", "two"),
+    ]
+
+
+def test_module_cannot_spoof_constraint_attribution() -> None:
+    """The framework, not module output, owns TCB attribution."""
+    spoofed = ForbidConstraint(
+        "one", RulePredicate(domain="network"), "offline", module="other"
+    )
+    stack = SecurityStack(
+        [FixedModule("network", Decision(Verdict.ALLOW, "ok", constraints=(spoofed,)))]
+    )
+    try:
+        decision = stack.permission(_principal(), _call())
+    finally:
+        stack.close()
+
+    assert decision == Decision(Verdict.DENY, "module_error:network")
 
 
 def test_transform_is_rechecked_by_dac() -> None:

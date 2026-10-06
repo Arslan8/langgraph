@@ -148,6 +148,75 @@ class ExecutionOutcome(str, Enum):
     INDETERMINATE = "indeterminate"
 
 
+class SelectorMatch(str, Enum):
+    """How a mandatory-policy predicate interprets its selector."""
+
+    ANY = "any"
+    EXACT = "exact"
+    SUBTREE = "subtree"
+
+
+@dataclass(frozen=True, slots=True)
+class RulePredicate:
+    """Bounded match over final-grant rules; it contains no policy source text."""
+
+    domain: str | None = None
+    operations: frozenset[str] = frozenset()
+    selector: str | None = None
+    selector_match: SelectorMatch = SelectorMatch.ANY
+    conditions: Mapping[str, Any] = field(default_factory=dict)
+
+    def __post_init__(self) -> None:
+        if self.domain is not None and not self.domain:
+            raise ValueError("predicate domain must be non-empty when present")
+        operations = frozenset(self.operations)
+        if any(not operation for operation in operations):
+            raise ValueError("predicate operations must be non-empty")
+        if self.selector_match is not SelectorMatch.ANY and not self.selector:
+            raise ValueError("exact and subtree predicates require a selector")
+        if self.selector_match is SelectorMatch.ANY and self.selector is not None:
+            raise ValueError("an ANY predicate cannot carry a selector")
+        if len(operations) > 32 or len(self.conditions) > 32:
+            raise ValueError("predicate exceeds the bounded complexity limit")
+        object.__setattr__(self, "operations", operations)
+        object.__setattr__(self, "conditions", MappingProxyType(dict(self.conditions)))
+
+
+@dataclass(frozen=True, slots=True)
+class ForbidConstraint:
+    """Typed restriction over one class of grant rules."""
+
+    constraint_id: str
+    predicate: RulePredicate
+    reason: str
+    module: str = ""
+
+    def __post_init__(self) -> None:
+        if not self.constraint_id or not self.reason:
+            raise ValueError("constraint identity and reason must be non-empty")
+
+
+@dataclass(frozen=True, slots=True)
+class ForbidCombination:
+    """Reject authority combinations even when each rule is valid alone."""
+
+    constraint_id: str
+    terms: tuple[RulePredicate, ...]
+    reason: str
+    module: str = ""
+
+    def __post_init__(self) -> None:
+        terms = tuple(self.terms)
+        if not self.constraint_id or not self.reason:
+            raise ValueError("constraint identity and reason must be non-empty")
+        if len(terms) < 2 or len(terms) > 16:
+            raise ValueError("combinations require between two and sixteen terms")
+        object.__setattr__(self, "terms", terms)
+
+
+PolicyConstraint = ForbidConstraint | ForbidCombination
+
+
 @dataclass(frozen=True, slots=True)
 class EscalationRequest:
     """Redacted human-approval request emitted by a policy module."""
@@ -206,19 +275,28 @@ class Decision:
     reason: str
     new_args: Mapping[str, Any] | None = None
     escalation: EscalationRequest | None = None
+    constraints: tuple[PolicyConstraint, ...] = ()
 
     def __post_init__(self) -> None:
         if not self.reason:
             raise ValueError("decision reason must be non-empty")
+        constraints = tuple(self.constraints)
+        object.__setattr__(self, "constraints", constraints)
         if self.verdict is Verdict.TRANSFORM:
-            if self.new_args is None or self.escalation is not None:
-                raise ValueError("TRANSFORM requires new_args and forbids escalation")
+            if self.new_args is None or self.escalation is not None or constraints:
+                raise ValueError(
+                    "TRANSFORM requires new_args and forbids escalation or constraints"
+                )
             object.__setattr__(self, "new_args", MappingProxyType(dict(self.new_args)))
         elif self.verdict is Verdict.ESCALATE:
-            if self.escalation is None or self.new_args is not None:
-                raise ValueError("ESCALATE requires escalation and forbids new_args")
+            if self.escalation is None or self.new_args is not None or constraints:
+                raise ValueError(
+                    "ESCALATE requires escalation and forbids new_args or constraints"
+                )
         elif self.new_args is not None or self.escalation is not None:
             raise ValueError("ALLOW and DENY cannot carry transform or escalation data")
+        elif self.verdict is Verdict.DENY and constraints:
+            raise ValueError("DENY cannot carry constraints")
 
 
 @dataclass(frozen=True, slots=True)
@@ -245,6 +323,38 @@ class AuditRecord:
             raise ValueError("audit tool, user, and stage must be non-empty")
 
 
+@dataclass(frozen=True, slots=True)
+class AuditSeal:
+    """Externally witnessable commitment to one retained audit-chain head."""
+
+    stream_id: str
+    record_count: int
+    chain_head: str
+    issued_at: float
+    signature: str
+
+    def __post_init__(self) -> None:
+        if not self.stream_id or not self.signature:
+            raise ValueError("audit seal stream and signature must be non-empty")
+        if self.record_count < 0 or self.issued_at <= 0:
+            raise ValueError("audit seal count and issuance time are invalid")
+        if self.record_count and not self.chain_head:
+            raise ValueError("a non-empty audit seal requires a chain head")
+
+
+@runtime_checkable
+class AuditWitness(Protocol):
+    """External signer/verifier for durable audit-chain commitments."""
+
+    def sign(self, payload: bytes) -> str:
+        """Sign a canonical audit-seal payload."""
+        ...
+
+    def verify(self, payload: bytes, signature: str) -> bool:
+        """Verify a canonical audit-seal payload against a trust anchor."""
+        ...
+
+
 @runtime_checkable
 class AuditSink(Protocol):
     """Storage protocol implemented by security audit sinks."""
@@ -259,6 +369,14 @@ class AuditSink(Protocol):
 
     def verify(self) -> tuple[bool, int | None]:
         """Return integrity status and the first invalid record index."""
+        ...
+
+    def seal(self, witness: AuditWitness) -> AuditSeal:
+        """Return an externally retainable commitment to the current chain."""
+        ...
+
+    def verify_seal(self, seal: AuditSeal, witness: AuditWitness) -> bool:
+        """Verify chain integrity, retained length, head, stream, and signature."""
         ...
 
 

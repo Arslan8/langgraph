@@ -11,6 +11,7 @@ import pytest
 from langgraph.prebuilt.security import (
     AuditRecord,
     AuditSink,
+    HmacAuditWitness,
     MemoryAuditSink,
     SqliteAuditSink,
     Verdict,
@@ -148,3 +149,35 @@ def test_memory_sink_serializes_parallel_appends() -> None:
 
     assert len(sink.records()) == 100
     assert sink.verify() == (True, None)
+
+
+@pytest.mark.parametrize("kind", ["memory", "sqlite"])
+def test_external_seal_detects_valid_prefix_truncation(
+    kind: str, tmp_path: Path
+) -> None:
+    """A retained witness commitment detects deletion of a valid suffix."""
+    sink: MemoryAuditSink | SqliteAuditSink
+    sink = (
+        MemoryAuditSink()
+        if kind == "memory"
+        else SqliteAuditSink(tmp_path / "sealed.db")
+    )
+    witness = HmacAuditWitness(b"w" * 32)
+    sink.write(_record(0))
+    sink.write(_record(1))
+    seal = sink.seal(witness)
+    assert sink.verify_seal(seal, witness)
+
+    if isinstance(sink, MemoryAuditSink):
+        sink._records.pop()
+    else:
+        sink._connection.execute(
+            "DELETE FROM audit_records WHERE sequence = "
+            "(SELECT MAX(sequence) FROM audit_records)"
+        )
+        sink._connection.commit()
+
+    assert sink.verify() == (True, None)
+    assert not sink.verify_seal(seal, witness)
+    if isinstance(sink, SqliteAuditSink):
+        sink.close()

@@ -30,6 +30,9 @@ from langgraph.prebuilt.security.types import (
     Decision,
     EscalationRequest,
     ExecutionOutcome,
+    ForbidCombination,
+    ForbidConstraint,
+    PolicyConstraint,
     Principal,
     Slot,
     ToolCall,
@@ -111,18 +114,21 @@ class SecurityStack:
         self._observe(principal, call, "permission", "dac", author, started)
         if author.verdict is not Verdict.ALLOW:
             return author
+        constraints: list[PolicyConstraint] = []
         for module in self.modules:
             started = self._started()
             decision = self._sync_decision(
                 module, partial(module.tool_call_permission, principal, call)
             )
             decision = self._bind_escalation(module, principal, call, decision)
+            decision = self._attribute_constraints(module, decision)
             if _matches_approval(decision, call, approval):
                 decision = Decision(Verdict.ALLOW, f"approval:{module.name}")
             self._observe(principal, call, "permission", module.name, decision, started)
             if decision.verdict is not Verdict.ALLOW:
                 return decision
-        return Decision(Verdict.ALLOW, "stack:allow")
+            constraints.extend(decision.constraints)
+        return Decision(Verdict.ALLOW, "stack:allow", constraints=tuple(constraints))
 
     async def apermission(
         self,
@@ -137,18 +143,21 @@ class SecurityStack:
         self._observe(principal, call, "permission", "dac", author, started)
         if author.verdict is not Verdict.ALLOW:
             return author
+        constraints: list[PolicyConstraint] = []
         for module in self.modules:
             started = self._started()
             decision = await self._async_decision(
                 module, partial(module.tool_call_permission, principal, call)
             )
             decision = self._bind_escalation(module, principal, call, decision)
+            decision = self._attribute_constraints(module, decision)
             if _matches_approval(decision, call, approval):
                 decision = Decision(Verdict.ALLOW, f"approval:{module.name}")
             self._observe(principal, call, "permission", module.name, decision, started)
             if decision.verdict is not Verdict.ALLOW:
                 return decision
-        return Decision(Verdict.ALLOW, "stack:allow")
+            constraints.extend(decision.constraints)
+        return Decision(Verdict.ALLOW, "stack:allow", constraints=tuple(constraints))
 
     def prepare(
         self, principal: Principal, call: ToolCall
@@ -456,6 +465,21 @@ class SecurityStack:
             expires_at=time.time() + self.approval_ttl_s,
         )
         return replace(decision, escalation=bound)
+
+    def _attribute_constraints(
+        self, module: SecurityModule, decision: Decision
+    ) -> Decision:
+        """Bind typed restrictions to their TCB module and reject spoofing."""
+        if not decision.constraints:
+            return decision
+        attributed: list[PolicyConstraint] = []
+        for constraint in decision.constraints:
+            if not isinstance(constraint, ForbidConstraint | ForbidCombination):
+                return Decision(Verdict.DENY, f"module_error:{module.name}")
+            if constraint.module:
+                return Decision(Verdict.DENY, f"module_error:{module.name}")
+            attributed.append(replace(constraint, module=module.name))
+        return replace(decision, constraints=tuple(attributed))
 
     async def _async_decision(
         self, module: SecurityModule, hook: Callable[[], Any]

@@ -27,9 +27,9 @@ sequence; accepted documentation is not evidence that its adapters exist.
 | Step | Status | Freeze consequence |
 | --- | --- | --- |
 | 1. Profile grammar and monotonic DAC evaluator | Complete | The `.slp` grammar is frozen. |
-| 2. Attributed platform-neutral `Grant` IR and resource selectors | Not implemented | No `Grant` API is frozen. `ConstructiveGrant` is only the DAC candidate. |
-| 3. Cedar integration and reference forbid policies | Not implemented | Cedar request construction and module forbid emission are not frozen. |
-| 4. `HostAttestation`, exact obligations, enforcement-adapter interface, activation receipts, transactional audit, and explicit degradation | Not implemented | Host, adapter, activation, and expanded audit contracts are not frozen. |
+| 2. Attributed platform-neutral `Grant` IR and resource selectors | Implemented and tested | `compile_grant` preserves source identity and `need`/`want`, marks runtime baselines, and emits a requirement ledger. |
+| 3. Cedar integration and reference forbid policies | Partially implemented and tested | Modules emit attributed bounded `ForbidConstraint` and `ForbidCombination` values. The replaceable reference backend filters exact grants, subtracts filesystem subtrees, rejects unrepresentable broad differences, rechecks requirements, and fails on diagnostics. A Cedar backend is not yet shipped. |
+| 4. `HostAttestation`, exact obligations, enforcement-adapter interface, activation receipts, transactional audit, and explicit degradation | Contracts implemented and tested; runtime wiring incomplete | Exact rule assessment, multi-adapter ownership, host trust verification, activation evidence, degradation, dispatch/outcome audit, and external chain seals exist. Tool execution is not yet routed through a native adapter. |
 | 5. Dedicated spawner and Linux reference adapter | Not implemented | There is no host-confinement claim. |
 
 The seven hook names and invocation structure are frozen. The detailed
@@ -44,22 +44,22 @@ table prevents target prose from being mistaken for implementation evidence.
 
 | Review area | Current status | Target disposition |
 | --- | --- | --- |
-| Rule-specific negotiation | Specified, not implemented | Resource classes are hints; exact operation, selector, conditions, dependencies, and complements are negotiated per obligation. |
-| Closed-world default deny | Specified, not implemented | Every retained authority is a grant/baseline line and adapters attest denial of each owned domain's complement. |
-| `need`/`want` revalidation | Initial DAC behavior implemented and tested; later stages not implemented | A requirement ledger is rechecked after policy filtering, lowering, and activation. |
-| Host evidence trust and context binding | Not implemented | Authenticated attestation is trust-anchored and bound to boot, worker, namespaces, credentials, cgroup, adapter, nonce, and freshness. |
-| Worker activation receipt and lease invalidation | Not implemented | A startup barrier releases import only after a verified worker-specific receipt and audit precommit; live dependencies are leased. |
-| Multi-component enforcement | Specified, not implemented | A semantic rule expands into an obligation DAG; each obligation has one primary enforcer and all required dependencies must activate. |
-| Advisory security claim | Evaluation-only projection exists; runtime not implemented | Waivers produce `DEGRADED`, suspend the full subset claim, enumerate missing guarantees, and cannot waive baseline invariants. |
-| Module output to Cedar | Current verdict API implemented; typed constraint output not implemented | Modules emit bounded typed labels/forbid constraints, never arbitrary Cedar text, and are pinned TCB components. |
-| Broad-resource mandatory filtering | Not implemented | Use sound resource-set difference, complete per-operation brokering, or reject the rule; a representative request is insufficient. |
-| Cedar diagnostics and aggregate combinations | Not implemented | Any diagnostic denies; both per-line and aggregate candidate checks run. |
+| Rule-specific negotiation | Implemented and tested as a platform-neutral contract | Resource classes are hints; exact operation, selector, conditions, dependencies, and complements are negotiated per obligation. No native adapter is wired to tool execution yet. |
+| Closed-world default deny | Implemented and tested as a negotiation invariant | Every represented authority domain requires a non-waivable `DENY_COMPLEMENT` obligation. Runtime proof awaits the native adapter. |
+| `need`/`want` revalidation | Implemented and tested through policy filtering and lowering | Source lineage survives DAC intersection, rule splitting, policy subtraction, waivers, and adapter selection. Activation-time reductions remain to be wired. |
+| Host evidence trust and context binding | Implemented and tested as a contract | An explicit verifier checks nonce, freshness, and trust; activation binds boot, worker, namespaces, credentials, cgroup, broker epoch, plan, and obligations. A host probe/attestor is not yet shipped. |
+| Worker activation receipt and lease invalidation | Activation receipt implemented; live invalidation not implemented | A receipt must cover every assigned obligation and exact worker context. The startup barrier and renewable dependency leases remain. |
+| Multi-component enforcement | Implemented and tested as an obligation DAG | Each obligation has one explicit primary enforcer, dependencies are complete and acyclic, and activation evidence must cover all assigned obligations. Semantic obligation compilers and native adapters remain. |
+| Advisory security claim | Implemented and tested in negotiation | Only explicitly waivable obligations may degrade; closed-world complements and required source lines cannot be waived. Runtime propagation remains. |
+| Module output to Cedar | Typed forbid-only output implemented and tested | The framework owns module attribution and rejects spoofed or malformed outputs. Cedar translation remains replaceable backend work. |
+| Broad-resource mandatory filtering | Implemented and tested in the reference backend | Filesystem child subtrees become explicit exclusions; unrepresentable conditional differences remove the broad rule and requirements are rechecked. |
+| Cedar diagnostics and aggregate combinations | Backend diagnostics and aggregate combinations implemented; Cedar adapter not implemented | Any backend diagnostic denies; typed combinations can reject cross-domain authority sets. |
 | Pre-confinement execution | Current decorators, tool construction, normalizers, hooks, and imports execute in the trusted process | Strict mode uses declarative manifests and imports tool code only after activation; custom transformations run confined and are reauthorized. |
 | Ambient authority and runtime baseline | Baseline is specified; enforcement not implemented | Start from a clean worker, enumerate every retained capability, and include it in grant obligations and activation evidence. |
 | Delegated labels and budgets | Scope subset and blob copying implemented and tested; richer semantics not addressed in code | Typed label partial orders and a shared atomic escrow ledger govern children. |
-| Approval subject binding | Request/call/tool matching and recheck implemented and tested; full intent binding not implemented | One-time expiring approval binds principal, artifact, normalized intent, authority, policy, ledger, and nonce. |
-| Atomic history, retries, audit outcomes, truncation | Atomic call indexes and thread-safe append are implemented and tested; the stronger properties are not addressed | A durable authorization transaction, idempotency contract, `INDETERMINATE` outcome, outbox, terminal seal, and external witness are required. |
-| Security disable/downgrade control | Root configuration and static propagation exist; monotonic inheritance is not guaranteed | A secured root issues an immutable context inherited by every descendant/resume/retry; missing or weaker context fails closed. |
+| Approval subject binding | Principal, roles, scopes, delegation, tool, call, raw and normalized arguments, expiry, and one-time use are implemented and tested | Artifact, final-grant, policy, ledger, and activation nonce binding require the strict execution path. |
+| Atomic history, retries, audit outcomes, truncation | Dispatch/outcome states, pre-dispatch audit failure, post-dispatch `INDETERMINATE`, hash chains, and external seals are implemented and tested | Durable quota reservation, side-effect idempotency, outbox delivery, and automatic external witnessing remain. |
+| Security disable/downgrade control | Reconfiguration and delegation downgrade are rejected and tested | A secured `ToolNode` cannot be replaced with another config and delegation must inherit or explicitly receive security. A signed immutable context for arbitrary dynamic descendants remains. |
 
 ## Phase two
 

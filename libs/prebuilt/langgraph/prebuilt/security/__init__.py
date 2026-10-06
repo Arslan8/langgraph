@@ -4,7 +4,11 @@ The package exposes tool descriptors and discretionary access-control metadata.
 Runtime mediation is added by the later security-framework modules.
 """
 
-from langgraph.prebuilt.security.audit import MemoryAuditSink, SqliteAuditSink
+from langgraph.prebuilt.security.audit import (
+    HmacAuditWitness,
+    MemoryAuditSink,
+    SqliteAuditSink,
+)
 from langgraph.prebuilt.security.binding import (
     PRINCIPAL_CONFIG_KEY,
     SecurityBindingError,
@@ -75,6 +79,11 @@ from langgraph.prebuilt.security.observability import (
     SecurityObserver,
     langsmith_metadata,
 )
+from langgraph.prebuilt.security.policy import (
+    MandatoryPolicyBackend,
+    PolicyFilterResult,
+    TypedPolicyBackend,
+)
 from langgraph.prebuilt.security.profile import (
     BoundExecRule,
     BoundFsRule,
@@ -111,12 +120,19 @@ from langgraph.prebuilt.security.taint import (
 from langgraph.prebuilt.security.types import (
     Approval,
     AuditRecord,
+    AuditSeal,
     AuditSink,
+    AuditWitness,
     Blobs,
     Decision,
     EscalationRequest,
     ExecutionOutcome,
+    ForbidCombination,
+    ForbidConstraint,
+    PolicyConstraint,
     Principal,
+    RulePredicate,
+    SelectorMatch,
     Slot,
     Tool,
     ToolCall,
@@ -131,7 +147,9 @@ __all__ = (
     "AdapterPlan",
     "Approval",
     "AuditRecord",
+    "AuditSeal",
     "AuditSink",
+    "AuditWitness",
     "AuthorityDomain",
     "Blobs",
     "BoundExecRule",
@@ -158,12 +176,16 @@ __all__ = (
     "ExecutionContext",
     "ExecRule",
     "FsRule",
+    "ForbidCombination",
+    "ForbidConstraint",
     "Grant",
     "GrantCompilation",
     "GrantRule",
     "HostAttestation",
     "HostAttestationVerifier",
+    "HmacAuditWitness",
     "Limits",
+    "MandatoryPolicyBackend",
     "MemoryAuditSink",
     "MemorySecurityObserver",
     "NamedRule",
@@ -178,12 +200,15 @@ __all__ = (
     "ProfileDocument",
     "ProfileSyntaxError",
     "PathTemplate",
+    "PolicyConstraint",
+    "PolicyFilterResult",
     "RemovedLine",
     "Requirement",
     "RequirementCheck",
     "RequirementEntry",
     "RequirementLedger",
     "ResourceArg",
+    "RulePredicate",
     "SecurityModule",
     "SecurityEvent",
     "SecurityObserver",
@@ -194,6 +219,7 @@ __all__ = (
     "SecurityDeniedError",
     "SecurityIndeterminateError",
     "SecurityStack",
+    "SelectorMatch",
     "ShareRule",
     "Slot",
     "SourceLocation",
@@ -207,6 +233,7 @@ __all__ = (
     "ToolInventory",
     "ToolInventoryEntry",
     "ToolProfile",
+    "TypedPolicyBackend",
     "TaintReport",
     "Verdict",
     "allocate_blobs",
