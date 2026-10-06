@@ -84,6 +84,14 @@ process-wide MAC, confinement of an allowed tool, syscall enforcement,
 credential isolation, or automatic compile-time rejection of every analyzer
 finding.
 
+Even after native phase-one confinement lands, the claim is per-execution
+resource access control. It does not imply cross-call confidentiality,
+noninterference between communicating siblings, confused-deputy safety for
+trusted result consumers, rollback after an adapter commit point, or that an
+allowed action matches the user's purpose. These properties require the
+separate mechanisms and claim boundaries in
+[security properties](security-properties.md).
+
 For untrusted tool code today, use an external OS sandbox and run
 `langgraph-security-taint` as an explicit CI gate. Do not treat an allow verdict,
 effect declaration, profile grant, audit record, or accepted ADR as evidence of

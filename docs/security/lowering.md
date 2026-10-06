@@ -268,9 +268,12 @@ approved by checking only `/workspace`. It must be represented by a sound set
 difference or every open must cross a broker; otherwise the line is rejected.
 
 The policy adapter performs both per-line filtering and an aggregate check over
-the candidate grant, its effects, labels, history snapshot, and flow summary.
-Aggregate policy can reject combinations such as sensitive-file authority plus
-outbound communication even if each line separately survived. Any Cedar
+the complete candidate grant, including operator-approved runtime baseline and
+authenticated channels. Aggregate policy can reject combinations such as
+sensitive-file authority plus outbound communication even if each line
+separately survived. It does not establish cross-call information flow: history,
+declared effects, or a flow summary cannot soundly represent dependencies through
+model context, graph state, checkpoints, results, or delegation. Any Cedar
 evaluation diagnostic, skipped-policy error, unknown entity, or aggregate error
 denies. A combination deny is never converted into separate allows.
 
@@ -280,9 +283,11 @@ Strict mode does not import tool-authored Python in the orchestrator. Discovery
 loads a declarative, schema-validated manifest containing the artifact digest,
 descriptor, profile, entry point, dependency closure, and normalizer identifiers.
 Framework-provided pure normalizers may run before authorization. A custom
-tool-authored transformation is untrusted: it runs in a separately confined
-preflight worker, and its output is treated as tainted input that may only narrow
-authority after normalization and reauthorization.
+tool-authored transformation is untrusted: it runs under a separate minimal
+preflight grant with no implicit access to the main grant. Its output is treated
+as tainted input and must be proven no broader than the original normalized
+request, not merely allowed by the principal envelope, before normalization and
+authorization run again.
 
 Operator-installed policy modules, policy translators, trusted probes, selected
 adapters, supervisors, audit coordinators, and built-in normalizers are in the
@@ -309,10 +314,11 @@ Before lowering, the supervisor constructs an `AuthoritySnapshot` covering:
 A fresh worker begins with a clean descriptor/handle table, minimal environment,
 private working directory and temporary storage, no direct credentials, no
 preexisting external sockets, and only explicitly granted runtime artifacts and
-authenticated channels. Every retained item becomes a baseline grant line and
-an obligation. Baseline lines pass through mandatory filtering and the same
+authenticated channels. Every retained item becomes an operator-approved
+baseline grant line and an obligation. Baseline lines pass through mandatory filtering and the same
 subset, activation, and audit checks. If the baseline cannot start the runtime,
-the call denies; the adapter never widens it on retry.
+the call denies; the adapter may report a requirement but cannot grant it to
+itself or widen it on retry.
 
 ## Worker-specific activation and leases
 

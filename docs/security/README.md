@@ -16,6 +16,11 @@ separates shipped behavior from the enforcement roadmap. The design rationale is
 recorded in the [`adr/`](adr/) directory. Three runnable examples live in
 [`examples/`](examples/README.md).
 
+The [security properties and composition boundaries](security-properties.md)
+separate per-call resource access control from session information flow,
+confused-deputy resistance, revocation, and task-intent integrity. Those
+boundaries are part of the security contract, not optional caveats.
+
 ## Security boundary
 
 The decisive check runs inside each physical sync or async tool execution,

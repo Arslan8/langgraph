@@ -117,8 +117,11 @@ credential grants and receive only the minimal runtime syscall set. They cannot
 run until an explicit declaration or operator override supplies authority.
 
 DAC is constructive: it can only propose concrete authority owned by the tool
-author or user. Cross-tool rules, information-flow labels, organization-wide
-ceilings, escalation, and separation of duty belong to mandatory policy.
+author or user. Cross-tool authority combinations, organization-wide ceilings,
+escalation, and separation of duty belong to mandatory policy. End-to-end
+information flow is a separate property: a current-grant aggregate check cannot
+soundly track data through results, model context, checkpoints, graph state, or
+delegation, so this ADR does not claim session noninterference.
 
 The profile grammar freezes after the profile parser and monotonic DAC evaluator
 land. Property tests define monotonicity over set inclusion: reducing the tool

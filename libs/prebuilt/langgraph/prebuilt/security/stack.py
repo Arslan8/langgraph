@@ -179,7 +179,15 @@ class SecurityStack:
             )
             self._observe(principal, current, "prepare", module.name, decision, started)
             if decision.verdict is Verdict.TRANSFORM:
-                current = _replace_call_args(current, decision.new_args or {})
+                transformed = _replace_call_args(current, decision.new_args or {})
+                if not _normalized_no_broader(
+                    current.normalized, transformed.normalized
+                ):
+                    return (
+                        Decision(Verdict.DENY, f"prepare:widened:{module.name}"),
+                        current,
+                    )
+                current = transformed
                 continue
             if decision.verdict is not Verdict.ALLOW:
                 return decision, current
@@ -210,7 +218,15 @@ class SecurityStack:
             )
             self._observe(principal, current, "prepare", module.name, decision, started)
             if decision.verdict is Verdict.TRANSFORM:
-                current = _replace_call_args(current, decision.new_args or {})
+                transformed = _replace_call_args(current, decision.new_args or {})
+                if not _normalized_no_broader(
+                    current.normalized, transformed.normalized
+                ):
+                    return (
+                        Decision(Verdict.DENY, f"prepare:widened:{module.name}"),
+                        current,
+                    )
+                current = transformed
                 continue
             if decision.verdict is not Verdict.ALLOW:
                 return decision, current
@@ -512,6 +528,27 @@ def record_approval(principal: Principal, approval: Approval) -> bool:
     """Atomically record one approval and reject reuse of its request ID."""
     slot = principal.security.allocate("cap")
     return slot.put_if_absent(f"approval:{approval.request_id}", approval)
+
+
+def _normalized_no_broader(
+    original: Mapping[str, Any], transformed: Mapping[str, Any]
+) -> bool:
+    """Conservatively require transformed security resources to be subsets."""
+    if not transformed.keys() <= original.keys():
+        return False
+    return all(
+        _value_no_broader(original[key], value) for key, value in transformed.items()
+    )
+
+
+def _value_no_broader(original: Any, transformed: Any) -> bool:
+    if isinstance(original, Mapping) and isinstance(transformed, Mapping):
+        return _normalized_no_broader(original, transformed)
+    if isinstance(original, set | frozenset) and isinstance(
+        transformed, set | frozenset
+    ):
+        return transformed <= original
+    return transformed == original
 
 
 def coerce_approval(response: Any, escalation: EscalationRequest) -> Approval:

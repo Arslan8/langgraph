@@ -147,8 +147,8 @@ def test_transform_is_rechecked_by_dac() -> None:
     finally:
         stack.close()
 
-    assert decision == Decision(Verdict.DENY, "prepare:dac:arg:path")
-    assert transformed.normalized["path"] == "/etc/passwd"
+    assert decision == Decision(Verdict.DENY, "prepare:widened:widen")
+    assert transformed.normalized["path"] == "/safe"
 
 
 @pytest.mark.parametrize(
