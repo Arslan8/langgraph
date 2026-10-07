@@ -12,6 +12,9 @@ The task-oriented [user guide](users/README.md) covers application integration,
 tool authorization, modules, session flow, operations, and deployment boundaries.
 The [Linux host execution guide](users/linux-host-execution.md) configures the
 working reference adapter for untrusted local Python tools.
+The [Linux enforcement acceptance report](linux-enforcement-acceptance.md)
+freezes its supported contract and maps A1–A8 to mechanisms and focused
+evidence.
 Existing applications should follow the [migration guide](migration.md) and
 [worked patterns](workflows.md). The constructive DAC language is specified by
 the [frozen `.slp` profile grammar](profiles.md). The target path from mandatory
