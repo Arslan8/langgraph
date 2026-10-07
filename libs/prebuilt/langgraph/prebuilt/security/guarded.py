@@ -27,6 +27,7 @@ from langgraph.prebuilt.security.errors import (
 from langgraph.prebuilt.security.execution import (
     HostExecutionDenied,
     HostExecutionError,
+    TerminationRecovery,
 )
 from langgraph.prebuilt.security.flow import ToolFlowRule
 from langgraph.prebuilt.security.introspect import (
@@ -122,6 +123,8 @@ class _GuardedExecutor:
             raise SecurityDeniedError("audit_failure") from exc
         result: Any = None
         outcome = ExecutionOutcome.INDETERMINATE
+        termination_confirmed = True
+        flow_recovery: TerminationRecovery | None = None
         try:
             if self.security.host_executor is not None:
                 host_result = self.security.host_executor.invoke(
@@ -143,6 +146,8 @@ class _GuardedExecutor:
             raise SecurityDeniedError(str(exc)) from exc
         except HostExecutionError as exc:
             outcome = exc.outcome
+            termination_confirmed = exc.termination_confirmed
+            flow_recovery = exc.recovery
             try:
                 self.stack.record_framework_event(
                     principal,
@@ -170,7 +175,12 @@ class _GuardedExecutor:
                     "tool outcome is indeterminate because completion audit failed"
                 ) from exc
             finally:
-                self._release_flow(principal, flow_reservation)
+                self._finalize_flow(
+                    principal,
+                    flow_reservation,
+                    termination_confirmed,
+                    flow_recovery,
+                )
 
     async def ainvoke(self, args: Mapping[str, Any], config: RunnableConfig) -> Any:
         principal, call = self._prepare(args, config)
@@ -197,6 +207,8 @@ class _GuardedExecutor:
             raise SecurityDeniedError("audit_failure") from exc
         result: Any = None
         outcome = ExecutionOutcome.INDETERMINATE
+        termination_confirmed = True
+        flow_recovery: TerminationRecovery | None = None
         try:
             if self.security.host_executor is not None:
                 host_result = await self.security.host_executor.ainvoke(
@@ -218,6 +230,8 @@ class _GuardedExecutor:
             raise SecurityDeniedError(str(exc)) from exc
         except HostExecutionError as exc:
             outcome = exc.outcome
+            termination_confirmed = exc.termination_confirmed
+            flow_recovery = exc.recovery
             try:
                 self.stack.record_framework_event(
                     principal,
@@ -245,7 +259,12 @@ class _GuardedExecutor:
                     "tool outcome is indeterminate because completion audit failed"
                 ) from exc
             finally:
-                self._release_flow(principal, flow_reservation)
+                self._finalize_flow(
+                    principal,
+                    flow_reservation,
+                    termination_confirmed,
+                    flow_recovery,
+                )
 
     def _prepare(
         self, args: Mapping[str, Any], config: RunnableConfig
@@ -295,6 +314,30 @@ class _GuardedExecutor:
         policy = self.security.flow_policy
         if policy is not None:
             policy.release(principal, reservation)
+
+    def _finalize_flow(
+        self,
+        principal: Principal,
+        reservation: ToolFlowRule | None,
+        termination_confirmed: bool,
+        recovery: TerminationRecovery | None,
+    ) -> None:
+        policy = self.security.flow_policy
+        if policy is None:
+            return
+        if termination_confirmed:
+            policy.release(principal, reservation)
+            return
+        if recovery is None:
+            raise SecurityIndeterminateError(
+                "uncertain worker has no termination recovery identity"
+            )
+        try:
+            policy.retain(principal, reservation, recovery)
+        except BaseException as exc:
+            raise SecurityIndeterminateError(
+                "uncertain worker reservation could not be retained"
+            ) from exc
 
     def _resume(
         self, principal: Principal, call: ToolCall, decision: Decision

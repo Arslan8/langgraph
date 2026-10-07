@@ -48,7 +48,7 @@ tool read_report {
   runs linux
   syscalls @minimal
   fs read ${path} need
-  limits cpu 2s mem 256M pids 1 nofile 64 wall 5s
+  limits cpu 2s pids 1 nofile 64 wall 5s
 }
 principal alice {
   roles analyst
@@ -170,6 +170,12 @@ mount descriptors bind the mounted root object, but do not claim content
 immutability. Deployments that need snapshot semantics must provide immutable
 artifacts or a snapshotting resource adapter.
 
+Selectors must name regular files or directories. FIFOs, sockets, device nodes,
+and other special files require another adapter. A directory containing a
+nested host mount is also rejected: each mount boundary needs its own explicit
+grant. Existing descendant symlinks retain ordinary live-name semantics, but
+can resolve only to objects separately visible in the worker namespace.
+
 The writable-mount operation set is deliberately closed. A writable existing
 file is accepted only with `read+write+truncate`; a writable directory subtree
 requires `read+write+create+delete+truncate`. Narrower mutation sets fail
@@ -213,7 +219,10 @@ A filesystem-only Linux deployment is supported when all of the following hold:
   trusted and cannot be modified by the tool account;
 - each untrusted entry point is a plain JSON-input/JSON-output Python callable
   with a pinned canonical source file and no injected LangGraph arguments;
-- runtime roots contain only required code and public runtime data;
+- runtime roots contain only required code and data authorized for every tool
+  that receives those roots;
+- each flow classification conservatively includes all data readable through
+  the tool grant, `/usr`, runtime roots, and the private runtime baseline;
 - every requested operation fits the supported filesystem/resource subset;
   unsupported network, service, credential, executable, or delegation rules are
   allowed to fail closed;
@@ -224,7 +233,15 @@ A filesystem-only Linux deployment is supported when all of the following hold:
 - deployment tests run on each kernel/distribution image used in production;
 - the operator has selected explicit CPU, virtual-address-space, file-size,
   temporary-storage, process, descriptor, and wall-time ceilings for the
-  workload. `memory_bytes` is `RLIMIT_AS`, not an RSS or cgroup-memory quota.
+  workload. The adapter calls the `RLIMIT_AS` baseline
+  `address_space_bytes` and the per-file `RLIMIT_FSIZE` baseline
+  `file_size_bytes`. Profile `mem` requests remain `memory_bytes` and are
+  rejected because this adapter has no RSS or cgroup-memory mechanism.
+
+`cpu_ms` is accepted only in whole-second increments because the active
+mechanism is `RLIMIT_CPU`. `tmpfs_bytes` is an aggregate ceiling for the private
+ephemeral `/tmp`; `file_size_bytes` is a per-file ceiling and does not bound
+aggregate persistent writable-storage consumption.
 
 Within that boundary, this is a deployable enforcement implementation, not a
 simulation. It is not a general-purpose container service or a substitute for a

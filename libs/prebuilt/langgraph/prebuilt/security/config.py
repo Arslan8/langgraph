@@ -43,6 +43,14 @@ class SecurityConfig:
             self.dac_overrides, DacOverrides
         ):
             raise TypeError("dac_overrides must be DacOverrides or None")
+        if (
+            self.host_executor is not None
+            and self.flow_policy is not None
+            and not self.flow_policy.store.persistent
+        ):
+            raise SecurityConfigurationError(
+                "host execution with session flow requires a persistent flow store"
+            )
 
     @property
     def can_escalate(self) -> bool:

@@ -27,6 +27,16 @@ class HostExecutionResult:
     receipt: ActivationReceipt
 
 
+@dataclass(frozen=True, slots=True)
+class TerminationRecovery:
+    """Kernel process identity retained after uncertain worker termination."""
+
+    recovery_id: str
+    pid: int
+    start_time: str
+    boot_id: str
+
+
 class HostExecutionError(RuntimeError):
     """Tool failure after host activation, with evidence and outcome state."""
 
@@ -35,10 +45,15 @@ class HostExecutionError(RuntimeError):
         reason: str,
         receipt: ActivationReceipt,
         outcome: ExecutionOutcome,
+        *,
+        termination_confirmed: bool = False,
+        recovery: TerminationRecovery | None = None,
     ) -> None:
         super().__init__(reason)
         self.receipt = receipt
         self.outcome = outcome
+        self.termination_confirmed = termination_confirmed
+        self.recovery = recovery
 
 
 @runtime_checkable
@@ -65,4 +80,8 @@ class HostToolExecutor(Protocol):
         constraints: Sequence[PolicyConstraint],
     ) -> HostExecutionResult:
         """Activate confinement and execute one asynchronous tool call."""
+        ...
+
+    def confirm_termination(self, recovery: TerminationRecovery) -> bool:
+        """Confirm that a retained worker identity can no longer execute."""
         ...

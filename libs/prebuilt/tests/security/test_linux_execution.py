@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import hashlib
 import json
 import os
@@ -18,6 +19,7 @@ from langchain_core.tools import tool
 
 from langgraph.prebuilt import InjectedState, ToolNode
 from langgraph.prebuilt.security import (
+    Confidentiality,
     DacOverrides,
     Decision,
     Effect,
@@ -31,8 +33,11 @@ from langgraph.prebuilt.security import (
     SecurityConfig,
     SecurityConfigurationError,
     SecurityModule,
+    SessionFlowPolicy,
     SqliteAuditSink,
+    SqliteFlowStateStore,
     ToolCall,
+    ToolFlowRule,
     Verdict,
     dac,
     effects,
@@ -41,8 +46,18 @@ from langgraph.prebuilt.security import (
     with_principal,
 )
 from langgraph.prebuilt.security import linux as linux_security
+from langgraph.prebuilt.security.enforcement import (
+    AuthorityDomain,
+    EnforcementObligation,
+    ObligationKind,
+    SupportLevel,
+)
 from langgraph.prebuilt.security.execution import HostExecutionDenied
-from langgraph.prebuilt.security.linux import _verified_resource_fd
+from langgraph.prebuilt.security.linux import (
+    _assess_path_obligation,
+    _nested_mount_points,
+    _verified_resource_fd,
+)
 
 _FIXTURES = Path(__file__).with_name("fixtures").resolve()
 
@@ -384,9 +399,9 @@ principal alice {
 }
 """
     limits = {
+        "address_space_bytes": 1_073_741_824,
         "cpu_ms": 30_000,
-        "file_bytes": 1_048_576,
-        "memory_bytes": 1_073_741_824,
+        "file_size_bytes": 1_048_576,
         "nofile": 64,
         "pids": 1,
         "tmpfs_bytes": 1_048_576,
@@ -567,7 +582,11 @@ principal alice {{
 
     result = guarded.invoke({"path": str(writable)}, config=_config(principal))
 
-    assert result == {"metadata": "blocked", "rename": "blocked"}
+    assert result == {
+        "ioctl": "blocked",
+        "metadata": "blocked",
+        "rename": "blocked",
+    }
     assert list(writable.iterdir()) == []
 
 
@@ -683,9 +702,9 @@ principal alice {
 }
 """
     limits = {
+        "address_space_bytes": 1_073_741_824,
         "cpu_ms": 30_000,
-        "file_bytes": 1_048_576,
-        "memory_bytes": 1_073_741_824,
+        "file_size_bytes": 1_048_576,
         "nofile": 64,
         "pids": 1,
         "tmpfs_bytes": 1_048_576,
@@ -1072,3 +1091,235 @@ principal alice {
     assert "required_authority_removed" in str(result["messages"][0].content)
     assert isinstance(security.host_executor, LinuxSandboxExecutor)
     assert security.host_executor.activation_receipts() == ()
+
+
+def test_unconfirmed_termination_retains_durable_flow_reservation(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A6/A7: recovery requires kernel evidence and survives coordinator restart."""
+    flow_path = tmp_path / "flow.sqlite"
+    store = SqliteFlowStateStore(flow_path)
+    rules = {
+        "read_file": ToolFlowRule(sink_ceiling=Confidentiality.PUBLIC),
+        "read_secret": ToolFlowRule(output_label=Confidentiality.SECRET),
+    }
+    flow = SessionFlowPolicy(rules, store=store)
+    base = _security(
+        """
+tool read_file {
+  owner analyst
+  grant analyst: call
+  runs linux
+  syscalls @minimal
+}
+principal alice {
+  roles analyst
+}
+""",
+        "linux_tools:read_file",
+    )
+    security = replace(base, flow_policy=flow)
+    assert isinstance(security.host_executor, LinuxSandboxExecutor)
+    actual_confirmation = linux_security._confirm_worker_terminated
+    monkeypatch.setattr(
+        linux_security,
+        "_confirm_worker_terminated",
+        lambda pid, start_time, *, timeout_s: False,
+    )
+
+    @tool
+    @dac(owner="analyst", grants={"analyst": "x", "*": "-"})
+    def read_file() -> str:
+        """Parent callback that must not execute."""
+        raise AssertionError
+
+    node = ToolNode((read_file,), security=security, handle_tool_errors=True)
+    principal = Principal("alice", frozenset({"analyst"}), frozenset(), "session")
+
+    result = node.invoke(_input("read_file", {}), config=_config(principal))
+
+    assert result["messages"][0].status == "error"
+    recovery_ids = flow.unresolved_terminations(principal)
+    assert len(recovery_ids) == 1
+    blocked, reservation = flow.acquire(principal, "read_secret")
+    assert blocked.reason == "flow:concurrent_egress"
+    assert reservation is None
+    store.close()
+
+    recovered_store = SqliteFlowStateStore(flow_path)
+    recovered = SessionFlowPolicy(rules, store=recovered_store)
+    assert recovered.unresolved_terminations(principal) == recovery_ids
+    monkeypatch.setattr(
+        linux_security, "_confirm_worker_terminated", actual_confirmation
+    )
+    assert recovered.recover_termination(
+        principal, recovery_ids[0], security.host_executor
+    )
+    assert recovered.unresolved_terminations(principal) == ()
+    allowed, reservation = recovered.acquire(principal, "read_secret")
+    assert allowed.verdict is Verdict.ALLOW
+    recovered.release(principal, reservation)
+    recovered_store.close()
+
+
+@pytest.mark.asyncio
+async def test_cancellation_waits_for_confirmed_linux_termination(
+    tmp_path: Path,
+) -> None:
+    """A6: cancellation cannot release flow state while a worker remains alive."""
+    limits = {
+        "address_space_bytes": 1_073_741_824,
+        "cpu_ms": 30_000,
+        "file_size_bytes": 1_048_576,
+        "nofile": 64,
+        "pids": 1,
+        "tmpfs_bytes": 1_048_576,
+        "wall_ms": 150,
+    }
+    store = SqliteFlowStateStore(tmp_path / "cancel-flow.sqlite")
+    rules = {
+        "read_file": ToolFlowRule(sink_ceiling=Confidentiality.PUBLIC),
+        "read_secret": ToolFlowRule(output_label=Confidentiality.SECRET),
+    }
+    flow = SessionFlowPolicy(rules, store=store)
+    base = _security(
+        """
+tool read_file {
+  owner analyst
+  grant analyst: call
+  runs linux
+  syscalls @minimal
+}
+principal alice {
+  roles analyst
+}
+""",
+        "linux_tools:slow_probe",
+        default_limits=limits,
+    )
+    security = replace(base, flow_policy=flow)
+    assert isinstance(security.host_executor, LinuxSandboxExecutor)
+
+    @tool
+    @dac(owner="analyst", grants={"analyst": "x", "*": "-"})
+    async def read_file() -> str:
+        """Parent callback that must not execute."""
+        raise AssertionError
+
+    node = ToolNode((read_file,), security=security, handle_tool_errors=True)
+    principal = Principal("alice", frozenset({"analyst"}), frozenset(), "session")
+    invocation = asyncio.create_task(
+        node.ainvoke(_input("read_file", {}), config=_config(principal))
+    )
+    for _ in range(100):
+        if security.host_executor.activation_receipts():
+            break
+        await asyncio.sleep(0.01)
+    assert security.host_executor.activation_receipts()
+    invocation.cancel()
+
+    with pytest.raises(asyncio.CancelledError):
+        await invocation
+
+    assert flow.unresolved_terminations(principal) == ()
+    allowed, reservation = flow.acquire(principal, "read_secret")
+    assert allowed.verdict is Verdict.ALLOW
+    flow.release(principal, reservation)
+    store.close()
+
+
+def test_special_file_grant_is_rejected_before_worker_release(tmp_path: Path) -> None:
+    """A2: device-like filesystem objects require a different adapter."""
+    fifo = tmp_path / "channel"
+    os.mkfifo(fifo)
+
+    @tool
+    @dac(owner="analyst", grants={"analyst": "x", "*": "-"})
+    @effects(Effect.READ, resources=[ResourceArg("path", "path", "realpath")])
+    def read_file(path: str) -> str:
+        """Parent callback that must not execute."""
+        raise AssertionError(path)
+
+    security = _security(_profile(tmp_path), "linux_tools:read_file")
+    node = ToolNode((read_file,), security=security)
+    principal = Principal("alice", frozenset({"analyst"}), frozenset(), "session")
+
+    result = node.invoke(
+        _input("read_file", {"path": str(fifo)}), config=_config(principal)
+    )
+
+    assert result["messages"][0].status == "error"
+    assert "adapter_rule_unsupported" in str(result["messages"][0].content)
+    assert isinstance(security.host_executor, LinuxSandboxExecutor)
+    assert security.host_executor.activation_receipts() == ()
+
+
+def test_directory_with_nested_mounts_is_not_claimed_as_one_exact_subtree() -> None:
+    """A2: live subtrees crossing mount boundaries require separate grants."""
+    assert _nested_mount_points(Path("/"))
+    support, reason = _assess_path_obligation(
+        EnforcementObligation(
+            "root-read",
+            "root-rule",
+            ObligationKind.OPERATE,
+            AuthorityDomain.FILESYSTEM,
+            "read",
+            "/",
+            {"subtree": True},
+        )
+    )
+
+    assert support is SupportLevel.UNSUPPORTED
+    assert reason == "nested_mount_requires_separate_grants"
+
+
+def test_linux_limits_reject_inexact_cpu_and_physical_memory_claims(
+    tmp_path: Path,
+) -> None:
+    """A8: the adapter advertises only limits with matching mechanisms."""
+    profiles = parse_profiles(_profile(tmp_path), source="linux-test.slp")
+    artifact = _FIXTURES / "linux_tools.py"
+    invalid = {
+        "address_space_bytes": 1_073_741_824,
+        "cpu_ms": 1500,
+        "file_size_bytes": 1_048_576,
+        "nofile": 64,
+        "pids": 1,
+        "tmpfs_bytes": 1_048_576,
+        "wall_ms": 30_000,
+    }
+    with pytest.raises(ValueError, match="whole-second"):
+        LinuxSandboxExecutor(
+            profiles,
+            {
+                "read_file": LinuxToolSpec(
+                    "linux_tools:read_file",
+                    artifact,
+                    hashlib.sha256(artifact.read_bytes()).hexdigest(),
+                )
+            },
+            runtime_roots=(_FIXTURES,),
+            default_limits=invalid,
+        )
+
+    memory_profiles = _profile(tmp_path).replace(
+        "syscalls @minimal", "syscalls @minimal\n  limits mem 256M"
+    )
+    security = _security(memory_profiles, "linux_tools:read_file")
+
+    @tool
+    @dac(owner="analyst", grants={"analyst": "x", "*": "-"})
+    @effects(Effect.READ, resources=[ResourceArg("path", "path", "realpath")])
+    def read_file(path: str) -> str:
+        """Parent callback that must not execute."""
+        raise AssertionError(path)
+
+    target = tmp_path / "target"
+    target.write_text("value")
+    node = ToolNode((read_file,), security=security)
+    principal = Principal("alice", frozenset({"analyst"}), frozenset(), "session")
+    result = node.invoke(
+        _input("read_file", {"path": str(target)}), config=_config(principal)
+    )
+    assert result["messages"][0].status == "error"
+    assert "adapter_rule_unsupported" in str(result["messages"][0].content)

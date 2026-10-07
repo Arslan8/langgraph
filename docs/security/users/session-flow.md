@@ -56,7 +56,8 @@ state. Labels only rise:
 2. before each physical execution, the framework atomically reserves the
    source/sink combination;
 3. a sink is denied when the session label exceeds its ceiling; and
-4. the reservation is released after post hooks and outcome audit complete.
+4. the reservation is released after post hooks and outcome audit complete only
+   when physical termination is confirmed.
 
 Batch premarking intentionally overtaints. A denied or unused source proposed
 in a parallel batch may still raise the label. This trades availability for a
@@ -70,9 +71,13 @@ denied with `flow:egress`.
 
 Use `SqliteFlowStateStore` when labels and reservations must coordinate across
 principal reconstruction, checkpoints, process restarts, or multiple workers.
-The in-memory store is thread-safe but process-local. A crashed persistent sink
-reservation fails closed and requires operator repair; never silently discard
-it while the external effect may still be running.
+The in-memory store is thread-safe but process-local and is rejected when host
+execution and session flow are configured together. An uncertain Linux worker
+stores a recovery identity beside its active SQLite sink reservation. List IDs
+with `unresolved_terminations()` and call `recover_termination()`; recovery
+releases the reservation only after the host executor confirms the recorded
+boot, PID, and process start-time identity can no longer execute. The record and
+reservation survive coordinator restart.
 
 The call boundary defines the implemented lifetime. Do not let a protected
 in-process tool leave threads, processes, callbacks, or asynchronous work alive

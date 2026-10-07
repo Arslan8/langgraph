@@ -115,6 +115,40 @@ async def test_async_later_egress_is_denied_after_sensitive_read() -> None:
     assert "flow:egress" in result["messages"][0].content
 
 
+def test_failed_source_execution_cannot_erase_session_classification() -> None:
+    """A7: possible reads taint the session even when execution raises."""
+    executed: list[str] = []
+
+    @tool
+    @dac(owner="analyst", grants={"analyst": "x"})
+    def read_secret() -> str:
+        """Possibly read secret data before failing."""
+        executed.append("read")
+        raise RuntimeError("failed after read")
+
+    @tool
+    @dac(owner="analyst", grants={"analyst": "x"})
+    def send_external() -> str:
+        """Send data to an external sink."""
+        executed.append("send")
+        return "sent"
+
+    node = ToolNode(
+        (read_secret, send_external),
+        security=SecurityConfig(flow_policy=_policy()),
+        handle_tool_errors=True,
+    )
+    principal = Principal("alice", frozenset({"analyst"}), frozenset(), "session")
+
+    failed = node.invoke(_request("read_secret"), config=_config(principal))
+    result = node.invoke(_request("send_external"), config=_config(principal))
+
+    assert failed["messages"][0].status == "error"
+    assert executed == ["read"]
+    assert result["messages"][0].status == "error"
+    assert "flow:egress" in result["messages"][0].content
+
+
 def test_parallel_read_and_egress_cannot_race_flow_state() -> None:
     """Batch premarking prevents a concurrent sink from beating the source call."""
     executed: list[str] = []

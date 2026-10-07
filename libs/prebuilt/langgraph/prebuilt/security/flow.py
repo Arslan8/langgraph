@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import sqlite3
-from collections.abc import Iterator, Mapping, Sequence
+from collections.abc import Callable, Iterator, Mapping, Sequence
 from contextlib import contextmanager
 from dataclasses import dataclass
 from enum import IntEnum
@@ -12,6 +12,10 @@ from threading import RLock
 from types import MappingProxyType
 from typing import Protocol, runtime_checkable
 
+from langgraph.prebuilt.security.execution import (
+    HostToolExecutor,
+    TerminationRecovery,
+)
 from langgraph.prebuilt.security.types import Decision, Principal, Verdict
 
 
@@ -41,6 +45,11 @@ class ToolFlowRule:
 @runtime_checkable
 class FlowStateStore(Protocol):
     """Atomic persistent storage for session labels and active sinks."""
+
+    @property
+    def persistent(self) -> bool:
+        """Whether labels and unresolved reservations survive process restart."""
+        ...
 
     def raise_label(
         self, user_id: str, session_id: str, label: Confidentiality
@@ -81,6 +90,30 @@ class FlowStateStore(Protocol):
         """Propagate a label to a target session or return a conflict reason."""
         ...
 
+    def retain(
+        self,
+        user_id: str,
+        session_id: str,
+        sink_ceiling: Confidentiality | None,
+        recovery: TerminationRecovery,
+    ) -> None:
+        """Bind an active reservation to uncertain worker termination."""
+        ...
+
+    def recover(
+        self,
+        user_id: str,
+        session_id: str,
+        recovery_id: str,
+        confirmer: Callable[[TerminationRecovery], bool],
+    ) -> bool:
+        """Release one retained reservation after kernel termination evidence."""
+        ...
+
+    def unresolved(self, user_id: str, session_id: str) -> tuple[str, ...]:
+        """Return retained recovery identities for one authenticated session."""
+        ...
+
 
 class MemoryFlowStateStore:
     """Thread-safe process-local session flow-state store."""
@@ -88,7 +121,16 @@ class MemoryFlowStateStore:
     def __init__(self) -> None:
         self._labels: dict[tuple[str, str], Confidentiality] = {}
         self._active_sinks: dict[tuple[str, str], dict[Confidentiality, int]] = {}
+        self._unresolved: dict[
+            str,
+            tuple[tuple[str, str], Confidentiality, TerminationRecovery],
+        ] = {}
         self._lock = RLock()
+
+    @property
+    def persistent(self) -> bool:
+        """Return false because this store does not survive process restart."""
+        return False
 
     def raise_label(
         self, user_id: str, session_id: str, label: Confidentiality
@@ -165,6 +207,58 @@ class MemoryFlowStateStore:
             self._labels[target_key] = target
             return None
 
+    def retain(
+        self,
+        user_id: str,
+        session_id: str,
+        sink_ceiling: Confidentiality | None,
+        recovery: TerminationRecovery,
+    ) -> None:
+        """Retain an active sink until its worker is proven terminated."""
+        if sink_ceiling is None:
+            return
+        with self._lock:
+            key = (user_id, session_id)
+            if self._active_sinks.get(key, {}).get(sink_ceiling, 0) <= 0:
+                raise ValueError("cannot retain a missing flow reservation")
+            if recovery.recovery_id in self._unresolved:
+                raise ValueError("duplicate termination recovery identity")
+            self._unresolved[recovery.recovery_id] = (
+                key,
+                sink_ceiling,
+                recovery,
+            )
+
+    def recover(
+        self,
+        user_id: str,
+        session_id: str,
+        recovery_id: str,
+        confirmer: Callable[[TerminationRecovery], bool],
+    ) -> bool:
+        """Release a retained sink only after trusted termination confirmation."""
+        with self._lock:
+            retained = self._unresolved.get(recovery_id)
+            if retained is None or retained[0] != (user_id, session_id):
+                return False
+            if not confirmer(retained[2]):
+                return False
+            self.release(user_id, session_id, retained[1])
+            del self._unresolved[recovery_id]
+            return True
+
+    def unresolved(self, user_id: str, session_id: str) -> tuple[str, ...]:
+        """Return process-local retained recovery identities."""
+        with self._lock:
+            key = (user_id, session_id)
+            return tuple(
+                sorted(
+                    recovery_id
+                    for recovery_id, retained in self._unresolved.items()
+                    if retained[0] == key
+                )
+            )
+
 
 class SqliteFlowStateStore:
     """SQLite WAL store preserving flow labels across checkpoints and restarts."""
@@ -196,7 +290,25 @@ class SqliteFlowStateStore:
             )
             """
         )
+        self._connection.execute(
+            """
+            CREATE TABLE IF NOT EXISTS flow_unresolved (
+                recovery_id TEXT PRIMARY KEY,
+                user_id TEXT NOT NULL,
+                session_id TEXT NOT NULL,
+                ceiling INTEGER NOT NULL,
+                pid INTEGER NOT NULL,
+                start_time TEXT NOT NULL,
+                boot_id TEXT NOT NULL
+            )
+            """
+        )
         self._connection.commit()
+
+    @property
+    def persistent(self) -> bool:
+        """Return true because SQLite retains labels and reservations durably."""
+        return True
 
     def raise_label(
         self, user_id: str, session_id: str, label: Confidentiality
@@ -363,6 +475,110 @@ class SqliteFlowStateStore:
                 self._connection.rollback()
                 raise
 
+    def retain(
+        self,
+        user_id: str,
+        session_id: str,
+        sink_ceiling: Confidentiality | None,
+        recovery: TerminationRecovery,
+    ) -> None:
+        """Durably bind an active sink to uncertain worker termination."""
+        if sink_ceiling is None:
+            return
+        with self._lock, self._connection:
+            active = self._connection.execute(
+                """
+                SELECT active_count FROM flow_active_sinks
+                WHERE user_id = ? AND session_id = ? AND ceiling = ?
+                """,
+                (user_id, session_id, int(sink_ceiling)),
+            ).fetchone()
+            if active is None or int(active[0]) <= 0:
+                raise ValueError("cannot retain a missing flow reservation")
+            self._connection.execute(
+                """
+                INSERT INTO flow_unresolved
+                    (recovery_id, user_id, session_id, ceiling, pid, start_time, boot_id)
+                VALUES (?, ?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    recovery.recovery_id,
+                    user_id,
+                    session_id,
+                    int(sink_ceiling),
+                    recovery.pid,
+                    recovery.start_time,
+                    recovery.boot_id,
+                ),
+            )
+
+    def recover(
+        self,
+        user_id: str,
+        session_id: str,
+        recovery_id: str,
+        confirmer: Callable[[TerminationRecovery], bool],
+    ) -> bool:
+        """Release a retained sink only after trusted termination confirmation."""
+        with self._lock:
+            self._connection.execute("BEGIN IMMEDIATE")
+            try:
+                row = self._connection.execute(
+                    """
+                    SELECT ceiling, pid, start_time, boot_id FROM flow_unresolved
+                    WHERE recovery_id = ? AND user_id = ? AND session_id = ?
+                    """,
+                    (recovery_id, user_id, session_id),
+                ).fetchone()
+                if row is None:
+                    self._connection.rollback()
+                    return False
+                recovery = TerminationRecovery(
+                    recovery_id,
+                    int(row[1]),
+                    str(row[2]),
+                    str(row[3]),
+                )
+                if not confirmer(recovery):
+                    self._connection.rollback()
+                    return False
+                self._connection.execute(
+                    """
+                    UPDATE flow_active_sinks SET active_count = active_count - 1
+                    WHERE user_id = ? AND session_id = ? AND ceiling = ?
+                    """,
+                    (user_id, session_id, int(row[0])),
+                )
+                self._connection.execute(
+                    """
+                    DELETE FROM flow_active_sinks
+                    WHERE user_id = ? AND session_id = ? AND ceiling = ?
+                        AND active_count <= 0
+                    """,
+                    (user_id, session_id, int(row[0])),
+                )
+                self._connection.execute(
+                    "DELETE FROM flow_unresolved WHERE recovery_id = ?",
+                    (recovery_id,),
+                )
+                self._connection.commit()
+                return True
+            except BaseException:
+                self._connection.rollback()
+                raise
+
+    def unresolved(self, user_id: str, session_id: str) -> tuple[str, ...]:
+        """Return durably retained recovery identities."""
+        with self._lock:
+            rows = self._connection.execute(
+                """
+                SELECT recovery_id FROM flow_unresolved
+                WHERE user_id = ? AND session_id = ? ORDER BY recovery_id
+                """,
+                (user_id, session_id),
+            ).fetchall()
+        return tuple(str(row[0]) for row in rows)
+
     def close(self) -> None:
         """Flush and close the database connection."""
         with self._lock:
@@ -437,6 +653,40 @@ class SessionFlowPolicy:
         self.store.release(
             principal.user_id, principal.session_id, reservation.sink_ceiling
         )
+
+    def retain(
+        self,
+        principal: Principal,
+        reservation: ToolFlowRule | None,
+        recovery: TerminationRecovery,
+    ) -> None:
+        """Retain a sink reservation after uncertain worker termination."""
+        if reservation is None:
+            return
+        self.store.retain(
+            principal.user_id,
+            principal.session_id,
+            reservation.sink_ceiling,
+            recovery,
+        )
+
+    def recover_termination(
+        self,
+        principal: Principal,
+        recovery_id: str,
+        executor: HostToolExecutor,
+    ) -> bool:
+        """Release a retained sink after the executor confirms termination."""
+        return self.store.recover(
+            principal.user_id,
+            principal.session_id,
+            recovery_id,
+            executor.confirm_termination,
+        )
+
+    def unresolved_terminations(self, principal: Principal) -> tuple[str, ...]:
+        """Return retained worker recoveries for an authenticated session."""
+        return self.store.unresolved(principal.user_id, principal.session_id)
 
     def transfer_session(self, source: Principal, target: Principal) -> Decision:
         """Propagate taint for a mediated checkpoint, artifact, or session copy."""

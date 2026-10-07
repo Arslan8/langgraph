@@ -13,7 +13,6 @@ import errno
 import inspect
 import io
 import json
-import math
 import resource
 import sys
 from collections.abc import Mapping
@@ -56,7 +55,6 @@ _ALLOWED_SYSCALLS = (
     "getrandom",
     "gettid",
     "getuid",
-    "ioctl",
     "lseek",
     "madvise",
     "mkdir",
@@ -167,14 +165,16 @@ def _apply_limits(raw: object) -> None:
     limits = raw if isinstance(raw, Mapping) else {}
     cpu_ms = limits.get("cpu_ms")
     if isinstance(cpu_ms, int):
-        seconds = max(1, math.ceil(cpu_ms / 1000))
+        if cpu_ms % 1000:
+            raise ValueError("cpu_ms must use whole-second RLIMIT_CPU granularity")
+        seconds = cpu_ms // 1000
         resource.setrlimit(resource.RLIMIT_CPU, (seconds, seconds))
-    memory = limits.get("memory_bytes")
-    if isinstance(memory, int):
-        resource.setrlimit(resource.RLIMIT_AS, (memory, memory))
-    file_bytes = limits.get("file_bytes")
-    if isinstance(file_bytes, int):
-        resource.setrlimit(resource.RLIMIT_FSIZE, (file_bytes, file_bytes))
+    address_space = limits.get("address_space_bytes")
+    if isinstance(address_space, int):
+        resource.setrlimit(resource.RLIMIT_AS, (address_space, address_space))
+    file_size = limits.get("file_size_bytes")
+    if isinstance(file_size, int):
+        resource.setrlimit(resource.RLIMIT_FSIZE, (file_size, file_size))
     nofile = limits.get("nofile")
     if isinstance(nofile, int):
         resource.setrlimit(resource.RLIMIT_NOFILE, (nofile, nofile))

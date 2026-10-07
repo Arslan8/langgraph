@@ -14,6 +14,7 @@ import select
 import shutil
 import stat
 import subprocess
+import sys
 import tempfile
 import time
 from collections import deque
@@ -46,6 +47,7 @@ from langgraph.prebuilt.security.execution import (
     HostExecutionDenied,
     HostExecutionError,
     HostExecutionResult,
+    TerminationRecovery,
 )
 from langgraph.prebuilt.security.policy import (
     MandatoryPolicyBackend,
@@ -65,9 +67,9 @@ _MAX_PROTOCOL_DEPTH = 64
 _MAX_PROTOCOL_NODES = 100_000
 _SUPPORTED_LIMITS = frozenset(
     {
+        "address_space_bytes",
         "cpu_ms",
-        "file_bytes",
-        "memory_bytes",
+        "file_size_bytes",
         "nofile",
         "pids",
         "tmpfs_bytes",
@@ -77,9 +79,9 @@ _SUPPORTED_LIMITS = frozenset(
 _WRITE_OPERATIONS = frozenset({"write", "create", "delete", "truncate"})
 _DEFAULT_LIMITS = MappingProxyType(
     {
+        "address_space_bytes": 1_073_741_824,
         "cpu_ms": 30_000,
-        "file_bytes": 67_108_864,
-        "memory_bytes": 1_073_741_824,
+        "file_size_bytes": 67_108_864,
         "nofile": 64,
         "pids": 1,
         "tmpfs_bytes": 67_108_864,
@@ -167,16 +169,23 @@ class LinuxSandboxExecutor:
         roots = tuple(_canonical_existing_path(item) for item in runtime_roots)
         if not roots:
             raise ValueError("at least one explicit runtime root is required")
+        if any(not _is_supported_mount_type(root) for root in roots):
+            raise ValueError("runtime roots must be regular files or directories")
         if startup_timeout_s <= 0 or default_wall_timeout_s <= 0:
             raise ValueError("Linux sandbox timeouts must be positive")
         _verify_bubblewrap_host(bwrap, startup_timeout_s)
         limits = dict(_DEFAULT_LIMITS if default_limits is None else default_limits)
-        if set(limits) != _SUPPORTED_LIMITS or any(
-            type(value) is not int or value <= 0 for value in limits.values()
+        if (
+            set(limits) != _SUPPORTED_LIMITS
+            or any(type(value) is not int or value <= 0 for value in limits.values())
+            or limits["cpu_ms"] % 1000
+            or limits["pids"] != 1
         ):
             raise ValueError(
-                "default_limits must provide positive cpu_ms, file_bytes, "
-                "memory_bytes, nofile, pids, tmpfs_bytes, and wall_ms values"
+                "default_limits must provide positive address_space_bytes, "
+                "cpu_ms, file_size_bytes, nofile, pids, tmpfs_bytes, and "
+                "wall_ms values; cpu_ms must use whole-second RLIMIT_CPU granularity"
+                " and pids must be 1 for the no-process-creation profile"
             )
         copied_tools = dict(tools)
         if not copied_tools:
@@ -234,6 +243,8 @@ class LinuxSandboxExecutor:
         self._coordinator = EnforcementCoordinator([self._adapter], self._adapter)
         self._receipts: deque[ActivationReceipt] = deque(maxlen=1024)
         self._receipt_lock = RLock()
+        self._unresolved: dict[str, TerminationRecovery] = {}
+        self._termination_lock = RLock()
 
     def validate_tools(self, tool_names: Sequence[str]) -> None:
         """Require a closed manifest and Linux profile for every reachable tool."""
@@ -247,6 +258,11 @@ class LinuxSandboxExecutor:
         """Return a bounded snapshot of worker-specific activation evidence."""
         with self._receipt_lock:
             return tuple(self._receipts)
+
+    def unresolved_terminations(self) -> tuple[TerminationRecovery, ...]:
+        """Return workers still awaiting reliable termination evidence."""
+        with self._termination_lock:
+            return tuple(self._unresolved.values())
 
     def invoke(
         self,
@@ -264,13 +280,41 @@ class LinuxSandboxExecutor:
         constraints: Sequence[PolicyConstraint],
     ) -> HostExecutionResult:
         """Compile, activate, and execute one async call off the event loop."""
-        return await asyncio.to_thread(
-            self._invoke,
-            principal,
-            call,
-            constraints,
-            asynchronous=True,
+        execution = asyncio.create_task(
+            asyncio.to_thread(
+                self._invoke,
+                principal,
+                call,
+                constraints,
+                asynchronous=True,
+            )
         )
+        try:
+            return await asyncio.shield(execution)
+        except asyncio.CancelledError:
+            try:
+                await execution
+            except HostExecutionError as exc:
+                if not exc.termination_confirmed:
+                    raise exc
+            except Exception:
+                pass
+            raise
+
+    def confirm_termination(self, recovery: TerminationRecovery) -> bool:
+        """Confirm or force termination for one retained Linux worker identity."""
+        with self._termination_lock:
+            retained = self._unresolved.get(recovery.recovery_id)
+            if retained is not None and retained != recovery:
+                return False
+        current_boot = Path("/proc/sys/kernel/random/boot_id").read_text().strip()
+        confirmed = recovery.boot_id != current_boot or _confirm_worker_terminated(
+            recovery.pid, recovery.start_time, timeout_s=2.0
+        )
+        if confirmed:
+            with self._termination_lock:
+                self._unresolved.pop(recovery.recovery_id, None)
+        return confirmed
 
     def _invoke(
         self,
@@ -686,13 +730,28 @@ class LinuxSandboxExecutor:
             if artifact_directory is not None:
                 _remove_private_artifact(artifact_directory)
             if not termination_confirmed:
+                recovery = TerminationRecovery(
+                    secrets.token_hex(16),
+                    child_pid,
+                    child_start_time,
+                    host.boot_id,
+                )
+                with self._termination_lock:
+                    self._unresolved[recovery.recovery_id] = recovery
+                active_error = sys.exception()
+                if isinstance(active_error, HostExecutionError):
+                    active_error.recovery = recovery
                 if receipt is not None:
                     raise HostExecutionError(
-                        "host:worker_termination_unconfirmed",
+                        f"host:worker_termination_unconfirmed:{recovery.recovery_id}",
                         receipt,
                         ExecutionOutcome.INDETERMINATE,
+                        recovery=recovery,
                     )
                 raise HostExecutionDenied("host:worker_termination_unconfirmed")
+            active_error = sys.exception()
+            if isinstance(active_error, HostExecutionError):
+                active_error.termination_confirmed = True
 
     def _worker_command(
         self, plan: AdapterPlan, spec: LinuxToolSpec
@@ -724,16 +783,29 @@ class LinuxSandboxExecutor:
         mount_args: list[str] = []
         destinations: set[str] = set()
         artifact_descriptor, artifact_directory = _verified_artifact_fd(spec)
-        for raw in mounts:
+        ordered_mounts = sorted(
+            mounts,
+            key=lambda item: (
+                os.fspath(item.get("path", "")).count("/")
+                if isinstance(item, Mapping)
+                else 0,
+                os.fspath(item.get("path", "")) if isinstance(item, Mapping) else "",
+            ),
+        )
+        for raw in ordered_mounts:
             if not isinstance(raw, Mapping):
                 raise HostExecutionDenied("host:invalid_native_plan")
             path = os.fspath(raw.get("path", ""))
             mode = str(raw.get("mode", ""))
+            if mode not in {"ro", "rw"}:
+                raise HostExecutionDenied("host:invalid_native_plan")
             if path == "/tmp":
                 continue
             canonical = _canonical_existing_path(path)
             if os.fspath(canonical) != path:
                 raise HostExecutionDenied("host:noncanonical_mount")
+            if canonical.is_dir() and _nested_mount_points(canonical):
+                raise HostExecutionDenied("host:nested_mount_changed")
             descriptor = (
                 artifact_descriptor
                 if canonical == spec.artifact_path
@@ -924,10 +996,8 @@ class _LinuxBubblewrapAdapter:
         elif (
             obligation.domain is AuthorityDomain.RESOURCE_LIMIT
             and obligation.kind is ObligationKind.RESOURCE_LIMIT
-            and obligation.selector in _SUPPORTED_LIMITS
         ):
-            support = SupportLevel.EXACT
-            reason = "setrlimit_or_supervisor"
+            support, reason = _assess_limit_obligation(obligation)
         return SupportAssessment(
             self.adapter_id,
             obligation.obligation_id,
@@ -1077,9 +1147,37 @@ def _assess_path_obligation(
         path = _canonical_existing_path(obligation.selector)
     except (OSError, ValueError):
         return SupportLevel.UNSUPPORTED, "path_missing_or_noncanonical"
+    if not _is_supported_mount_type(path):
+        return SupportLevel.UNSUPPORTED, "special_file_requires_broker"
     if path.is_dir() and not bool(obligation.conditions.get("subtree")):
         return SupportLevel.UNSUPPORTED, "exact_directory_requires_broker"
+    if path.is_dir() and _nested_mount_points(path):
+        return SupportLevel.UNSUPPORTED, "nested_mount_requires_separate_grants"
     return SupportLevel.EXACT, "stable_bind_mount"
+
+
+def _assess_limit_obligation(
+    obligation: EnforcementObligation,
+) -> tuple[SupportLevel, str]:
+    maximum = obligation.conditions.get("maximum")
+    if type(maximum) is not int or maximum <= 0:
+        return SupportLevel.UNSUPPORTED, "invalid_resource_limit"
+    if obligation.selector not in _SUPPORTED_LIMITS:
+        return SupportLevel.UNSUPPORTED, "resource_limit_mechanism_unsupported"
+    if obligation.selector == "cpu_ms" and maximum % 1000:
+        return SupportLevel.UNSUPPORTED, "rlimit_cpu_requires_whole_seconds"
+    if obligation.selector == "pids" and maximum != 1:
+        return SupportLevel.UNSUPPORTED, "minimal_seccomp_supports_pids_one_only"
+    mechanism = {
+        "address_space_bytes": "rlimit_as",
+        "cpu_ms": "rlimit_cpu",
+        "file_size_bytes": "rlimit_fsize_per_file",
+        "nofile": "rlimit_nofile",
+        "pids": "seccomp_no_process_creation",
+        "tmpfs_bytes": "private_tmpfs_aggregate_size",
+        "wall_ms": "supervisor_deadline_and_termination",
+    }[obligation.selector]
+    return SupportLevel.EXACT, mechanism
 
 
 def _verified_artifact_fd(spec: LinuxToolSpec) -> tuple[int, Path]:
@@ -1123,6 +1221,8 @@ def _verified_resource_fd(path: Path) -> int:
             stat.S_IFMT(current.st_mode),
         ):
             raise HostExecutionDenied("host:resource_identity_changed")
+        if not (stat.S_ISREG(opened.st_mode) or stat.S_ISDIR(opened.st_mode)):
+            raise HostExecutionDenied("host:special_resource_unsupported")
         return descriptor
     except BaseException:
         os.close(descriptor)
@@ -1309,6 +1409,31 @@ def _canonical_existing_path(value: str | Path) -> Path:
     if raw != resolved:
         raise ValueError("sandbox paths must be canonical and symlink-free")
     return resolved
+
+
+def _is_supported_mount_type(path: Path) -> bool:
+    mode = path.stat(follow_symlinks=False).st_mode
+    return stat.S_ISREG(mode) or stat.S_ISDIR(mode)
+
+
+def _nested_mount_points(path: Path) -> tuple[Path, ...]:
+    nested: list[Path] = []
+    for line in Path("/proc/self/mountinfo").read_text().splitlines():
+        fields = line.split()
+        if len(fields) < 5:
+            raise HostExecutionDenied("host:mountinfo_invalid")
+        value = fields[4]
+        for encoded, decoded in (
+            ("\\040", " "),
+            ("\\011", "\t"),
+            ("\\012", "\n"),
+            ("\\134", "\\"),
+        ):
+            value = value.replace(encoded, decoded)
+        mount = Path(value)
+        if mount != path and path in mount.parents:
+            nested.append(mount)
+    return tuple(sorted(nested))
 
 
 def _verify_bubblewrap_host(bwrap_path: str, timeout: float) -> None:

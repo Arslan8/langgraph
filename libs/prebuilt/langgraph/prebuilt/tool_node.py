@@ -114,6 +114,7 @@ from langgraph.prebuilt.security.execution import (
     HostExecutionDenied,
     HostExecutionError,
     HostToolExecutor,
+    TerminationRecovery,
 )
 from langgraph.prebuilt.security.flow import SessionFlowPolicy, ToolFlowRule
 from langgraph.prebuilt.security.stack import (
@@ -987,6 +988,31 @@ class ToolNode(RunnableCallable):
         if policy is not None:
             policy.release(principal, reservation)
 
+    def _finalize_security_flow(
+        self,
+        principal: Principal,
+        reservation: ToolFlowRule | None,
+        termination_confirmed: bool,
+        recovery: TerminationRecovery | None,
+    ) -> None:
+        """Release a finished call or retain an uncertain worker reservation."""
+        policy = self._security_flow_policy
+        if policy is None:
+            return
+        if termination_confirmed:
+            policy.release(principal, reservation)
+            return
+        if recovery is None:
+            raise SecurityIndeterminateError(
+                "uncertain worker has no termination recovery identity"
+            )
+        try:
+            policy.retain(principal, reservation, recovery)
+        except BaseException as exc:
+            raise SecurityIndeterminateError(
+                "uncertain worker reservation could not be retained"
+            ) from exc
+
     def _normalize_security_args(
         self, tool: SecurityTool, args: Mapping[str, Any]
     ) -> dict[str, Any]:
@@ -1356,6 +1382,8 @@ class ToolNode(RunnableCallable):
 
         post_result: Any = None
         outcome = ExecutionOutcome.INDETERMINATE
+        flow_termination_confirmed = True
+        flow_recovery: TerminationRecovery | None = None
         try:
             try:
                 if (
@@ -1392,6 +1420,9 @@ class ToolNode(RunnableCallable):
                     response = tool.invoke(call_args, config)
             except HostExecutionError as exc:
                 outcome = exc.outcome
+                if not exc.termination_confirmed:
+                    flow_termination_confirmed = False
+                    flow_recovery = exc.recovery
                 assert security_call is not None and request.principal is not None
                 try:
                     self._audit_security(
@@ -1492,7 +1523,12 @@ class ToolNode(RunnableCallable):
                 ) from exc
             finally:
                 if request.principal is not None:
-                    self._release_security_flow(request.principal, flow_reservation)
+                    self._finalize_security_flow(
+                        request.principal,
+                        flow_reservation,
+                        flow_termination_confirmed,
+                        flow_recovery,
+                    )
 
     def _run_one(
         self,
@@ -1644,6 +1680,8 @@ class ToolNode(RunnableCallable):
 
         post_result: Any = None
         outcome = ExecutionOutcome.INDETERMINATE
+        flow_termination_confirmed = True
+        flow_recovery: TerminationRecovery | None = None
         try:
             try:
                 if (
@@ -1680,6 +1718,9 @@ class ToolNode(RunnableCallable):
                     response = await tool.ainvoke(call_args, config)
             except HostExecutionError as exc:
                 outcome = exc.outcome
+                if not exc.termination_confirmed:
+                    flow_termination_confirmed = False
+                    flow_recovery = exc.recovery
                 assert security_call is not None and request.principal is not None
                 try:
                     self._audit_security(
@@ -1780,7 +1821,12 @@ class ToolNode(RunnableCallable):
                 ) from exc
             finally:
                 if request.principal is not None:
-                    self._release_security_flow(request.principal, flow_reservation)
+                    self._finalize_security_flow(
+                        request.principal,
+                        flow_reservation,
+                        flow_termination_confirmed,
+                        flow_recovery,
+                    )
 
     async def _arun_one(
         self,

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import fcntl
 import os
 import socket
 import subprocess
@@ -125,8 +126,15 @@ def directory_operation_probe(path: str) -> dict[str, str]:
         metadata = "blocked"
     else:
         metadata = "allowed"
+    try:
+        with created.open("rb") as stream:
+            fcntl.ioctl(stream, 0x80086601, bytearray(8))
+    except PermissionError:
+        ioctl = "blocked"
+    else:
+        ioctl = "allowed"
     created.unlink()
-    return {"metadata": metadata, "rename": rename}
+    return {"ioctl": ioctl, "metadata": metadata, "rename": rename}
 
 
 def oversized_result(size: int) -> str:
