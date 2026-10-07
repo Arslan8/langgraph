@@ -661,10 +661,16 @@ def evaluate_dac(
 
 
 def _source_id(resource_class: str, location: SourceLocation | None, index: int) -> str:
-    """Return a stable identity for one constructive source line."""
+    """Return a stable identity for one constructive source line.
+
+    One directive may list several comma-separated lines with independent
+    `need`/`want` requirements, so the item index is part of the identity.
+    """
     if location is None:
         return f"{resource_class}:{index}"
-    return f"{resource_class}:{location.source}:{location.line}:{location.column}"
+    return (
+        f"{resource_class}:{location.source}:{location.line}:{location.column}:{index}"
+    )
 
 
 @dataclass(frozen=True, slots=True)

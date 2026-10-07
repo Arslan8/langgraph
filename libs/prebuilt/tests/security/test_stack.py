@@ -358,6 +358,61 @@ async def test_async_post_hooks_fail_closed(behavior: str, reason: str) -> None:
     assert decision.reason == reason
 
 
+def test_sync_post_runs_later_hooks_after_failure() -> None:
+    """Every sync post hook receives completion even after an earlier failure."""
+    calls: list[str] = []
+
+    class RecordingPost(SecurityModule):
+        def __init__(self, name: str, *, fail: bool) -> None:
+            self.name = name
+            self.fail = fail
+
+        def tool_call_post(self, principal, call, result, slot):
+            calls.append(self.name)
+            if self.fail:
+                raise RuntimeError("broken")
+            return None
+
+    stack = SecurityStack(
+        [RecordingPost("first", fail=True), RecordingPost("second", fail=False)]
+    )
+    try:
+        decision = stack.post(_principal(), _call(), "result")
+    finally:
+        stack.close()
+
+    assert decision.reason == "module_error:first"
+    assert calls == ["first", "second"]
+
+
+@pytest.mark.asyncio
+async def test_async_post_runs_later_hooks_after_failure() -> None:
+    """Every async post hook receives completion even after an earlier failure."""
+    calls: list[str] = []
+
+    class RecordingPost(SecurityModule):
+        def __init__(self, name: str, *, fail: bool) -> None:
+            self.name = name
+            self.fail = fail
+
+        def tool_call_post(self, principal, call, result, slot):
+            calls.append(self.name)
+            if self.fail:
+                raise RuntimeError("broken")
+            return None
+
+    stack = SecurityStack(
+        [RecordingPost("first", fail=True), RecordingPost("second", fail=False)]
+    )
+    try:
+        decision = await stack.apost(_principal(), _call(), "result")
+    finally:
+        stack.close()
+
+    assert decision.reason == "module_error:first"
+    assert calls == ["first", "second"]
+
+
 @pytest.mark.asyncio
 async def test_async_prepare_covers_dac_transform_and_module_denial() -> None:
     """Async prepare stops on DAC and module denial and normalizes transforms."""

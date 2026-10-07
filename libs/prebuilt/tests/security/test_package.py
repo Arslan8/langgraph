@@ -82,7 +82,10 @@ def test_security_package_exports_descriptor_api() -> None:
         "RequirementCheck",
         "RequirementEntry",
         "RequirementLedger",
+        "ResourceAllowance",
         "ResourceArg",
+        "ResourceBoundary",
+        "ResourceBoundaryPolicy",
         "RulePredicate",
         "SecurityModule",
         "SecurityEvent",
@@ -130,5 +133,6 @@ def test_security_package_exports_descriptor_api() -> None:
         "normalize_resource",
         "parse_profiles",
         "principal_from",
+        "resource_path",
         "with_principal",
     )

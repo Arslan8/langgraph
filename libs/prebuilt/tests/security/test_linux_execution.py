@@ -10,6 +10,7 @@ import py_compile
 import time
 from dataclasses import replace
 from pathlib import Path
+from threading import RLock
 from typing import Annotated
 from unittest.mock import Mock
 
@@ -52,10 +53,14 @@ from langgraph.prebuilt.security.enforcement import (
     ObligationKind,
     SupportLevel,
 )
-from langgraph.prebuilt.security.execution import HostExecutionDenied
+from langgraph.prebuilt.security.execution import (
+    HostExecutionDenied,
+    HostExecutionError,
+)
 from langgraph.prebuilt.security.linux import (
     _assess_path_obligation,
     _nested_mount_points,
+    _read_fd_json,
     _verified_resource_fd,
 )
 
@@ -1160,6 +1165,67 @@ principal alice {
     assert allowed.verdict is Verdict.ALLOW
     recovered.release(principal, reservation)
     recovered_store.close()
+
+
+def test_worker_cleanup_is_independent_and_preserves_active_error(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Cleanup failures cannot skip termination recovery or replace execution errors."""
+    executor = object.__new__(LinuxSandboxExecutor)
+    executor._termination_lock = RLock()
+    executor._unresolved = {}
+    process = Mock()
+    process.poll.side_effect = RuntimeError("poll failed")
+    process.kill.side_effect = RuntimeError("kill failed")
+    process.wait.side_effect = RuntimeError("wait failed")
+    receipt = Mock()
+    active_error = HostExecutionError(
+        "tool failed", receipt, linux_security.ExecutionOutcome.FAILED
+    )
+    confirmations: list[tuple[int, str]] = []
+
+    def fail_confirmation(pid: int, start_time: str, *, timeout_s: float) -> bool:
+        confirmations.append((pid, start_time))
+        raise OSError("confirmation failed")
+
+    monkeypatch.setattr(linux_security.os, "close", Mock(side_effect=OSError("close")))
+    monkeypatch.setattr(linux_security, "_confirm_worker_terminated", fail_confirmation)
+    monkeypatch.setattr(
+        linux_security,
+        "_remove_private_artifact",
+        Mock(side_effect=OSError("remove")),
+    )
+
+    executor._cleanup_worker(
+        status_read=10,
+        status_write=11,
+        inherited_fds=(12,),
+        process=process,
+        child_pid=123,
+        child_start_time="456",
+        artifact_directory=tmp_path,
+        host=Mock(boot_id="boot"),
+        receipt=receipt,
+        active_error=active_error,
+    )
+
+    assert confirmations == [(123, "456")]
+    assert process.kill.call_count == 1
+    assert process.wait.call_count == 1
+    assert active_error.outcome is linux_security.ExecutionOutcome.INDETERMINATE
+    assert active_error.recovery is not None
+    assert active_error.recovery in executor.unresolved_terminations()
+
+
+def test_bubblewrap_status_accepts_partial_pipe_reads(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Status framing accumulates partial kernel reads before decoding JSON."""
+    chunks = iter((b'{"child-pid":', b" 123}"))
+    monkeypatch.setattr(linux_security.select, "select", lambda *args: ([10], [], []))
+    monkeypatch.setattr(linux_security.os, "read", lambda *args: next(chunks))
+
+    assert _read_fd_json(10, 1.0) == {"child-pid": 123}
 
 
 @pytest.mark.asyncio

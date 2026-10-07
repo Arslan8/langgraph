@@ -4,6 +4,8 @@ from __future__ import annotations
 
 from dataclasses import replace
 
+import pytest
+
 from langgraph.prebuilt.security import (
     AuthorityDomain,
     ForbidCombination,
@@ -208,3 +210,139 @@ def test_policy_digest_binds_typed_constraints() -> None:
     assert one.grant is not None and two.grant is not None
     assert one.grant.policy_digest != two.grant.policy_digest
     assert one.grant.digest != two.grant.digest
+
+
+def test_exact_forbid_matches_containing_runtime_subtree() -> None:
+    """Runtime path rules are restricted like filesystem rules, never skipped."""
+    runtime = GrantRule(
+        "runtime:root:0",
+        AuthorityDomain.RUNTIME,
+        "read",
+        "/opt/runtime",
+        {"subtree": True},
+        baseline=True,
+    )
+    constraint = ForbidConstraint(
+        "no-config",
+        RulePredicate(
+            AuthorityDomain.RUNTIME.value,
+            selector="/opt/runtime/config",
+            selector_match=SelectorMatch.EXACT,
+        ),
+        "config_is_protected",
+        "paths",
+    )
+
+    result = TypedPolicyBackend().filter(
+        _grant(runtime), _ledger(runtime), (constraint,)
+    )
+
+    assert not result.allowed
+    assert result.reason == "required_authority_removed:source:runtime:root:0"
+
+
+def test_exempt_subtree_forbid_matches_only_the_difference() -> None:
+    """Exempt resources are untouched; overlap with them is never subtracted."""
+    rules = (
+        GrantRule(
+            "inside", AuthorityDomain.FILESYSTEM, "read", "/w/ok", {"subtree": True}
+        ),
+        GrantRule(
+            "other", AuthorityDomain.FILESYSTEM, "read", "/w/no", {"subtree": True}
+        ),
+        GrantRule(
+            "broad",
+            AuthorityDomain.FILESYSTEM,
+            "read",
+            "/w",
+            {"subtree": True},
+            Requirement.WANT,
+        ),
+        GrantRule("file", AuthorityDomain.FILESYSTEM, "read", "/w/f.txt"),
+    )
+    constraint = ForbidConstraint(
+        "listed-only",
+        RulePredicate(
+            AuthorityDomain.FILESYSTEM.value,
+            selector="/w",
+            selector_match=SelectorMatch.SUBTREE,
+            exempt_subtrees={"/w/ok"},
+            exempt_paths={"/w/f.txt"},
+        ),
+        "unlisted",
+        "paths",
+    )
+    ledger = RequirementLedger(
+        tuple(
+            RequirementEntry(
+                f"source:{rule.rule_id}", Requirement.WANT, frozenset({rule.rule_id})
+            )
+            for rule in rules
+        )
+    )
+
+    result = TypedPolicyBackend().filter(_grant(*rules), ledger, (constraint,))
+
+    assert result.grant is not None
+    assert {rule.rule_id for rule in result.grant.rules} == {"inside", "file"}
+
+
+@pytest.mark.parametrize(
+    "exempt", ["/elsewhere", "/w/../x", "relative"], ids=["outside", "dots", "rel"]
+)
+def test_exemptions_must_be_canonical_and_inside_selector(exempt: str) -> None:
+    """Malformed exemptions are diagnostics, never silent widening."""
+    rule = GrantRule("r", AuthorityDomain.FILESYSTEM, "read", "/w/a")
+    constraint = ForbidConstraint(
+        "bad",
+        RulePredicate(
+            AuthorityDomain.FILESYSTEM.value,
+            selector="/w",
+            selector_match=SelectorMatch.SUBTREE,
+            exempt_subtrees={exempt},
+        ),
+        "bad",
+        "paths",
+    )
+
+    result = TypedPolicyBackend().filter(_grant(rule), _ledger(rule), (constraint,))
+
+    assert not result.allowed
+    assert result.diagnostics
+
+
+def test_exemptions_require_subtree_predicates() -> None:
+    """An exact or ANY predicate has no difference to exempt from."""
+    with pytest.raises(ValueError, match="subtree"):
+        RulePredicate(
+            "filesystem",
+            selector="/w",
+            selector_match=SelectorMatch.EXACT,
+            exempt_paths={"/w"},
+        )
+
+
+def test_constraint_order_does_not_change_filtered_grant() -> None:
+    """Rule IDs, provenance, and digests are independent of constraint order."""
+    broad = GrantRule(
+        "workspace", AuthorityDomain.FILESYSTEM, "read", "/w", {"subtree": True}
+    )
+    first = ForbidConstraint(
+        "a",
+        RulePredicate("filesystem", frozenset(), "/w/a", SelectorMatch.SUBTREE),
+        "a",
+        "one",
+    )
+    second = ForbidConstraint(
+        "b",
+        RulePredicate("filesystem", frozenset(), "/w/b", SelectorMatch.SUBTREE),
+        "b",
+        "two",
+    )
+    backend = TypedPolicyBackend()
+
+    forward = backend.filter(_grant(broad), _ledger(broad), (first, second))
+    backward = backend.filter(_grant(broad), _ledger(broad), (second, first))
+
+    assert forward.grant == backward.grant
+    assert forward.ledger == backward.ledger

@@ -16,9 +16,10 @@ sequence; accepted documentation is not evidence that its adapters exist.
 | Direct tool mediation | Implemented and tested | Calls through `guarded_tool` use the same decision stack. Other aliases are outside the boundary. |
 | Classified session scheduling | Implemented and tested when configured | Operator-supplied possible-read labels and outward-effect ceilings are joined and reserved atomically; same-call source/sink conflicts, cross-call races, and mediated session transfers are covered. This is not a hostile-code confidentiality claim until confinement validates the bounds and channels. |
 | Scope delegation attenuation | Implemented and tested | Child scopes must be a subset and blobs are independently copied. Typed label ordering, exact-grant attenuation, and shared budgets are not implemented. |
-| Checkpoint-compatible approval flow | Implemented and tested | Escalation requires a checkpointer; resume rechecks policy; approval payloads omit arguments. Current matching binds request, call, and tool identifiers only. |
+| Checkpoint-compatible approval flow | Implemented and tested | Escalation requires a checkpointer; resume rechecks policy; approval payloads omit arguments. Matching binds the principal, roles, scopes, delegation, tool, call, raw and normalized arguments, expiry, and one-time use. Artifact, final-grant, policy, ledger, and activation nonce binding require the strict execution path. |
 | Hash-chained audit | Implemented and tested | In-memory and SQLite sinks detect modification inside the retained chain. They do not detect deletion of a valid suffix without an external head or terminal seal. This is decision evidence only. |
 | Redacted observability | Implemented and tested | Memory, logging, OpenTelemetry-compatible, and LangSmith adapters expose no raw tool arguments. |
+| `ResourceBoundary` reference module | Implemented and tested | Operator filesystem policy is compiled into attributed forbids over requested and runtime-baseline path authority. It is tested in composition and in real Linux workers. Unrepresentable or unlowerable results deny before release. See the [interface assessment](resource-boundary-interface.md). |
 | Tool inventory | Implemented and tested | Static entries are collected; incomplete dynamic inventory is reported honestly. |
 | Escape analysis | Implemented and tested | Source and CLI analysis report known and unresolved bypass paths. It must currently be run explicitly. |
 | `.slp` grammar and constructive DAC | Implemented and tested | The parser, binding, need/want semantics, provenance, overrides, and monotonicity properties are shipped. |
@@ -78,6 +79,22 @@ lands and is measured:
 None of these names is a shipped public API.
 
 ## Present security claim
+
+The module hooks provide LSM-style policy programmability at tool-call
+granularity; they are a policy decision point, not an LSM-equivalent reference
+monitor. Modules authorize and restrict a call before dispatch. They are not
+consulted on each file open or other resource access, resources do not carry
+framework labels, and an in-process tool shares the interpreter and address
+space with the policy stack. Only a configured host executor can turn supported
+typed restrictions into an independently enforced boundary.
+
+`LinuxSandboxExecutor` compiles the module decisions into one grant before the
+worker is released, after which the kernel mediates the supported filesystem
+and process operations against that fixed boundary. It does not call modules on
+each access and does not provide mid-call policy revocation. Per-access dynamic
+authorization or labeled-object policy requires a trusted broker, such as a
+FUSE service or seccomp user-notification supervisor, that reauthorizes every
+operation. No such broker is currently shipped.
 
 The branch claims complete mediation for calls crossing a configured `ToolNode`
 or returned `guarded_tool` wrapper. When `LinuxSandboxExecutor` is configured,

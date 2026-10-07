@@ -76,6 +76,11 @@ class TypedPolicyBackend:
             )
 
 
+_PATH_DOMAINS = frozenset(
+    {AuthorityDomain.FILESYSTEM.value, AuthorityDomain.RUNTIME.value}
+)
+
+
 class _Relation(str, Enum):
     NONE = "none"
     FULL = "full"
@@ -88,6 +93,12 @@ def _filter_grant(
     constraints: Sequence[PolicyConstraint],
 ) -> PolicyFilterResult:
     _validate_constraints(constraints)
+    # Forbids are monotone, so application order cannot change effective
+    # authority. A canonical order also makes derived rule IDs, provenance,
+    # and the policy digest independent of module registration order.
+    constraints = sorted(
+        constraints, key=lambda item: (item.module, item.constraint_id)
+    )
     active = {rule.rule_id: rule for rule in grant.rules}
     origins = {rule.rule_id: frozenset({rule.rule_id}) for rule in grant.rules}
     removed: set[str] = set()
@@ -194,9 +205,18 @@ def _validate_constraints(constraints: Sequence[PolicyConstraint]) -> None:
                     ) from exc
             if (
                 predicate.selector_match is SelectorMatch.SUBTREE
-                and predicate.domain != AuthorityDomain.FILESYSTEM.value
+                and predicate.domain not in _PATH_DOMAINS
             ):
-                raise ValueError("subtree matching is valid only for filesystem rules")
+                raise ValueError("subtree matching is valid only for path rules")
+            if predicate.exempt_subtrees or predicate.exempt_paths:
+                selector = predicate.selector or ""
+                for exempt in (*predicate.exempt_subtrees, *predicate.exempt_paths):
+                    if not _canonical_absolute(exempt) or not _path_contains(
+                        selector, exempt
+                    ):
+                        raise ValueError(
+                            "exemptions must be canonical paths inside the selector"
+                        )
 
 
 def _matches(predicate: RulePredicate, rule: GrantRule) -> bool:
@@ -231,22 +251,53 @@ def _selector_relation(predicate: RulePredicate, rule: GrantRule) -> _Relation:
         if _rule_contains_path(rule, selector):
             return _Relation.PARTIAL
         return _Relation.NONE
-    if not selector.startswith("/") or posixpath.normpath(selector) != selector:
+    if not _canonical_absolute(selector):
         raise ValueError("subtree predicate selector must be canonical and absolute")
     rule_subtree = bool(rule.conditions.get("subtree"))
     if _path_contains(selector, rule.selector):
-        return _Relation.FULL
-    if rule_subtree and _path_contains(rule.selector, selector):
+        relation = _Relation.FULL
+    elif rule_subtree and _path_contains(rule.selector, selector):
+        relation = _Relation.PARTIAL
+    else:
+        return _Relation.NONE
+    return _apply_exemptions(predicate, rule, rule_subtree, relation)
+
+
+def _apply_exemptions(
+    predicate: RulePredicate,
+    rule: GrantRule,
+    rule_subtree: bool,
+    relation: _Relation,
+) -> _Relation:
+    """Narrow a subtree relation to the selector minus its exemptions.
+
+    Existing rule exclusions are ignored, which can only over-approximate the
+    rule and therefore never turns a real overlap into `NONE`.
+    """
+    if not predicate.exempt_subtrees and not predicate.exempt_paths:
+        return relation
+    if any(_path_contains(item, rule.selector) for item in predicate.exempt_subtrees):
+        return _Relation.NONE
+    if not rule_subtree and rule.selector in predicate.exempt_paths:
+        return _Relation.NONE
+    if rule_subtree and any(
+        _path_contains(rule.selector, item)
+        for item in (*predicate.exempt_subtrees, *predicate.exempt_paths)
+    ):
         return _Relation.PARTIAL
-    return _Relation.NONE
+    return relation
 
 
 def _rule_contains_path(rule: GrantRule, path: str) -> bool:
     return (
-        rule.domain is AuthorityDomain.FILESYSTEM
+        rule.domain.value in _PATH_DOMAINS
         and bool(rule.conditions.get("subtree"))
         and _path_contains(rule.selector, path)
     )
+
+
+def _canonical_absolute(path: str) -> bool:
+    return path.startswith("/") and posixpath.normpath(path) == path
 
 
 def _path_contains(parent: str, child: str) -> bool:
@@ -259,6 +310,10 @@ def _subtract(rule: GrantRule, constraint: ForbidConstraint) -> GrantRule | None
         rule.domain is not AuthorityDomain.FILESYSTEM
         or predicate.selector is None
         or predicate.conditions
+        # The partial difference keeps exempt pieces inside the forbidden
+        # region, which one exclusion list cannot represent.
+        or predicate.exempt_subtrees
+        or predicate.exempt_paths
     ):
         return None
     conditions = dict(rule.conditions)
@@ -335,6 +390,8 @@ def _constraint_payload(constraint: PolicyConstraint) -> Mapping[str, Any]:
             {
                 "conditions": dict(predicate.conditions),
                 "domain": predicate.domain,
+                "exempt_paths": sorted(predicate.exempt_paths),
+                "exempt_subtrees": sorted(predicate.exempt_subtrees),
                 "operations": sorted(predicate.operations),
                 "selector": predicate.selector,
                 "selector_match": predicate.selector_match.value,

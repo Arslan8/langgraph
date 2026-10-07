@@ -158,13 +158,20 @@ class SelectorMatch(str, Enum):
 
 @dataclass(frozen=True, slots=True)
 class RulePredicate:
-    """Bounded match over final-grant rules; it contains no policy source text."""
+    """Bounded match over final-grant rules; it contains no policy source text.
+
+    A subtree predicate may exempt canonical subtrees or exact paths below its
+    selector. It then matches only the remaining difference, which lets a
+    forbid-only module deny everything in a scope except listed resources.
+    """
 
     domain: str | None = None
     operations: frozenset[str] = frozenset()
     selector: str | None = None
     selector_match: SelectorMatch = SelectorMatch.ANY
     conditions: Mapping[str, Any] = field(default_factory=dict)
+    exempt_subtrees: frozenset[str] = frozenset()
+    exempt_paths: frozenset[str] = frozenset()
 
     def __post_init__(self) -> None:
         if self.domain is not None and not self.domain:
@@ -176,9 +183,21 @@ class RulePredicate:
             raise ValueError("exact and subtree predicates require a selector")
         if self.selector_match is SelectorMatch.ANY and self.selector is not None:
             raise ValueError("an ANY predicate cannot carry a selector")
-        if len(operations) > 32 or len(self.conditions) > 32:
+        exempt_subtrees = frozenset(self.exempt_subtrees)
+        exempt_paths = frozenset(self.exempt_paths)
+        if (exempt_subtrees or exempt_paths) and (
+            self.selector_match is not SelectorMatch.SUBTREE
+        ):
+            raise ValueError("exemptions are valid only for subtree predicates")
+        if (
+            len(operations) > 32
+            or len(self.conditions) > 32
+            or len(exempt_subtrees) + len(exempt_paths) > 32
+        ):
             raise ValueError("predicate exceeds the bounded complexity limit")
         object.__setattr__(self, "operations", operations)
+        object.__setattr__(self, "exempt_subtrees", exempt_subtrees)
+        object.__setattr__(self, "exempt_paths", exempt_paths)
         object.__setattr__(self, "conditions", MappingProxyType(dict(self.conditions)))
 
 

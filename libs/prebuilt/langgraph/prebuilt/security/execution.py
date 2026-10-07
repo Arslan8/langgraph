@@ -14,6 +14,9 @@ from langgraph.prebuilt.security.types import (
     ToolCall,
 )
 
+UNENFORCED_CONSTRAINTS = "policy:constraints_require_host_executor"
+"""Denial reason when typed restrictions have no host grant to filter."""
+
 
 class HostExecutionDenied(PermissionError):
     """Raised before tool code runs when host enforcement cannot be established."""

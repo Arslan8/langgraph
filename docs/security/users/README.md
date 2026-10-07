@@ -16,6 +16,8 @@ role:
   mediated operations in later or concurrent calls.
 - [Run untrusted local tools on Linux](linux-host-execution.md) to activate the
   platform-neutral grant through the reference bubblewrap adapter.
+- [Bound resources with `ResourceBoundary`](resource-boundary.md) to cap
+  filesystem authority by operator policy without changing tools.
 - [Operate and audit deployments](operations.md) for principal binding, durable
   audit, observability, inventory, escape analysis, and troubleshooting.
 - [Understand the security boundary](security-boundary.md) before running

@@ -277,6 +277,7 @@ class SecurityStack:
 
     def post(self, principal: Principal, call: ToolCall, result: Any) -> Decision:
         """Run every post hook; failures are reported but cannot alter the result."""
+        failures: list[Decision] = []
         for module in self.modules:
             if type(module).tool_call_post is SecurityModule.tool_call_post:
                 continue
@@ -303,13 +304,14 @@ class SecurityStack:
                 )
             self._observe(principal, call, "post", module.name, decision, started)
             if decision.verdict is not Verdict.ALLOW:
-                return decision
-        return Decision(Verdict.ALLOW, "post:complete")
+                failures.append(decision)
+        return failures[0] if failures else Decision(Verdict.ALLOW, "post:complete")
 
     async def apost(
         self, principal: Principal, call: ToolCall, result: Any
     ) -> Decision:
         """Asynchronously run every post-execution hook."""
+        failures: list[Decision] = []
         for module in self.modules:
             if type(module).tool_call_post is SecurityModule.tool_call_post:
                 continue
@@ -345,8 +347,8 @@ class SecurityStack:
                 )
             self._observe(principal, call, "post", module.name, decision, started)
             if decision.verdict is not Verdict.ALLOW:
-                return decision
-        return Decision(Verdict.ALLOW, "post:complete")
+                failures.append(decision)
+        return failures[0] if failures else Decision(Verdict.ALLOW, "post:complete")
 
     def record_framework_event(
         self,

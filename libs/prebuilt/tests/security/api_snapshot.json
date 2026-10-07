@@ -75,7 +75,10 @@
   "RequirementCheck",
   "RequirementEntry",
   "RequirementLedger",
+  "ResourceAllowance",
   "ResourceArg",
+  "ResourceBoundary",
+  "ResourceBoundaryPolicy",
   "RulePredicate",
   "SecurityModule",
   "SecurityEvent",
@@ -123,5 +126,6 @@
   "normalize_resource",
   "parse_profiles",
   "principal_from",
+  "resource_path",
   "with_principal"
 ]

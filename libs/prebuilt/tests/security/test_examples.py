@@ -18,6 +18,9 @@ _EXAMPLES = _REPOSITORY / "docs" / "security" / "examples"
         ("guarded_tool_audit.py", "result: replacement approved"),
         ("corporate_recipient_policy.py", "denied: external_recipient"),
         ("constructive_profile.py", "denied: required_line_removed"),
+        ("legacy_report_reader.py", "audit chain: valid"),
+        ("legacy_mail_queue.py", "denied call made no delivery"),
+        ("resource_boundary.py", "effective authority: identical for both tools"),
     ],
 )
 def test_security_example_runs(script: str, expected: str) -> None:

@@ -715,43 +715,103 @@ class LinuxSandboxExecutor:
                 ) from exc
             raise HostExecutionDenied("host:worker_activation_failed") from exc
         finally:
-            if status_read >= 0:
-                os.close(status_read)
-            if status_write >= 0:
-                os.close(status_write)
-            for descriptor in inherited_fds:
+            self._cleanup_worker(
+                status_read=status_read,
+                status_write=status_write,
+                inherited_fds=inherited_fds,
+                process=process,
+                child_pid=child_pid,
+                child_start_time=child_start_time,
+                artifact_directory=artifact_directory,
+                host=host,
+                receipt=receipt,
+                active_error=sys.exc_info()[1],
+            )
+
+    def _cleanup_worker(
+        self,
+        *,
+        status_read: int,
+        status_write: int,
+        inherited_fds: Sequence[int],
+        process: subprocess.Popen[bytes] | None,
+        child_pid: int | None,
+        child_start_time: str | None,
+        artifact_directory: Path | None,
+        host: HostAttestation,
+        receipt: ActivationReceipt | None,
+        active_error: BaseException | None,
+    ) -> None:
+        """Clean up independently and retain recovery evidence when uncertain."""
+        for descriptor in (status_read, status_write, *inherited_fds):
+            if descriptor < 0:
+                continue
+            try:
                 os.close(descriptor)
-            if process is not None and process.poll() is None:
-                process.kill()
-                process.wait(timeout=2.0)
-            termination_confirmed = not (
-                child_pid is not None and child_start_time is not None
-            ) or _confirm_worker_terminated(child_pid, child_start_time, timeout_s=2.0)
-            if artifact_directory is not None:
-                _remove_private_artifact(artifact_directory)
-            if not termination_confirmed:
-                recovery = TerminationRecovery(
-                    secrets.token_hex(16),
-                    child_pid,
-                    child_start_time,
-                    host.boot_id,
+            except Exception:
+                pass
+
+        if process is not None:
+            try:
+                running = process.poll() is None
+            except Exception:
+                running = True
+            if running:
+                try:
+                    process.kill()
+                except Exception:
+                    pass
+                try:
+                    process.wait(timeout=2.0)
+                except Exception:
+                    pass
+
+        termination_confirmed = not (
+            child_pid is not None and child_start_time is not None
+        )
+        if child_pid is not None and child_start_time is not None:
+            try:
+                termination_confirmed = _confirm_worker_terminated(
+                    child_pid, child_start_time, timeout_s=2.0
                 )
-                with self._termination_lock:
-                    self._unresolved[recovery.recovery_id] = recovery
-                active_error = sys.exception()
-                if isinstance(active_error, HostExecutionError):
-                    active_error.recovery = recovery
-                if receipt is not None:
-                    raise HostExecutionError(
-                        f"host:worker_termination_unconfirmed:{recovery.recovery_id}",
-                        receipt,
-                        ExecutionOutcome.INDETERMINATE,
-                        recovery=recovery,
-                    )
-                raise HostExecutionDenied("host:worker_termination_unconfirmed")
-            active_error = sys.exception()
+            except Exception:
+                termination_confirmed = False
+
+        if artifact_directory is not None:
+            try:
+                _remove_private_artifact(artifact_directory)
+            except Exception:
+                pass
+
+        if termination_confirmed:
             if isinstance(active_error, HostExecutionError):
                 active_error.termination_confirmed = True
+            return
+
+        # Both values are present whenever confirmation is required.
+        assert child_pid is not None
+        assert child_start_time is not None
+        recovery = TerminationRecovery(
+            secrets.token_hex(16),
+            child_pid,
+            child_start_time,
+            host.boot_id,
+        )
+        with self._termination_lock:
+            self._unresolved[recovery.recovery_id] = recovery
+        if isinstance(active_error, HostExecutionError):
+            active_error.outcome = ExecutionOutcome.INDETERMINATE
+            active_error.recovery = recovery
+            return
+        if receipt is not None:
+            raise HostExecutionError(
+                f"host:worker_termination_unconfirmed:{recovery.recovery_id}",
+                receipt,
+                ExecutionOutcome.INDETERMINATE,
+                recovery=recovery,
+            )
+        if active_error is None:
+            raise HostExecutionDenied("host:worker_termination_unconfirmed")
 
     def _worker_command(
         self, plan: AdapterPlan, spec: LinuxToolSpec
@@ -1314,16 +1374,27 @@ def _activation_payload(evidence: ActivationEvidence) -> str:
 
 
 def _read_fd_json(descriptor: int, timeout: float) -> Mapping[str, Any]:
-    ready, _, _ = select.select([descriptor], [], [], timeout)
-    if not ready:
-        raise TimeoutError
-    payload = os.read(descriptor, 16_384)
-    if not payload or len(payload) >= 16_384:
-        raise ValueError("invalid bubblewrap status")
-    value = json.loads(payload)
-    if not isinstance(value, dict):
-        raise ValueError("invalid bubblewrap status")
-    return value
+    deadline = time.monotonic() + timeout
+    payload = bytearray()
+    while len(payload) < 16_384:
+        remaining = deadline - time.monotonic()
+        if remaining <= 0:
+            raise TimeoutError
+        ready, _, _ = select.select([descriptor], [], [], remaining)
+        if not ready:
+            raise TimeoutError
+        chunk = os.read(descriptor, 16_384 - len(payload))
+        if not chunk:
+            break
+        payload.extend(chunk)
+        try:
+            value = json.loads(payload)
+        except json.JSONDecodeError:
+            continue
+        if not isinstance(value, dict):
+            raise ValueError("invalid bubblewrap status")
+        return value
+    raise ValueError("invalid bubblewrap status")
 
 
 def _readline_json(

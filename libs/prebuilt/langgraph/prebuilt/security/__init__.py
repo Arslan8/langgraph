@@ -125,6 +125,12 @@ from langgraph.prebuilt.security.profile import (
     evaluate_dac,
     parse_profiles,
 )
+from langgraph.prebuilt.security.resource_boundary import (
+    ResourceAllowance,
+    ResourceBoundary,
+    ResourceBoundaryPolicy,
+    resource_path,
+)
 from langgraph.prebuilt.security.stack import CapModule, SecurityStack
 from langgraph.prebuilt.security.taint import (
     EscapeFinding,
@@ -232,7 +238,10 @@ __all__ = (
     "RequirementCheck",
     "RequirementEntry",
     "RequirementLedger",
+    "ResourceAllowance",
     "ResourceArg",
+    "ResourceBoundary",
+    "ResourceBoundaryPolicy",
     "RulePredicate",
     "SecurityModule",
     "SecurityEvent",
@@ -280,5 +289,6 @@ __all__ = (
     "normalize_resource",
     "parse_profiles",
     "principal_from",
+    "resource_path",
     "with_principal",
 )

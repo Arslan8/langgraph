@@ -136,14 +136,28 @@ to the configured backend.
 
 | Name | Purpose |
 | --- | --- |
-| `RulePredicate` | Matches a bounded authority domain, operation set, selector relation, and immutable conditions. |
-| `SelectorMatch` | Selects any, exact, or canonical filesystem-subtree matching. |
+| `RulePredicate` | Matches a bounded authority domain, operation set, selector relation, and immutable conditions. A subtree predicate may list `exempt_subtrees` and `exempt_paths`, matching only the selector minus those resources. |
+| `SelectorMatch` | Selects any, exact, or canonical path-subtree matching for filesystem and runtime rules. |
 | `ForbidConstraint` | Removes or soundly subtracts matching authority from the candidate grant. |
 | `ForbidCombination` | Rejects combinations such as sensitive reads plus outbound communication. |
 | `PolicyConstraint` | Union of the two accepted forbid-only constraint records. |
 | `MandatoryPolicyBackend` | Replaceable filtering interface used by Cedar or another policy engine. |
 | `TypedPolicyBackend` | Built-in fail-closed reference backend with broad-path subtraction, conservative rejection of unrepresentable differences, aggregate checks, and requirement revalidation. |
 | `PolicyFilterResult` | Filtered no-broader grant, remapped requirement ledger, removals, and fail-closed diagnostics. |
+
+A decision carrying constraints is denied with
+`policy:constraints_require_host_executor` when no `host_executor` is configured,
+because there is no grant to which the restrictions could apply.
+
+`ResourceBoundary` is the shipped reference mandatory module built only on the
+constraint interface above. See [resource boundaries](users/resource-boundary.md).
+
+| Name | Purpose |
+| --- | --- |
+| `ResourceBoundary` | Module that turns a `ResourceBoundaryPolicy` into attributed filesystem and runtime forbids. It never transforms, escalates, or builds enforcement plans. |
+| `ResourceBoundaryPolicy` | Operator policy: identifier, version, controlled `/**` scope, allowances, and forbidden selectors. Overlaps intersect; forbids win; unlisted paths in scope receive nothing. |
+| `ResourceAllowance` | Maximum filesystem operations for one exact path or subtree inside the scope. |
+| `resource_path` | Normalizes a policy selector with the `.slp` path grammar and the `realpath` argument normalizer. |
 
 Session IFC uses a conservative program-counter label: after a classified source
 may run, the entire session remains at least that sensitive. This deliberately

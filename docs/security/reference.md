@@ -71,6 +71,16 @@ the hooks it needs:
 `cap` is framework-owned and always first. Policy hooks run under
 `policy_timeout_s`; timeout, exception, or malformed output fails closed.
 
+These hooks are an LSM-style programming interface at tool-call granularity,
+not an LSM-equivalent per-resource-access reference monitor. They decide whether
+and under what typed restrictions a call may start. In-process tool behavior
+after dispatch is not mediated by the hooks and shares the Python process with
+them. With `LinuxSandboxExecutor`, supported restrictions are compiled into a
+fixed pre-execution grant and enforced by the worker boundary; modules are not
+called again for each access and cannot revoke that grant mid-call. Dynamic
+per-access decisions or labeled resources require a trusted broker that owns
+the operation path.
+
 ## Approval and resume
 
 An `ESCALATE` decision contains an `EscalationRequest`. ToolNode passes only its

@@ -111,6 +111,9 @@ from langgraph.prebuilt.security.errors import (
     SecurityIndeterminateError,
 )
 from langgraph.prebuilt.security.execution import (
+    UNENFORCED_CONSTRAINTS as _UNENFORCED_CONSTRAINTS,
+)
+from langgraph.prebuilt.security.execution import (
     HostExecutionDenied,
     HostExecutionError,
     HostToolExecutor,
@@ -1340,6 +1343,12 @@ class ToolNode(RunnableCallable):
         if decision.verdict is not Verdict.ALLOW:
             return self._security_denial(call, decision)
         policy_constraints = decision.constraints
+        if policy_constraints and self._security_host_executor is None:
+            # Typed restrictions apply to a host grant; dropping them would
+            # silently retain the tool's unconfined in-process authority.
+            return self._security_denial(
+                call, Decision(Verdict.DENY, _UNENFORCED_CONSTRAINTS)
+            )
         flow_reservation: ToolFlowRule | None = None
         if (
             self._security_flow_policy is not None
@@ -1638,6 +1647,12 @@ class ToolNode(RunnableCallable):
         if decision.verdict is not Verdict.ALLOW:
             return self._security_denial(call, decision)
         policy_constraints = decision.constraints
+        if policy_constraints and self._security_host_executor is None:
+            # Typed restrictions apply to a host grant; dropping them would
+            # silently retain the tool's unconfined in-process authority.
+            return self._security_denial(
+                call, Decision(Verdict.DENY, _UNENFORCED_CONSTRAINTS)
+            )
         flow_reservation: ToolFlowRule | None = None
         if (
             self._security_flow_policy is not None

@@ -323,3 +323,29 @@ def test_constructive_grant_is_monotone_in_shares(
         )
     )
     assert small <= large
+
+
+def test_each_listed_line_has_its_own_requirement_lineage() -> None:
+    """Lines sharing one directive keep independent `need`/`want` identities."""
+    document = parse_profiles(
+        """
+tool copy {
+  owner analyst
+  grant analyst: call
+  fs read /data/in need, write /data/out want
+}
+principal alice {
+  roles analyst
+  fs /data/**
+}
+"""
+    )
+
+    result = document.evaluate("copy", "alice", {})
+
+    read, write = result.grant.fs
+    assert read.source_id != write.source_id
+    assert (read.requirement, write.requirement) == (
+        Requirement.NEED,
+        Requirement.WANT,
+    )

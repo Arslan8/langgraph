@@ -25,6 +25,7 @@ from langgraph.prebuilt.security.errors import (
     SecurityIndeterminateError,
 )
 from langgraph.prebuilt.security.execution import (
+    UNENFORCED_CONSTRAINTS,
     HostExecutionDenied,
     HostExecutionError,
     TerminationRecovery,
@@ -108,6 +109,10 @@ class _GuardedExecutor:
         if decision.verdict is not Verdict.ALLOW:
             raise SecurityDeniedError(decision.reason)
         policy_constraints = decision.constraints
+        if policy_constraints and self.security.host_executor is None:
+            # Typed restrictions apply to a host grant; dropping them would
+            # silently retain the tool's unconfined in-process authority.
+            raise SecurityDeniedError(UNENFORCED_CONSTRAINTS)
         decision, flow_reservation = self._acquire_flow(principal, call)
         if decision.verdict is not Verdict.ALLOW:
             raise SecurityDeniedError(decision.reason)
@@ -192,6 +197,10 @@ class _GuardedExecutor:
         if decision.verdict is not Verdict.ALLOW:
             raise SecurityDeniedError(decision.reason)
         policy_constraints = decision.constraints
+        if policy_constraints and self.security.host_executor is None:
+            # Typed restrictions apply to a host grant; dropping them would
+            # silently retain the tool's unconfined in-process authority.
+            raise SecurityDeniedError(UNENFORCED_CONSTRAINTS)
         decision, flow_reservation = self._acquire_flow(principal, call)
         if decision.verdict is not Verdict.ALLOW:
             raise SecurityDeniedError(decision.reason)
