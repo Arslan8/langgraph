@@ -73,3 +73,15 @@ def file_limit_probe(size: int) -> str:
     except OSError as exc:
         return f"blocked:{exc.errno}"
     return "written"
+
+
+def descriptor_probe() -> list[int]:
+    """Report unexpected descriptors inherited by the untrusted entry point."""
+    inherited = []
+    for descriptor in range(3, 64):
+        try:
+            os.fstat(descriptor)
+        except OSError:
+            continue
+        inherited.append(descriptor)
+    return inherited

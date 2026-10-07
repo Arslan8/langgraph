@@ -109,6 +109,8 @@ missing manifests fail during configuration.
    bubblewrap worker receives only explicit mounts, an ephemeral `/tmp`, a clear
    environment, dropped capabilities, isolated namespaces, a default-deny
    seccomp allowlist, and resource ceilings.
+   Each resource mount is opened by descriptor and its device, inode, and object
+   type are revalidated against the authorized canonical path before release.
 5. The worker reports ready before importing the entry point. The parent binds
    the plan to the actual PID, process start time, namespaces, credentials,
    cgroup, boot identity, and adapter evidence. It verifies an activation

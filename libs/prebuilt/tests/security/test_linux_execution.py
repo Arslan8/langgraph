@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import os
 import py_compile
 from dataclasses import replace
 from pathlib import Path
@@ -38,6 +39,8 @@ from langgraph.prebuilt.security import (
     parse_profiles,
     with_principal,
 )
+from langgraph.prebuilt.security.execution import HostExecutionDenied
+from langgraph.prebuilt.security.linux import _verified_resource_fd
 
 _FIXTURES = Path(__file__).with_name("fixtures").resolve()
 
@@ -406,6 +409,65 @@ principal alice {
     result = guarded.invoke({"size": 2_097_152}, config=_config(principal))
 
     assert result.startswith("blocked:")
+
+
+def test_linux_worker_inherits_no_ambient_descriptors(tmp_path: Path) -> None:
+    """Mount and startup descriptors are closed before untrusted code runs."""
+    profiles = """
+tool read_file {
+  owner analyst
+  grant analyst: call
+  runs linux
+  syscalls @minimal
+}
+principal alice {
+  roles analyst
+}
+"""
+
+    @tool
+    @dac(owner="analyst", grants={"analyst": "x", "*": "-"})
+    def read_file() -> list[int]:
+        """Parent callback that must not execute."""
+        raise AssertionError
+
+    guarded = guarded_tool(
+        read_file,
+        security=_security(profiles, "linux_tools:descriptor_probe"),
+    )
+    principal = Principal("alice", frozenset({"analyst"}), frozenset(), "session")
+
+    assert guarded.invoke({}, config=_config(principal)) == []
+
+
+def test_linux_mount_descriptor_is_bound_to_authorized_object(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A resource replacement between resolution and mount fails closed."""
+    authorized = tmp_path / "authorized.txt"
+    replacement = tmp_path / "replacement.txt"
+    authorized.write_text("authorized")
+    replacement.write_text("replacement")
+    actual_stat = os.stat
+
+    def replaced_stat(
+        path: os.PathLike[str] | str,
+        *,
+        dir_fd: int | None = None,
+        follow_symlinks: bool = True,
+    ) -> os.stat_result:
+        if Path(path) == authorized:
+            return actual_stat(
+                replacement,
+                dir_fd=dir_fd,
+                follow_symlinks=follow_symlinks,
+            )
+        return actual_stat(path, dir_fd=dir_fd, follow_symlinks=follow_symlinks)
+
+    monkeypatch.setattr(os, "stat", replaced_stat)
+
+    with pytest.raises(HostExecutionDenied, match="resource_identity_changed"):
+        _verified_resource_fd(authorized)
 
 
 def test_guarded_tool_uses_linux_host_executor(tmp_path: Path) -> None:

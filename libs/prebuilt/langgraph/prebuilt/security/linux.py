@@ -12,6 +12,7 @@ import platform
 import secrets
 import select
 import shutil
+import stat
 import subprocess
 import tempfile
 import time
@@ -712,7 +713,7 @@ class LinuxSandboxExecutor:
             descriptor = (
                 artifact_descriptor
                 if canonical == spec.artifact_path
-                else os.open(path, os.O_PATH | os.O_CLOEXEC | os.O_NOFOLLOW)
+                else _verified_resource_fd(canonical)
             )
             descriptors.append(descriptor)
             destinations.add(path)
@@ -1073,6 +1074,28 @@ def _verified_artifact_fd(spec: LinuxToolSpec) -> tuple[int, Path]:
         )
     except BaseException:
         _remove_private_artifact(directory)
+        raise
+
+
+def _verified_resource_fd(path: Path) -> int:
+    """Open and identity-bind one canonical host resource for a worker mount."""
+    descriptor = os.open(path, os.O_PATH | os.O_CLOEXEC | os.O_NOFOLLOW)
+    try:
+        opened = os.fstat(descriptor)
+        current = os.stat(path, follow_symlinks=False)
+        if (
+            opened.st_dev,
+            opened.st_ino,
+            stat.S_IFMT(opened.st_mode),
+        ) != (
+            current.st_dev,
+            current.st_ino,
+            stat.S_IFMT(current.st_mode),
+        ):
+            raise HostExecutionDenied("host:resource_identity_changed")
+        return descriptor
+    except BaseException:
+        os.close(descriptor)
         raise
 
 
