@@ -84,6 +84,7 @@ permissions. Unknown tool names fail configuration, and an audit sink records
 each applied override.
 
 For constructive resource grants, use the frozen `.slp` grammar described in
-[profiles](../profiles.md). The current runtime tool-call path uses `ToolDac`;
-native enforcement of compiled grants is not yet wired into tool execution.
-
+[profiles](../profiles.md). The ordinary trusted runtime path uses `ToolDac`.
+On Linux, configure `LinuxSandboxExecutor` to compile `.slp` authority into a
+worker grant and activate kernel confinement as described in
+[Linux host execution](linux-host-execution.md).

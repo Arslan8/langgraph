@@ -10,6 +10,7 @@ from typing import Any
 
 from langgraph.prebuilt.security.descriptor import DacOverrides
 from langgraph.prebuilt.security.errors import SecurityConfigurationError
+from langgraph.prebuilt.security.execution import HostToolExecutor
 from langgraph.prebuilt.security.flow import SessionFlowPolicy
 from langgraph.prebuilt.security.hooks import SecurityModule
 from langgraph.prebuilt.security.observability import SecurityObserver
@@ -30,6 +31,7 @@ class SecurityConfig:
     approval_ttl_s: float = 300.0
     require_principal: bool = True
     flow_policy: SessionFlowPolicy | None = None
+    host_executor: HostToolExecutor | None = None
 
     def __post_init__(self) -> None:
         object.__setattr__(self, "modules", tuple(self.modules))
@@ -62,6 +64,8 @@ class SecurityConfig:
             raise ValueError(f"DAC overrides reference unknown tools: {names}")
         if self.flow_policy is not None:
             self.flow_policy.validate_tools(tuple(known_tools))
+        if self.host_executor is not None:
+            self.host_executor.validate_tools(tuple(known_tools))
         for node in nodes:
             self.configure_tool_node(node, validate_overrides=False)
         graph._security_config = self
@@ -84,6 +88,8 @@ class SecurityConfig:
             raise ValueError(f"DAC overrides reference unknown tools: {names}")
         if self.flow_policy is not None:
             self.flow_policy.validate_tools(tuple(node._security_tools_by_name))
+        if self.host_executor is not None:
+            self.host_executor.validate_tools(tuple(node._security_tools_by_name))
         stack = SecurityStack(
             self.modules,
             policy_timeout_s=self.policy_timeout_s,
@@ -116,6 +122,7 @@ class SecurityConfig:
                 audit_sink=self.audit_sink,
                 require_principal=self.require_principal,
                 flow_policy=self.flow_policy,
+                host_executor=self.host_executor,
             )
             node._security_config = self
         except BaseException:

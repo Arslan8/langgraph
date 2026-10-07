@@ -14,6 +14,8 @@ role:
   private slots, argument narrowing, approvals, and delegation.
 - [Schedule classified sources and sinks](session-flow.md) to block incompatible
   mediated operations in later or concurrent calls.
+- [Run untrusted local tools on Linux](linux-host-execution.md) to activate the
+  platform-neutral grant through the reference bubblewrap adapter.
 - [Operate and audit deployments](operations.md) for principal binding, durable
   audit, observability, inventory, escape analysis, and troubleshooting.
 - [Understand the security boundary](security-boundary.md) before running
@@ -31,7 +33,9 @@ restrictive mandatory hooks, fail-closed normalization and hook handling,
 redacted decision audit, durable approval rechecks, and optional classified
 source/sink scheduling. Sync and async paths use the same contracts.
 
-Native worker confinement is a separate layer. The grant, obligation,
-host-attestation, adapter-plan, and activation-receipt contracts exist, but tool
-execution is not yet routed through a native enforcement adapter. Until that
-wiring lands, use an external sandbox when tool code itself is untrusted.
+For supported local Python tools on Linux, `LinuxSandboxExecutor` routes both
+`ToolNode` and `guarded_tool` execution through a fresh kernel-confined worker.
+The current adapter enforces filesystem authority, a closed no-network/process
+baseline, and resource ceilings. Unsupported network, service, credential,
+delegation, or executable authority fails closed and requires another adapter or
+broker.

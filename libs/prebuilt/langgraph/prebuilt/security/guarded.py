@@ -24,6 +24,7 @@ from langgraph.prebuilt.security.errors import (
     SecurityConfigurationError,
     SecurityIndeterminateError,
 )
+from langgraph.prebuilt.security.execution import HostExecutionDenied
 from langgraph.prebuilt.security.flow import ToolFlowRule
 from langgraph.prebuilt.security.introspect import (
     ToolInventoryEntry,
@@ -75,6 +76,8 @@ class _GuardedExecutor:
         )
         if security.flow_policy is not None:
             security.flow_policy.validate_tools((target.name,))
+        if security.host_executor is not None:
+            security.host_executor.validate_tools((target.name,))
         for module in self.stack.modules:
             slot = self.tool.security.allocate(module.name)
             module.tool_alloc_security(self.tool, slot)
@@ -100,6 +103,7 @@ class _GuardedExecutor:
             decision = self._resume(principal, call, decision)
         if decision.verdict is not Verdict.ALLOW:
             raise SecurityDeniedError(decision.reason)
+        policy_constraints = decision.constraints
         decision, flow_reservation = self._acquire_flow(principal, call)
         if decision.verdict is not Verdict.ALLOW:
             raise SecurityDeniedError(decision.reason)
@@ -116,9 +120,17 @@ class _GuardedExecutor:
         result: Any = None
         outcome = ExecutionOutcome.INDETERMINATE
         try:
-            result = self.target.invoke(dict(call.args), config=config)
+            if self.security.host_executor is not None:
+                result = self.security.host_executor.invoke(
+                    principal, call, policy_constraints
+                )
+            else:
+                result = self.target.invoke(dict(call.args), config=config)
             outcome = ExecutionOutcome.SUCCEEDED
             return result
+        except HostExecutionDenied as exc:
+            outcome = ExecutionOutcome.DENIED_BEFORE_DISPATCH
+            raise SecurityDeniedError(str(exc)) from exc
         finally:
             try:
                 self.stack.post(principal, call, result)
@@ -145,6 +157,7 @@ class _GuardedExecutor:
             decision = await self._aresume(principal, call, decision)
         if decision.verdict is not Verdict.ALLOW:
             raise SecurityDeniedError(decision.reason)
+        policy_constraints = decision.constraints
         decision, flow_reservation = self._acquire_flow(principal, call)
         if decision.verdict is not Verdict.ALLOW:
             raise SecurityDeniedError(decision.reason)
@@ -161,9 +174,17 @@ class _GuardedExecutor:
         result: Any = None
         outcome = ExecutionOutcome.INDETERMINATE
         try:
-            result = await self.target.ainvoke(dict(call.args), config=config)
+            if self.security.host_executor is not None:
+                result = await self.security.host_executor.ainvoke(
+                    principal, call, policy_constraints
+                )
+            else:
+                result = await self.target.ainvoke(dict(call.args), config=config)
             outcome = ExecutionOutcome.SUCCEEDED
             return result
+        except HostExecutionDenied as exc:
+            outcome = ExecutionOutcome.DENIED_BEFORE_DISPATCH
+            raise SecurityDeniedError(str(exc)) from exc
         finally:
             try:
                 await self.stack.apost(principal, call, result)

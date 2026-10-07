@@ -26,15 +26,21 @@ prove that hostile code lacks undeclared effects.
 
 ## When tool code is untrusted
 
-Run it in an external sandbox that starts without ambient credentials, inherited
-file descriptors, existing sockets, unsafe environment variables, or a broad
-working directory. Route resource access through scoped brokers where the host
-cannot express the required restriction directly.
+On Linux, configure `LinuxSandboxExecutor` for supported local Python tools. It
+starts a fresh bubblewrap worker with explicit mounts, a clear environment,
+dropped capabilities, namespace isolation, default resource ceilings, and a
+default-deny seccomp allowlist. The worker blocks before importing the pinned
+tool artifact; the parent verifies a worker-specific activation receipt before
+sending the release signal. See [Linux host execution](linux-host-execution.md).
 
-The framework already exposes platform-neutral grant, obligation, adapter,
-host-attestation, and activation-receipt contracts. Native execution is not yet
-wired through those contracts, so an accepted plan or activation object is not
-evidence that this branch confined a real worker.
+The current adapter intentionally rejects network, service, credential,
+delegation, and executable grants. Add a scoped broker or another adapter for
+those obligations; do not weaken the Linux worker or treat an unsupported rule
+as advisory. Runtime roots and `/usr` are explicit operator-owned baseline
+authority and must contain no secrets the tool is not permitted to read.
+
+The in-process path remains available for trusted implementations and upstream
+compatibility. It provides authorization, not hostile-code confinement.
 
 ## Information-flow boundary
 

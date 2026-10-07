@@ -45,11 +45,13 @@ egress operation. A source-and-sink operation joins its possible reads before
 checking its own sink ceiling. A crashed sink reservation fails closed until it
 is released or repaired by the operator.
 
-The implemented reservation lasts through the mediated Python call, post hooks,
-and outcome audit. It does not supervise descendants or background work that
-outlive that call. Such work is forbidden in the protected in-process model; a
-native worker supervisor must retain the reservation and confinement lease until
-every descendant exits.
+The implemented reservation lasts through the mediated physical call, post
+hooks, and outcome audit. The Linux reference worker cannot create descendants
+or background processes under its default-deny syscall policy and is killed at
+call completion. The trusted in-process path does not supervise descendants or
+background work; such work is forbidden in that protected model. A future
+adapter that permits descendants must retain both reservation and confinement
+lease until every descendant exits.
 
 Session identifiers are not declassification tokens. `transfer_session()`
 atomically joins the source label into the target before a mediated checkpoint,
@@ -57,16 +59,17 @@ artifact, or inter-session copy. A copy that bypasses this operation is outside
 the protected model. Only trusted application code may create security sessions
 or authorize deliberate declassification.
 
-This is a scheduling guarantee over operator classifications, not proof of
-noninterference against hostile tool implementations. In the current in-process
-runtime, a falsely public tool may read confidential ambient data or transmit
-internally despite its declaration. Sound confidentiality therefore requires a
-trusted implementation or external confinement whose effective input authority
-and egress channels validate the classification. Model requests, tracing,
-telemetry, callbacks, renderers, and artifact handlers are sinks too. Route each
-through `guard_operation()` with a rule or treat it as an explicitly trusted
+This is a scheduling guarantee over operator classifications, not by itself
+proof of noninterference against hostile tool implementations. In the trusted
+in-process path, a falsely public tool may read confidential ambient data or
+transmit internally despite its declaration. For the Linux executor's supported
+subset, the effective filesystem inputs, no-network/no-process baseline, and
+runtime roots are kernel-bounded and must conservatively validate the configured
+label. Unsupported outward authority denies. Model requests, tracing, telemetry,
+callbacks, renderers, and artifact handlers are sinks too. Route each through
+`guard_operation()` with a rule or treat it as an explicitly trusted
 destination. Static inventory and escape analysis are diagnostics; they cannot
-prove arbitrary Python has no unmediated effects.
+prove arbitrary Python has no unmediated effects outside the worker boundary.
 
 ## Untrusted results and confused deputies
 

@@ -112,6 +112,10 @@ TCB component and must pass its platform contract suite.
 | `SupportAssessment` | One adapter's rule-specific assessment and evidence requirements for one obligation. |
 | `HostAttestation` | Fresh, nonce-bound host statement whose digest is meaningful only after trust-anchor verification. |
 | `HostAttestationVerifier` | Protocol that authenticates a `HostAttestation` against deployment trust anchors. |
+| `HostExecutionDenied` | Fail-closed error raised before tool code runs when an exact host plan cannot be activated. |
+| `HostToolExecutor` | Portable execution bridge used by `ToolNode` and `guarded_tool` after authorization. |
+| `LinuxSandboxExecutor` | Linux implementation that lowers supported grants into a fresh bubblewrap worker, validates activation evidence, and releases the startup barrier before tool import. `activation_receipts()` exposes a bounded operational snapshot. |
+| `LinuxToolSpec` | Trusted manifest binding a tool name to an importable entry point and operator-verified artifact digest. |
 | `EnforcementAdapter` | Protocol for exact assessment, conservative lowering, worker activation, and activation-evidence verification. |
 | `AdapterPlan` | Opaque native plan digest and the exact obligation IDs assigned to it. |
 | `ObligationAssignment` | One obligation's primary adapter and conservative support relation. |
@@ -214,7 +218,7 @@ lower-level records directly.
 | `BoundNetRule` | Surviving TCP operation and integer port with source provenance. |
 | `BoundExecRule` | Surviving executable path with source provenance. |
 | `BoundNamedRule` | Surviving service kind and bound attributes with source provenance. |
-| `ConstructiveGrant` | Result of DAC intersection before mandatory policy and adapter lowering. It is not the platform-neutral final `Grant` planned by ADR 0007. |
+| `ConstructiveGrant` | Result of DAC intersection before mandatory policy and adapter lowering. `compile_grant` converts it to the platform-neutral final `Grant`. |
 | `RemovedLine` | Resource class, need/want requirement, reason, and source for a candidate removed during intersection. |
 | `DacEvaluation` | Constructive grant, removed lines, denial flag, and optional denial reason. |
 | `ProfileDocument` | Immutable tool and principal maps. `evaluate()` also gathers applicable inbound shares and supports full operator overrides. |
@@ -224,14 +228,14 @@ lower-level records directly.
 
 Canonical path strings are a parser/evaluator invariant, not a TOCTOU defense.
 Each enforcing adapter must resolve resource objects safely for its platform. The
-Linux reference adapter will use descriptors as specified by ADR 0007; other
-platforms may use different native object identities behind the same contract.
+Linux reference adapter retains path descriptors while bubblewrap constructs
+the worker mount namespace. Other platforms may use different native object
+identities behind the same contract.
 
-The planned `HostModel` is separate from both the final `Grant` and adapter set.
-It will contain an attested, platform-neutral inventory of capabilities available
-on the current machine. Execution will fail closed when a grant requires a host
-capability that the selected host does not provide, even if an adapter implements
-that capability on other hosts.
+`HostAttestation` is separate from both the final `Grant` and adapter set. It is
+a fresh, authenticated inventory of capabilities and execution context on the
+current machine. Execution fails closed when a grant requires a capability the
+selected host cannot provide, even if another platform adapter implements it.
 
 ## Exceptions and fail-closed behavior
 

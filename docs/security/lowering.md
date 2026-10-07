@@ -1,10 +1,11 @@
 # Grant lowering, obligations, and activation evidence
 
-This document specifies the target lowering process accepted by
-[ADR 0007](adr/0007-kernel-enforced-confinement.md). The final `Grant`,
-`HostModel`, obligation, adapter, receipt, and transaction types described here
-are not yet shipped public APIs; [implementation status](status.md) records what
-exists on the branch today.
+This document specifies the lowering process accepted by
+[ADR 0007](adr/0007-kernel-enforced-confinement.md). The platform-neutral grant,
+obligation, adapter, attestation, and activation-receipt contracts are shipped.
+The Linux reference executor implements the documented filesystem and
+resource-limit subset; [implementation status](status.md) records the exact
+boundary and remaining adapters.
 
 ## Security invariant
 

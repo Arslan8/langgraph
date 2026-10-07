@@ -61,6 +61,10 @@ from langgraph.prebuilt.security.errors import (
     SecurityConfigurationError,
     SecurityIndeterminateError,
 )
+from langgraph.prebuilt.security.execution import (
+    HostExecutionDenied,
+    HostToolExecutor,
+)
 from langgraph.prebuilt.security.flow import (
     Confidentiality,
     FlowStateStore,
@@ -80,6 +84,7 @@ from langgraph.prebuilt.security.introspect import (
     ToolInventoryEntry,
     introspect,
 )
+from langgraph.prebuilt.security.linux import LinuxSandboxExecutor, LinuxToolSpec
 from langgraph.prebuilt.security.observability import (
     LoggingSecurityObserver,
     MemorySecurityObserver,
@@ -194,8 +199,12 @@ __all__ = (
     "GrantRule",
     "HostAttestation",
     "HostAttestationVerifier",
+    "HostExecutionDenied",
+    "HostToolExecutor",
     "HmacAuditWitness",
     "Limits",
+    "LinuxSandboxExecutor",
+    "LinuxToolSpec",
     "MandatoryPolicyBackend",
     "MemoryAuditSink",
     "MemoryFlowStateStore",

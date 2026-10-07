@@ -110,6 +110,7 @@ from langgraph.prebuilt.security.errors import (
     SecurityAuditError,
     SecurityIndeterminateError,
 )
+from langgraph.prebuilt.security.execution import HostExecutionDenied, HostToolExecutor
 from langgraph.prebuilt.security.flow import SessionFlowPolicy, ToolFlowRule
 from langgraph.prebuilt.security.stack import (
     SecurityStack,
@@ -831,6 +832,7 @@ class ToolNode(RunnableCallable):
         self._security_audit_sink: AuditSink | None = None
         self._security_require_principal = True
         self._security_flow_policy: SessionFlowPolicy | None = None
+        self._security_host_executor: HostToolExecutor | None = None
         self._handle_tool_errors = handle_tool_errors
         self._messages_key = messages_key
         self._wrap_tool_call = wrap_tool_call
@@ -877,12 +879,14 @@ class ToolNode(RunnableCallable):
         audit_sink: AuditSink | None = None,
         require_principal: bool = True,
         flow_policy: SessionFlowPolicy | None = None,
+        host_executor: HostToolExecutor | None = None,
     ) -> None:
         """Configure mediation internally until the public constructor is added."""
         self._security_stack = stack
         self._security_audit_sink = audit_sink
         self._security_require_principal = require_principal
         self._security_flow_policy = flow_policy
+        self._security_host_executor = host_executor
 
     def _security_check(self, request: ToolCallRequest) -> Decision:
         """Return the innermost security decision for one physical execution."""
@@ -1305,6 +1309,7 @@ class ToolNode(RunnableCallable):
             decision = self._resume_security(request.principal, security_call, decision)
         if decision.verdict is not Verdict.ALLOW:
             return self._security_denial(call, decision)
+        policy_constraints = decision.constraints
         flow_reservation: ToolFlowRule | None = None
         if (
             self._security_flow_policy is not None
@@ -1349,7 +1354,21 @@ class ToolNode(RunnableCallable):
         outcome = ExecutionOutcome.INDETERMINATE
         try:
             try:
-                response = tool.invoke(call_args, config)
+                if (
+                    self._security_host_executor is not None
+                    and security_call is not None
+                    and request.principal is not None
+                ):
+                    response = self._security_host_executor.invoke(
+                        request.principal, security_call, policy_constraints
+                    )
+                    response = ToolMessage(
+                        content=cast("str | list", msg_content_output(response)),
+                        name=call["name"],
+                        tool_call_id=call["id"],
+                    )
+                else:
+                    response = tool.invoke(call_args, config)
             except ValidationError as exc:
                 # Filter out errors for injected arguments
                 injected = self._injected_args.get(call["name"])
@@ -1377,6 +1396,10 @@ class ToolNode(RunnableCallable):
         # (2 and 3 can happen in a "supervisor w/ tools" multi-agent architecture)
         except GraphBubbleUp:
             raise
+        except HostExecutionDenied as exc:
+            outcome = ExecutionOutcome.DENIED_BEFORE_DISPATCH
+            post_result = self._security_denial(call, Decision(Verdict.DENY, str(exc)))
+            return post_result
         except Exception as e:
             # Determine which exception types are handled
             handled_types: tuple[type[Exception], ...]
@@ -1539,6 +1562,7 @@ class ToolNode(RunnableCallable):
             )
         if decision.verdict is not Verdict.ALLOW:
             return self._security_denial(call, decision)
+        policy_constraints = decision.constraints
         flow_reservation: ToolFlowRule | None = None
         if (
             self._security_flow_policy is not None
@@ -1583,7 +1607,21 @@ class ToolNode(RunnableCallable):
         outcome = ExecutionOutcome.INDETERMINATE
         try:
             try:
-                response = await tool.ainvoke(call_args, config)
+                if (
+                    self._security_host_executor is not None
+                    and security_call is not None
+                    and request.principal is not None
+                ):
+                    response = await self._security_host_executor.ainvoke(
+                        request.principal, security_call, policy_constraints
+                    )
+                    response = ToolMessage(
+                        content=cast("str | list", msg_content_output(response)),
+                        name=call["name"],
+                        tool_call_id=call["id"],
+                    )
+                else:
+                    response = await tool.ainvoke(call_args, config)
             except ValidationError as exc:
                 # Filter out errors for injected arguments
                 injected = self._injected_args.get(call["name"])
@@ -1611,6 +1649,10 @@ class ToolNode(RunnableCallable):
         # (2 and 3 can happen in a "supervisor w/ tools" multi-agent architecture)
         except GraphBubbleUp:
             raise
+        except HostExecutionDenied as exc:
+            outcome = ExecutionOutcome.DENIED_BEFORE_DISPATCH
+            post_result = self._security_denial(call, Decision(Verdict.DENY, str(exc)))
+            return post_result
         except Exception as e:
             # Determine which exception types are handled
             handled_types: tuple[type[Exception], ...]

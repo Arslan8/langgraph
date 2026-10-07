@@ -1,0 +1,274 @@
+"""Trusted startup shim for the Linux sandbox executor.
+
+This module is an implementation detail. It applies resource and syscall
+restrictions before importing the operator-selected tool entry point.
+"""
+
+from __future__ import annotations
+
+import asyncio
+import contextlib
+import ctypes
+import errno
+import importlib.util
+import inspect
+import io
+import json
+import math
+import resource
+import sys
+from collections.abc import Mapping
+from typing import Any
+
+_MAX_FRAME = 1_048_576
+_ALLOWED_SYSCALLS = (
+    "access",
+    "arch_prctl",
+    "brk",
+    "clock_gettime",
+    "clock_nanosleep",
+    "close",
+    "dup",
+    "dup2",
+    "dup3",
+    "epoll_create1",
+    "epoll_ctl",
+    "epoll_pwait",
+    "epoll_wait",
+    "eventfd2",
+    "exit",
+    "exit_group",
+    "faccessat",
+    "faccessat2",
+    "fcntl",
+    "fdatasync",
+    "fstat",
+    "fsync",
+    "ftruncate",
+    "futex",
+    "getcwd",
+    "getdents64",
+    "getegid",
+    "geteuid",
+    "getgid",
+    "getpid",
+    "getppid",
+    "getrandom",
+    "gettid",
+    "getuid",
+    "ioctl",
+    "lseek",
+    "madvise",
+    "mkdir",
+    "mkdirat",
+    "mmap",
+    "mprotect",
+    "mremap",
+    "munmap",
+    "nanosleep",
+    "newfstatat",
+    "open",
+    "openat",
+    "pipe",
+    "pipe2",
+    "poll",
+    "ppoll",
+    "pread64",
+    "prlimit64",
+    "pselect6",
+    "read",
+    "readlink",
+    "readlinkat",
+    "readv",
+    "restart_syscall",
+    "rmdir",
+    "rseq",
+    "rt_sigaction",
+    "rt_sigprocmask",
+    "rt_sigreturn",
+    "sched_getaffinity",
+    "sched_yield",
+    "select",
+    "set_robust_list",
+    "set_tid_address",
+    "sigaltstack",
+    "stat",
+    "statx",
+    "sysinfo",
+    "truncate",
+    "uname",
+    "unlink",
+    "unlinkat",
+    "write",
+    "writev",
+)
+
+
+def main() -> int:
+    """Run one request after a parent-verified startup barrier."""
+    protocol_output = sys.stdout
+    event_loop: asyncio.AbstractEventLoop | None = None
+    try:
+        request = _read_request()
+        _apply_limits(request.get("limits"))
+        if bool(request.get("asynchronous")):
+            event_loop = asyncio.new_event_loop()
+        _apply_seccomp()
+        _write(
+            protocol_output,
+            {"plan_digest": request["plan_digest"], "status": "ready"},
+        )
+        if sys.stdin.readline(16) != "GO\n":
+            return 73
+        result = _invoke(request, event_loop)
+        _write(protocol_output, {"result": _json_value(result), "status": "ok"})
+        return 0
+    except BaseException as exc:
+        try:
+            _write(
+                protocol_output,
+                {"error_type": type(exc).__name__, "status": "error"},
+            )
+        except BaseException:
+            pass
+        return 70
+    finally:
+        if event_loop is not None:
+            event_loop.close()
+
+
+def _read_request() -> Mapping[str, Any]:
+    line = sys.stdin.readline(_MAX_FRAME + 1)
+    if not line or len(line) > _MAX_FRAME or not line.endswith("\n"):
+        raise ValueError("invalid request frame")
+    value = json.loads(line)
+    if not isinstance(value, dict):
+        raise ValueError("request must be an object")
+    required = {
+        "args",
+        "artifact_path",
+        "call_id",
+        "entrypoint",
+        "plan_digest",
+        "tool_name",
+    }
+    if not required.issubset(value):
+        raise ValueError("request is missing required fields")
+    return value
+
+
+def _apply_limits(raw: object) -> None:
+    limits = raw if isinstance(raw, Mapping) else {}
+    cpu_ms = limits.get("cpu_ms")
+    if isinstance(cpu_ms, int):
+        seconds = max(1, math.ceil(cpu_ms / 1000))
+        resource.setrlimit(resource.RLIMIT_CPU, (seconds, seconds))
+    memory = limits.get("memory_bytes")
+    if isinstance(memory, int):
+        resource.setrlimit(resource.RLIMIT_AS, (memory, memory))
+    nofile = limits.get("nofile")
+    if isinstance(nofile, int):
+        resource.setrlimit(resource.RLIMIT_NOFILE, (nofile, nofile))
+    pids = limits.get("pids")
+    if isinstance(pids, int):
+        resource.setrlimit(resource.RLIMIT_NPROC, (pids, pids))
+
+
+def _apply_seccomp() -> None:
+    library = ctypes.CDLL("libseccomp.so.2", use_errno=True)
+    library.seccomp_init.argtypes = [ctypes.c_uint32]
+    library.seccomp_init.restype = ctypes.c_void_p
+    library.seccomp_syscall_resolve_name.argtypes = [ctypes.c_char_p]
+    library.seccomp_syscall_resolve_name.restype = ctypes.c_int
+    library.seccomp_rule_add.argtypes = [
+        ctypes.c_void_p,
+        ctypes.c_uint32,
+        ctypes.c_int,
+        ctypes.c_uint,
+    ]
+    library.seccomp_rule_add.restype = ctypes.c_int
+    library.seccomp_load.argtypes = [ctypes.c_void_p]
+    library.seccomp_load.restype = ctypes.c_int
+    library.seccomp_release.argtypes = [ctypes.c_void_p]
+    allow = ctypes.c_uint32(0x7FFF0000)
+    deny = ctypes.c_uint32(0x00050000 | errno.EPERM)
+    context = library.seccomp_init(deny)
+    if not context:
+        raise OSError("seccomp initialization failed")
+    try:
+        for name in _ALLOWED_SYSCALLS:
+            number = library.seccomp_syscall_resolve_name(name.encode())
+            if number < 0:
+                continue
+            if library.seccomp_rule_add(context, allow, number, 0) != 0:
+                raise OSError(f"seccomp rule failed:{name}")
+        if library.seccomp_load(context) != 0:
+            raise OSError("seccomp activation failed")
+    finally:
+        library.seccomp_release(context)
+
+
+def _invoke(
+    request: Mapping[str, Any], event_loop: asyncio.AbstractEventLoop | None
+) -> Any:
+    entrypoint = str(request["entrypoint"])
+    module_name, _, attribute_path = entrypoint.partition(":")
+    artifact_path = str(request["artifact_path"])
+    module_spec = importlib.util.spec_from_file_location(module_name, artifact_path)
+    if module_spec is None or module_spec.loader is None:
+        raise ImportError("sandbox artifact cannot be loaded")
+    module = importlib.util.module_from_spec(module_spec)
+    sys.modules[module_name] = module
+    module_spec.loader.exec_module(module)
+    target: Any = module
+    for part in attribute_path.split("."):
+        target = getattr(target, part)
+    args = request["args"]
+    if not isinstance(args, dict):
+        raise TypeError("tool arguments must be an object")
+    call = {
+        "args": args,
+        "id": str(request["call_id"]),
+        "name": str(request["tool_name"]),
+        "type": "tool_call",
+    }
+    with (
+        contextlib.redirect_stdout(io.StringIO()),
+        contextlib.redirect_stderr(io.StringIO()),
+    ):
+        if bool(request.get("asynchronous")) and hasattr(target, "ainvoke"):
+            if event_loop is None:
+                raise RuntimeError("async worker event loop is unavailable")
+            return event_loop.run_until_complete(target.ainvoke(call))
+        if hasattr(target, "invoke"):
+            return target.invoke(call)
+        result = target(**args)
+        if inspect.isawaitable(result):
+            if event_loop is None:
+                raise RuntimeError("async result requires an async worker")
+            return event_loop.run_until_complete(result)
+        return result
+
+
+def _json_value(value: object) -> Any:
+    if value is None or type(value) in {bool, int, float, str}:
+        return value
+    if isinstance(value, list | tuple) and type(value) in {list, tuple}:
+        return [_json_value(item) for item in value]
+    if isinstance(value, dict) and type(value) is dict:
+        if any(type(key) is not str for key in value):
+            raise ValueError("result mappings require string keys")
+        return {key: _json_value(item) for key, item in value.items()}
+    raise TypeError(f"result type is not supported:{type(value).__name__}")
+
+
+def _write(stream: Any, value: Mapping[str, Any]) -> None:
+    encoded = json.dumps(value, sort_keys=True, separators=(",", ":"))
+    if len(encoded) > _MAX_FRAME:
+        raise ValueError("response frame exceeds limit")
+    stream.write(encoded + "\n")
+    stream.flush()
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

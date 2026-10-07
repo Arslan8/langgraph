@@ -1,0 +1,976 @@
+"""Linux bubblewrap executor for host-confined tool entry points."""
+
+from __future__ import annotations
+
+import asyncio
+import hashlib
+import hmac
+import json
+import os
+import platform
+import secrets
+import select
+import shutil
+import subprocess
+import tempfile
+import time
+from collections import deque
+from collections.abc import Mapping, Sequence
+from dataclasses import dataclass, replace
+from pathlib import Path
+from threading import RLock
+from types import MappingProxyType
+from typing import Any
+
+from langgraph.prebuilt.security.enforcement import (
+    ActivationEvidence,
+    ActivationReceipt,
+    AdapterPlan,
+    AuthorityDomain,
+    EnforcementCoordinator,
+    EnforcementObligation,
+    EnforcementPlan,
+    ExecutionContext,
+    Grant,
+    GrantRule,
+    HostAttestation,
+    ObligationKind,
+    SupportAssessment,
+    SupportLevel,
+    compile_grant,
+    compile_obligations,
+)
+from langgraph.prebuilt.security.execution import HostExecutionDenied
+from langgraph.prebuilt.security.policy import (
+    MandatoryPolicyBackend,
+    TypedPolicyBackend,
+)
+from langgraph.prebuilt.security.profile import ProfileDocument
+from langgraph.prebuilt.security.types import PolicyConstraint, Principal, ToolCall
+
+_ADAPTER_ID = "linux-bubblewrap-v1"
+_SUPPORTED_LIMITS = frozenset({"cpu_ms", "memory_bytes", "pids", "nofile", "wall_ms"})
+_WRITE_OPERATIONS = frozenset({"write", "create", "delete", "truncate"})
+_DEFAULT_LIMITS = MappingProxyType(
+    {
+        "cpu_ms": 30_000,
+        "memory_bytes": 1_073_741_824,
+        "nofile": 64,
+        "pids": 1,
+        "wall_ms": 30_000,
+    }
+)
+
+
+@dataclass(frozen=True, slots=True)
+class LinuxToolSpec:
+    """Trusted manifest entry for one tool imported inside the sandbox.
+
+    `entrypoint` has the form `package.module:attribute`. `artifact_path` and
+    `artifact_digest` identify the exact operator-verified module file bound
+    into the per-call grant. Every other module needed to import the entry
+    point must live under an explicit runtime root.
+    """
+
+    entrypoint: str
+    artifact_path: Path
+    artifact_digest: str
+
+    def __post_init__(self) -> None:
+        module, separator, attribute = self.entrypoint.partition(":")
+        if (
+            not separator
+            or not module
+            or not attribute
+            or "<locals>" in attribute
+            or any(not part.isidentifier() for part in module.split("."))
+            or any(not part.isidentifier() for part in attribute.split("."))
+        ):
+            raise ValueError(
+                "Linux tool entrypoint must be importable module:attribute"
+            )
+        artifact = _canonical_existing_path(self.artifact_path)
+        if not artifact.is_file():
+            raise ValueError("Linux tool artifact_path must name a file")
+        if (
+            len(self.artifact_digest) != 64
+            or _file_digest(artifact) != self.artifact_digest
+        ):
+            raise ValueError("Linux tool artifact digest does not match artifact_path")
+        object.__setattr__(self, "artifact_path", artifact)
+
+
+class LinuxSandboxExecutor:
+    """Execute manifest tools in a fresh, fail-closed bubblewrap worker.
+
+    The backend currently enforces filesystem grants, an isolated no-network
+    namespace, a default-deny seccomp allowlist, and resource ceilings. Network,
+    service, credential, delegation, and executable grants are rejected until a
+    broker or a more capable Linux adapter owns their exact obligations.
+    """
+
+    def __init__(
+        self,
+        profiles: ProfileDocument,
+        tools: Mapping[str, LinuxToolSpec],
+        *,
+        runtime_roots: Sequence[str | Path],
+        principal_bindings: Mapping[str, Mapping[str, object]] | None = None,
+        policy_backend: MandatoryPolicyBackend | None = None,
+        bubblewrap_path: str | Path = "bwrap",
+        python_executable: str | Path | None = None,
+        startup_timeout_s: float = 5.0,
+        default_wall_timeout_s: float = 30.0,
+        default_limits: Mapping[str, int] | None = None,
+        attestation_key: bytes | None = None,
+    ) -> None:
+        if platform.system() != "Linux":
+            raise RuntimeError("LinuxSandboxExecutor requires Linux")
+        bwrap = shutil.which(os.fspath(bubblewrap_path))
+        if bwrap is None:
+            raise RuntimeError("bubblewrap is required for Linux host execution")
+        python = Path(python_executable or os.sys.executable).resolve()
+        if not python.is_file():
+            raise ValueError("python_executable must resolve to an existing file")
+        roots = tuple(_canonical_existing_path(item) for item in runtime_roots)
+        if not roots:
+            raise ValueError("at least one explicit runtime root is required")
+        if startup_timeout_s <= 0 or default_wall_timeout_s <= 0:
+            raise ValueError("Linux sandbox timeouts must be positive")
+        limits = dict(_DEFAULT_LIMITS if default_limits is None else default_limits)
+        if set(limits) != _SUPPORTED_LIMITS or any(
+            type(value) is not int or value <= 0 for value in limits.values()
+        ):
+            raise ValueError(
+                "default_limits must provide positive cpu_ms, memory_bytes, "
+                "pids, nofile, and wall_ms values"
+            )
+        copied_tools = dict(tools)
+        if not copied_tools:
+            raise ValueError("Linux sandbox requires at least one tool manifest")
+        unknown = set(copied_tools).difference(profiles.tools)
+        if unknown:
+            raise ValueError(
+                "Linux tool manifests lack profiles: " + ", ".join(sorted(unknown))
+            )
+        wrong_locus = {
+            name for name in copied_tools if profiles.tools[name].runs != "linux"
+        }
+        if wrong_locus:
+            raise ValueError(
+                "Linux tool profiles must declare 'runs linux': "
+                + ", ".join(sorted(wrong_locus))
+            )
+        self.profiles = profiles
+        self.tools = MappingProxyType(copied_tools)
+        self.runtime_roots = roots
+        self.principal_bindings = MappingProxyType(
+            {
+                name: MappingProxyType(dict(values))
+                for name, values in (principal_bindings or {}).items()
+            }
+        )
+        self.policy_backend = policy_backend or TypedPolicyBackend()
+        self.bubblewrap_path = bwrap
+        self.python_executable = python
+        self._worker_script = Path(__file__).with_name("_linux_worker.py").resolve()
+        self.startup_timeout_s = startup_timeout_s
+        self.default_wall_timeout_s = default_wall_timeout_s
+        self.default_limits = MappingProxyType(limits)
+        self._adapter = _LinuxBubblewrapAdapter(
+            bwrap,
+            attestation_key or secrets.token_bytes(32),
+        )
+        self._coordinator = EnforcementCoordinator([self._adapter], self._adapter)
+        self._receipts: deque[ActivationReceipt] = deque(maxlen=1024)
+        self._receipt_lock = RLock()
+
+    def validate_tools(self, tool_names: Sequence[str]) -> None:
+        """Require a closed manifest and Linux profile for every reachable tool."""
+        missing = set(tool_names).difference(self.tools)
+        if missing:
+            raise ValueError(
+                "Linux execution missing tool manifests: " + ", ".join(sorted(missing))
+            )
+
+    def activation_receipts(self) -> tuple[ActivationReceipt, ...]:
+        """Return a bounded snapshot of worker-specific activation evidence."""
+        with self._receipt_lock:
+            return tuple(self._receipts)
+
+    def invoke(
+        self,
+        principal: Principal,
+        call: ToolCall,
+        constraints: Sequence[PolicyConstraint],
+    ) -> Any:
+        """Compile, activate, and execute one call in a fresh Linux worker."""
+        return self._invoke(principal, call, constraints, asynchronous=False)
+
+    async def ainvoke(
+        self,
+        principal: Principal,
+        call: ToolCall,
+        constraints: Sequence[PolicyConstraint],
+    ) -> Any:
+        """Compile, activate, and execute one async call off the event loop."""
+        return await asyncio.to_thread(
+            self._invoke,
+            principal,
+            call,
+            constraints,
+            asynchronous=True,
+        )
+
+    def _invoke(
+        self,
+        principal: Principal,
+        call: ToolCall,
+        constraints: Sequence[PolicyConstraint],
+        *,
+        asynchronous: bool,
+    ) -> Any:
+        spec = self.tools.get(call.tool.name)
+        if spec is None:
+            raise HostExecutionDenied("host:tool_manifest_missing")
+        grant, ledger = self._compile_grant(principal, call, spec)
+        filtered = self.policy_backend.filter(grant, ledger, constraints)
+        if not filtered.allowed or filtered.grant is None:
+            raise HostExecutionDenied(f"host:{filtered.reason}")
+        grant = filtered.grant
+        obligations = compile_obligations(grant)
+        challenge = secrets.token_hex(16)
+        host = self._adapter.attest(challenge)
+        negotiation = self._coordinator.negotiate(
+            grant,
+            filtered.ledger,
+            obligations,
+            host,
+            expected_nonce=challenge,
+        )
+        if not negotiation.allowed or negotiation.plan is None:
+            raise HostExecutionDenied(f"host:{negotiation.reason}")
+        return self._run_worker(
+            principal,
+            call,
+            spec,
+            grant,
+            host,
+            negotiation.plan,
+            asynchronous=asynchronous,
+        )
+
+    def _compile_grant(
+        self, principal: Principal, call: ToolCall, spec: LinuxToolSpec
+    ) -> tuple[Grant, Any]:
+        profile = self.profiles.principals.get(principal.user_id)
+        if profile is None:
+            raise HostExecutionDenied("host:principal_profile_missing")
+        if profile.roles != principal.roles or profile.scopes != principal.scopes:
+            raise HostExecutionDenied("host:principal_profile_mismatch")
+        bindings: dict[str, object] = dict(call.args)
+        bindings.update(call.normalized)
+        try:
+            evaluation = self.profiles.evaluate(
+                call.tool.name,
+                principal.user_id,
+                bindings,
+                principal_bindings=self.principal_bindings,
+            )
+        except (KeyError, TypeError, ValueError) as exc:
+            raise HostExecutionDenied("host:profile_evaluation_failed") from exc
+        if evaluation.denied:
+            raise HostExecutionDenied(f"host:dac:{evaluation.reason or 'deny'}")
+        compiled = compile_grant(
+            evaluation,
+            principal_id=principal.user_id,
+            session_id=principal.session_id,
+            artifact_digest=spec.artifact_digest,
+            call_id=call.call_id,
+            normalized_intent_digest=_digest(
+                {
+                    "args": _json_value(call.args),
+                    "normalized": _json_value(call.normalized),
+                    "tool": call.tool.name,
+                }
+            ),
+            policy_digest=_digest({"stage": "pre-mac"}),
+            baseline_rules=self._baseline_rules(spec),
+        )
+        return compiled.grant, compiled.ledger
+
+    def _baseline_rules(self, spec: LinuxToolSpec) -> tuple[GrantRule, ...]:
+        rules = [
+            GrantRule(
+                "runtime:usr",
+                AuthorityDomain.RUNTIME,
+                "read",
+                "/usr",
+                {"subtree": True},
+                baseline=True,
+            ),
+            GrantRule(
+                "runtime:tmp:read",
+                AuthorityDomain.RUNTIME,
+                "read",
+                "/tmp",
+                {"subtree": True, "ephemeral": True},
+                baseline=True,
+            ),
+            GrantRule(
+                "runtime:tmp:write",
+                AuthorityDomain.RUNTIME,
+                "write",
+                "/tmp",
+                {"subtree": True, "ephemeral": True},
+                baseline=True,
+            ),
+            GrantRule(
+                "runtime:tmp:create",
+                AuthorityDomain.RUNTIME,
+                "create",
+                "/tmp",
+                {"subtree": True, "ephemeral": True},
+                baseline=True,
+            ),
+            GrantRule(
+                "runtime:tmp:delete",
+                AuthorityDomain.RUNTIME,
+                "delete",
+                "/tmp",
+                {"subtree": True, "ephemeral": True},
+                baseline=True,
+            ),
+            GrantRule(
+                "runtime:tmp:truncate",
+                AuthorityDomain.RUNTIME,
+                "truncate",
+                "/tmp",
+                {"subtree": True, "ephemeral": True},
+                baseline=True,
+            ),
+            GrantRule(
+                "runtime:worker",
+                AuthorityDomain.RUNTIME,
+                "read",
+                os.fspath(self._worker_script),
+                baseline=True,
+            ),
+            GrantRule(
+                "runtime:artifact",
+                AuthorityDomain.RUNTIME,
+                "read",
+                os.fspath(spec.artifact_path),
+                baseline=True,
+            ),
+        ]
+        for index, root in enumerate(self.runtime_roots):
+            if root == Path("/usr") or Path("/usr") in root.parents:
+                continue
+            rules.append(
+                GrantRule(
+                    f"runtime:root:{index}",
+                    AuthorityDomain.RUNTIME,
+                    "read",
+                    os.fspath(root),
+                    {"subtree": root.is_dir()},
+                    baseline=True,
+                )
+            )
+        for name, maximum in self.default_limits.items():
+            rules.append(
+                GrantRule(
+                    f"runtime:limit:{name}",
+                    AuthorityDomain.RESOURCE_LIMIT,
+                    "limit",
+                    name,
+                    {"maximum": maximum},
+                    baseline=True,
+                )
+            )
+        return tuple(rules)
+
+    def _run_worker(
+        self,
+        principal: Principal,
+        call: ToolCall,
+        spec: LinuxToolSpec,
+        grant: Grant,
+        host: HostAttestation,
+        plan: EnforcementPlan,
+        *,
+        asynchronous: bool,
+    ) -> Any:
+        adapter_plan = next(
+            item for item in plan.adapter_plans if item.adapter_id == _ADAPTER_ID
+        )
+        command, inherited_fds, status_read, status_write, artifact_directory = (
+            self._worker_command(adapter_plan, spec)
+        )
+        request = {
+            "args": _json_value(call.args),
+            "artifact_path": os.fspath(spec.artifact_path),
+            "asynchronous": asynchronous,
+            "call_id": call.call_id,
+            "entrypoint": spec.entrypoint,
+            "limits": _plain_mapping(adapter_plan.payload.get("limits", {})),
+            "plan_digest": adapter_plan.native_plan_digest,
+            "tool_name": call.tool.name,
+        }
+        process: subprocess.Popen[str] | None = None
+        released = False
+        try:
+            process = subprocess.Popen(
+                command,
+                stdin=subprocess.PIPE,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                text=True,
+                bufsize=1,
+                close_fds=True,
+                pass_fds=(*inherited_fds, status_write),
+            )
+            os.close(status_write)
+            status_write = -1
+            for descriptor in inherited_fds:
+                os.close(descriptor)
+            inherited_fds = ()
+            if process.stdin is None or process.stdout is None:
+                raise HostExecutionDenied("host:worker_pipe_failed")
+            process.stdin.write(json.dumps(request, sort_keys=True) + "\n")
+            process.stdin.flush()
+            status = _read_fd_json(status_read, self.startup_timeout_s)
+            child_pid = int(status["child-pid"])
+            ready = _readline_json(process, self.startup_timeout_s)
+            _remove_private_artifact(artifact_directory)
+            artifact_directory = None
+            if ready != {
+                "plan_digest": adapter_plan.native_plan_digest,
+                "status": "ready",
+            }:
+                raise HostExecutionDenied("host:worker_startup_protocol")
+            context = _execution_context(child_pid)
+            self._adapter.register_pending(adapter_plan, context)
+            activation_nonce = secrets.token_hex(16)
+            receipt = self._coordinator.activate(
+                grant,
+                plan,
+                host,
+                context,
+                nonce=activation_nonce,
+            )
+            if not self._coordinator.validate_receipt(
+                receipt, grant, plan, host, context
+            ):
+                raise HostExecutionDenied("host:activation_receipt_invalid")
+            with self._receipt_lock:
+                self._receipts.append(receipt)
+            process.stdin.write("GO\n")
+            process.stdin.flush()
+            released = True
+            wall_timeout = _wall_timeout(
+                adapter_plan.payload, self.default_wall_timeout_s
+            )
+            response = _readline_json(process, wall_timeout)
+            return_code = process.wait(timeout=1.0)
+            if response.get("status") == "ok" and "result" in response:
+                if return_code != 0:
+                    raise RuntimeError("sandboxed tool exited unsuccessfully")
+                return response["result"]
+            error_type = str(response.get("error_type", "Exception"))
+            raise RuntimeError(f"sandboxed tool failed:{error_type}")
+        except HostExecutionDenied:
+            raise
+        except TimeoutError as exc:
+            reason = "host:worker_startup_timeout" if not released else "tool_timeout"
+            if released:
+                raise RuntimeError(reason) from exc
+            raise HostExecutionDenied(reason) from exc
+        except (KeyError, OSError, ValueError, subprocess.SubprocessError) as exc:
+            if released:
+                raise RuntimeError("sandboxed tool outcome is indeterminate") from exc
+            raise HostExecutionDenied("host:worker_activation_failed") from exc
+        finally:
+            if status_read >= 0:
+                os.close(status_read)
+            if status_write >= 0:
+                os.close(status_write)
+            for descriptor in inherited_fds:
+                os.close(descriptor)
+            if process is not None and process.poll() is None:
+                process.kill()
+                process.wait(timeout=2.0)
+            if artifact_directory is not None:
+                _remove_private_artifact(artifact_directory)
+
+    def _worker_command(
+        self, plan: AdapterPlan, spec: LinuxToolSpec
+    ) -> tuple[list[str], tuple[int, ...], int, int, Path]:
+        mounts = tuple(plan.payload.get("mounts", ()))
+        descriptors: list[int] = []
+        mount_args: list[str] = []
+        destinations: set[str] = set()
+        artifact_descriptor, artifact_directory = _verified_artifact_fd(spec)
+        for raw in mounts:
+            if not isinstance(raw, Mapping):
+                raise HostExecutionDenied("host:invalid_native_plan")
+            path = os.fspath(raw.get("path", ""))
+            mode = str(raw.get("mode", ""))
+            if path == "/tmp":
+                continue
+            canonical = _canonical_existing_path(path)
+            if os.fspath(canonical) != path:
+                raise HostExecutionDenied("host:noncanonical_mount")
+            descriptor = (
+                artifact_descriptor
+                if canonical == spec.artifact_path
+                else os.open(path, os.O_PATH | os.O_CLOEXEC | os.O_NOFOLLOW)
+            )
+            descriptors.append(descriptor)
+            destinations.add(path)
+            mount_args.extend(
+                ["--bind-fd" if mode == "rw" else "--ro-bind-fd", str(descriptor), path]
+            )
+        directories = sorted(
+            {
+                parent
+                for destination in destinations
+                for parent in _missing_parent_directories(destination)
+            },
+            key=lambda value: (value.count("/"), value),
+        )
+        status_read, status_write = os.pipe2(os.O_CLOEXEC)
+        command = [
+            self.bubblewrap_path,
+            "--unshare-all",
+            "--unshare-user",
+            "--die-with-parent",
+            "--new-session",
+            "--disable-userns",
+            "--assert-userns-disabled",
+            "--clearenv",
+            "--cap-drop",
+            "ALL",
+            "--ro-bind",
+            "/usr",
+            "/usr",
+            "--symlink",
+            "usr/bin",
+            "/bin",
+            "--symlink",
+            "usr/lib",
+            "/lib",
+            "--symlink",
+            "usr/lib64",
+            "/lib64",
+            "--tmpfs",
+            "/tmp",
+        ]
+        for directory in directories:
+            command.extend(["--dir", directory])
+        command.extend(mount_args)
+        command.extend(
+            [
+                "--setenv",
+                "PATH",
+                "/usr/bin",
+                "--setenv",
+                "PYTHONPATH",
+                ":".join(os.fspath(item) for item in self.runtime_roots),
+                "--setenv",
+                "PYTHONDONTWRITEBYTECODE",
+                "1",
+                "--setenv",
+                "PYTHONUNBUFFERED",
+                "1",
+                "--chdir",
+                "/tmp",
+                "--json-status-fd",
+                str(status_write),
+                "--",
+                os.fspath(self.python_executable),
+                os.fspath(self._worker_script),
+            ]
+        )
+        return (
+            command,
+            tuple(descriptors),
+            status_read,
+            status_write,
+            artifact_directory,
+        )
+
+
+class _LinuxBubblewrapAdapter:
+    """Exact-obligation adapter used by `LinuxSandboxExecutor`."""
+
+    def __init__(self, bwrap_path: str, key: bytes) -> None:
+        self.bwrap_path = bwrap_path
+        self._key = key
+        self._pending: dict[str, str] = {}
+        self._lock = RLock()
+        self._boot_id = Path("/proc/sys/kernel/random/boot_id").read_text().strip()
+        self._binary_digest = _file_digest(Path(bwrap_path))
+
+    @property
+    def adapter_id(self) -> str:
+        """Return the versioned Linux adapter identity."""
+        return _ADAPTER_ID
+
+    def attest(self, nonce: str) -> HostAttestation:
+        """Return fresh locally authenticated host evidence."""
+        now = time.time()
+        attestation = HostAttestation(
+            "slanggraph-local-linux",
+            nonce,
+            self._boot_id,
+            "linux",
+            now,
+            now + 30.0,
+            frozenset(
+                {
+                    "bubblewrap",
+                    "filesystem",
+                    "namespace:no-network",
+                    "resource-limits",
+                    "seccomp:minimal",
+                }
+            ),
+            _namespace_links(os.getpid()),
+            {
+                "adapter": self.adapter_id,
+                "bubblewrap_digest": self._binary_digest,
+                "kernel": platform.release(),
+            },
+            "pending",
+        )
+        return replace(attestation, signature=self._sign(attestation.digest))
+
+    def verify(self, attestation: HostAttestation) -> bool:
+        """Verify local host evidence against this executor's trust key."""
+        return (
+            attestation.issuer == "slanggraph-local-linux"
+            and attestation.boot_id == self._boot_id
+            and hmac.compare_digest(
+                attestation.signature, self._sign(attestation.digest)
+            )
+        )
+
+    def assess(
+        self, obligation: EnforcementObligation, host: HostAttestation
+    ) -> SupportAssessment:
+        """Report support only for guarantees this backend actually activates."""
+        support = SupportLevel.UNSUPPORTED
+        reason = "linux_adapter_unsupported"
+        if obligation.kind is ObligationKind.DENY_COMPLEMENT:
+            support = SupportLevel.EXACT
+            reason = "isolated_empty_authority_domain"
+        elif obligation.domain in {AuthorityDomain.FILESYSTEM, AuthorityDomain.RUNTIME}:
+            support, reason = _assess_path_obligation(obligation)
+        elif (
+            obligation.domain is AuthorityDomain.PROCESS
+            and obligation.operation == "syscall_set"
+            and obligation.selector == "minimal"
+        ):
+            support = SupportLevel.EXACT
+            reason = "seccomp_minimal"
+        elif (
+            obligation.domain is AuthorityDomain.RESOURCE_LIMIT
+            and obligation.kind is ObligationKind.RESOURCE_LIMIT
+            and obligation.selector in _SUPPORTED_LIMITS
+        ):
+            support = SupportLevel.EXACT
+            reason = "setrlimit_or_supervisor"
+        return SupportAssessment(
+            self.adapter_id,
+            obligation.obligation_id,
+            support,
+            reason,
+            ("worker_namespace", "activation_receipt")
+            if support is not SupportLevel.UNSUPPORTED
+            else (),
+        )
+
+    def lower(
+        self,
+        grant: Grant,
+        obligations: Sequence[EnforcementObligation],
+        host: HostAttestation,
+    ) -> AdapterPlan:
+        """Compile assigned obligations into stable mounts and resource limits."""
+        del host
+        rules = {rule.rule_id: rule for rule in grant.rules}
+        path_rules = [
+            rules[item.rule_id]
+            for item in obligations
+            if item.kind is ObligationKind.OPERATE
+            and item.domain in {AuthorityDomain.FILESYSTEM, AuthorityDomain.RUNTIME}
+        ]
+        operations: dict[tuple[AuthorityDomain, str], set[str]] = {}
+        for rule in path_rules:
+            operations.setdefault((rule.domain, rule.selector), set()).add(
+                rule.operation
+            )
+        for (domain, selector), granted in operations.items():
+            if domain is AuthorityDomain.RUNTIME:
+                continue
+            required = {"read", "write", "truncate"}
+            path = _canonical_existing_path(selector)
+            if path.is_dir():
+                required.update({"create", "delete"})
+            if granted.intersection(_WRITE_OPERATIONS) and not required.issubset(
+                granted
+            ):
+                raise ValueError(f"inexact_writable_mount:{selector}")
+        mounts: dict[str, str] = {}
+        subtrees: dict[str, bool] = {}
+        for rule in path_rules:
+            mode = "rw" if rule.operation in _WRITE_OPERATIONS | {"write"} else "ro"
+            prior = mounts.get(rule.selector)
+            mounts[rule.selector] = "rw" if "rw" in {prior, mode} else "ro"
+            subtrees[rule.selector] = bool(rule.conditions.get("subtree"))
+        limits: dict[str, int] = {}
+        for item in obligations:
+            if item.kind is ObligationKind.RESOURCE_LIMIT:
+                maximum = item.conditions.get("maximum")
+                if not isinstance(maximum, int) or maximum <= 0:
+                    raise ValueError(f"invalid_resource_limit:{item.obligation_id}")
+                prior = limits.get(item.selector)
+                limits[item.selector] = (
+                    maximum if prior is None else min(prior, maximum)
+                )
+        payload = {
+            "limits": limits,
+            "mounts": [
+                {"mode": mounts[path], "path": path, "subtree": subtrees[path]}
+                for path in sorted(mounts)
+            ],
+            "network": "isolated",
+            "seccomp": "minimal",
+        }
+        native_digest = _digest(payload)
+        return AdapterPlan(
+            self.adapter_id,
+            frozenset(item.obligation_id for item in obligations),
+            native_digest,
+            payload,
+        )
+
+    def register_pending(self, plan: AdapterPlan, context: ExecutionContext) -> None:
+        """Bind one started-but-blocked worker to its native plan."""
+        with self._lock:
+            self._pending[context.digest] = plan.native_plan_digest
+
+    def activate(
+        self, plan: AdapterPlan, context: ExecutionContext, nonce: str
+    ) -> ActivationEvidence:
+        """Consume a blocked worker registration and sign activation evidence."""
+        with self._lock:
+            pending = self._pending.pop(context.digest, None)
+        if pending != plan.native_plan_digest:
+            raise ValueError("Linux worker was not started with this native plan")
+        now = time.time()
+        evidence = ActivationEvidence(
+            self.adapter_id,
+            plan.native_plan_digest,
+            context.digest,
+            nonce,
+            plan.obligation_ids,
+            now,
+            now + 30.0,
+            "pending",
+        )
+        return replace(evidence, signature=self._sign(_activation_payload(evidence)))
+
+    def verify_activation(self, evidence: ActivationEvidence) -> bool:
+        """Verify worker-bound activation evidence."""
+        return hmac.compare_digest(
+            evidence.signature, self._sign(_activation_payload(evidence))
+        )
+
+    def _sign(self, value: str) -> str:
+        return hmac.new(self._key, value.encode(), hashlib.sha256).hexdigest()
+
+
+def _assess_path_obligation(
+    obligation: EnforcementObligation,
+) -> tuple[SupportLevel, str]:
+    if obligation.kind is not ObligationKind.OPERATE:
+        return SupportLevel.UNSUPPORTED, "path_obligation_kind_unsupported"
+    if obligation.operation not in {"read", *_WRITE_OPERATIONS}:
+        return SupportLevel.UNSUPPORTED, "path_operation_unsupported"
+    if obligation.conditions.get("exclude_paths") or obligation.conditions.get(
+        "exclude_subtrees"
+    ):
+        return SupportLevel.UNSUPPORTED, "path_exclusion_requires_broker"
+    try:
+        path = _canonical_existing_path(obligation.selector)
+    except (OSError, ValueError):
+        return SupportLevel.UNSUPPORTED, "path_missing_or_noncanonical"
+    if path.is_dir() and not bool(obligation.conditions.get("subtree")):
+        return SupportLevel.UNSUPPORTED, "exact_directory_requires_broker"
+    return SupportLevel.EXACT, "stable_bind_mount"
+
+
+def _verified_artifact_fd(spec: LinuxToolSpec) -> tuple[int, Path]:
+    """Copy verified artifact bytes into a sealed, worker-bound file."""
+    directory = Path(tempfile.mkdtemp(prefix="slanggraph-artifact-"))
+    directory.chmod(0o700)
+    artifact = directory / "artifact.py"
+    digest = hashlib.sha256()
+    try:
+        with spec.artifact_path.open("rb") as source, artifact.open("xb") as target:
+            for chunk in iter(lambda: source.read(1024 * 1024), b""):
+                digest.update(chunk)
+                target.write(chunk)
+            target.flush()
+            os.fsync(target.fileno())
+        if digest.hexdigest() != spec.artifact_digest:
+            raise HostExecutionDenied("host:artifact_changed")
+        artifact.chmod(0o400)
+        return (
+            os.open(artifact, os.O_PATH | os.O_CLOEXEC | os.O_NOFOLLOW),
+            directory,
+        )
+    except BaseException:
+        _remove_private_artifact(directory)
+        raise
+
+
+def _remove_private_artifact(directory: Path) -> None:
+    artifact = directory / "artifact.py"
+    if artifact.exists():
+        artifact.unlink()
+    directory.rmdir()
+
+
+def _wall_timeout(payload: Mapping[str, Any], default: float) -> float:
+    limits = payload.get("limits", {})
+    if isinstance(limits, Mapping):
+        value = limits.get("wall_ms")
+        if isinstance(value, int) and value > 0:
+            return value / 1000
+    return default
+
+
+def _execution_context(pid: int) -> ExecutionContext:
+    status = Path(f"/proc/{pid}/status").read_text()
+    credential_lines = [
+        line for line in status.splitlines() if line.startswith(("Uid:", "Gid:", "Cap"))
+    ]
+    stat = Path(f"/proc/{pid}/stat").read_text().split()
+    cgroup = Path(f"/proc/{pid}/cgroup").read_text().strip() or "isolated"
+    boot_id = Path("/proc/sys/kernel/random/boot_id").read_text().strip()
+    return ExecutionContext(
+        worker_id=f"linux-worker:{pid}:{stat[21]}",
+        process_identity=f"pid:{pid}:start:{stat[21]}",
+        boot_id=boot_id,
+        namespaces=_namespace_links(pid),
+        credential_digest=_digest(credential_lines),
+        cgroup_id=cgroup,
+        broker_epoch="no-broker",
+    )
+
+
+def _namespace_links(pid: int) -> Mapping[str, str]:
+    namespace_root = Path(f"/proc/{pid}/ns")
+    names = ("cgroup", "ipc", "mnt", "net", "pid", "user", "uts")
+    return {name: os.readlink(namespace_root / name) for name in names}
+
+
+def _activation_payload(evidence: ActivationEvidence) -> str:
+    return _digest(
+        {
+            "activated_at": evidence.activated_at,
+            "adapter_id": evidence.adapter_id,
+            "context_digest": evidence.context_digest,
+            "expires_at": evidence.expires_at,
+            "native_plan_digest": evidence.native_plan_digest,
+            "nonce": evidence.nonce,
+            "obligation_ids": sorted(evidence.obligation_ids),
+        }
+    )
+
+
+def _read_fd_json(descriptor: int, timeout: float) -> Mapping[str, Any]:
+    ready, _, _ = select.select([descriptor], [], [], timeout)
+    if not ready:
+        raise TimeoutError
+    payload = os.read(descriptor, 16_384)
+    if not payload or len(payload) >= 16_384:
+        raise ValueError("invalid bubblewrap status")
+    value = json.loads(payload)
+    if not isinstance(value, dict):
+        raise ValueError("invalid bubblewrap status")
+    return value
+
+
+def _readline_json(process: subprocess.Popen[str], timeout: float) -> Mapping[str, Any]:
+    if process.stdout is None:
+        raise ValueError("worker stdout is unavailable")
+    ready, _, _ = select.select([process.stdout.fileno()], [], [], timeout)
+    if not ready:
+        raise TimeoutError
+    line = process.stdout.readline(1_048_577)
+    if not line or len(line) > 1_048_576 or not line.endswith("\n"):
+        raise ValueError("invalid worker protocol frame")
+    value = json.loads(line)
+    if not isinstance(value, dict):
+        raise ValueError("invalid worker protocol frame")
+    return value
+
+
+def _canonical_existing_path(value: str | Path) -> Path:
+    raw = Path(value)
+    if not raw.is_absolute():
+        raise ValueError("sandbox paths must be absolute")
+    resolved = raw.resolve(strict=True)
+    if raw != resolved:
+        raise ValueError("sandbox paths must be canonical and symlink-free")
+    return resolved
+
+
+def _missing_parent_directories(value: str) -> tuple[str, ...]:
+    path = Path(value)
+    parents: list[str] = []
+    for parent in reversed(path.parents):
+        text = os.fspath(parent)
+        if text in {"/", "/usr"} or text.startswith("/usr/"):
+            continue
+        parents.append(text)
+    if path.is_dir():
+        parents.append(value)
+    return tuple(dict.fromkeys(parents))
+
+
+def _plain_mapping(value: object) -> dict[str, Any]:
+    if not isinstance(value, Mapping):
+        raise ValueError("expected mapping")
+    return {str(key): _json_value(item) for key, item in value.items()}
+
+
+def _json_value(value: object) -> Any:
+    if value is None or type(value) in {bool, int, float, str}:
+        return value
+    if isinstance(value, list | tuple) and type(value) in {list, tuple}:
+        return [_json_value(item) for item in value]
+    if isinstance(value, Mapping) and type(value) in {dict, MappingProxyType}:
+        if any(type(key) is not str for key in value):
+            raise ValueError("sandbox mappings require string keys")
+        return {key: _json_value(item) for key, item in value.items()}
+    raise ValueError(f"sandbox protocol cannot encode {type(value).__name__}")
+
+
+def _file_digest(path: Path) -> str:
+    digest = hashlib.sha256()
+    with path.open("rb") as stream:
+        for chunk in iter(lambda: stream.read(1024 * 1024), b""):
+            digest.update(chunk)
+    return digest.hexdigest()
+
+
+def _digest(value: object) -> str:
+    encoded = json.dumps(
+        value, sort_keys=True, separators=(",", ":"), default=repr
+    ).encode()
+    return hashlib.sha256(encoded).hexdigest()

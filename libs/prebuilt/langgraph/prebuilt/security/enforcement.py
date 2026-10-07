@@ -829,7 +829,8 @@ class EnforcementCoordinator:
         for adapter_plan in plan.adapter_plans:
             adapter = self._adapters[adapter_plan.adapter_id]
             item = adapter.activate(adapter_plan, context, nonce)
-            _validate_activation(item, adapter_plan, context, nonce, timestamp)
+            validation_time = time.time() if now is None else timestamp
+            _validate_activation(item, adapter_plan, context, nonce, validation_time)
             if not adapter.verify_activation(item):
                 raise ValueError(f"activation evidence rejected:{adapter.adapter_id}")
             evidence.append(item)

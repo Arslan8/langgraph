@@ -10,6 +10,8 @@ Start with the [10-line HOWTO](HOWTO.md), then use the
 [behavior reference](reference.md) and [complete public API reference](api.md).
 The task-oriented [user guide](users/README.md) covers application integration,
 tool authorization, modules, session flow, operations, and deployment boundaries.
+The [Linux host execution guide](users/linux-host-execution.md) configures the
+working reference adapter for untrusted local Python tools.
 Existing applications should follow the [migration guide](migration.md) and
 [worked patterns](workflows.md). The constructive DAC language is specified by
 the [frozen `.slp` profile grammar](profiles.md). The target path from mandatory
@@ -39,5 +41,6 @@ records in graph state or messages.
 This is not process-wide mandatory access control. Ordinary graph nodes execute
 Python directly and can access files, networks, processes, databases, native
 extensions, and unwrapped tools without crossing a tool hook. Run the
-[escape analysis](escape-analysis.md) in CI and isolate untrusted execution in
-an operating-system sandbox when the threat model requires non-bypassable MAC.
+[escape analysis](escape-analysis.md) in CI. On Linux, route supported untrusted
+tool entry points through `LinuxSandboxExecutor`; use brokers or additional host
+adapters for authority its filesystem-focused backend rejects.

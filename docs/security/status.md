@@ -30,8 +30,8 @@ sequence; accepted documentation is not evidence that its adapters exist.
 | 1. Profile grammar and monotonic DAC evaluator | Complete | The `.slp` grammar is frozen. |
 | 2. Attributed platform-neutral `Grant` IR and resource selectors | Implemented and tested | `compile_grant` preserves source identity and `need`/`want`, marks runtime baselines, and emits a requirement ledger. |
 | 3. Cedar integration and reference forbid policies | Partially implemented and tested | Modules emit attributed bounded `ForbidConstraint` and `ForbidCombination` values. The replaceable reference backend filters exact grants, subtracts filesystem subtrees, rejects unrepresentable broad differences, rechecks requirements, and fails on diagnostics. A Cedar backend is not yet shipped. |
-| 4. `HostAttestation`, exact obligations, enforcement-adapter interface, activation receipts, transactional audit, and explicit degradation | Contracts implemented and tested; runtime wiring incomplete | Exact rule assessment, multi-adapter ownership, host trust verification, activation evidence, degradation, dispatch/outcome audit, and external chain seals exist. Tool execution is not yet routed through a native adapter. |
-| 5. Dedicated spawner and Linux reference adapter | Not implemented | There is no host-confinement claim. |
+| 4. `HostAttestation`, exact obligations, enforcement-adapter interface, activation receipts, transactional audit, and explicit degradation | Implemented and tested | Exact rule assessment, ownership, local host evidence, worker-context binding, activation evidence, dispatch/outcome audit, and external chain seals exist. `ToolNode` and `guarded_tool` route through a configured `HostToolExecutor`. |
+| 5. Dedicated spawner and Linux reference adapter | Implemented and tested for the documented Linux subset | `LinuxSandboxExecutor` creates one bubblewrap worker per call, applies a default-deny seccomp allowlist and resource ceilings before import, verifies a worker-specific activation receipt, then releases the worker. Filesystem and resource-limit grants are supported; network, service, credential, delegation, and executable grants deny as unsupported. |
 
 The seven hook names and invocation structure are frozen. The detailed
 `tool_call_permission` return contract remains open for the planned forbid-only
@@ -45,18 +45,18 @@ table prevents target prose from being mistaken for implementation evidence.
 
 | Review area | Current status | Target disposition |
 | --- | --- | --- |
-| Rule-specific negotiation | Implemented and tested as a platform-neutral contract | Resource classes are hints; exact operation, selector, conditions, dependencies, and complements are negotiated per obligation. No native adapter is wired to tool execution yet. |
-| Closed-world default deny | Implemented and tested as a negotiation invariant | Every represented authority domain requires a non-waivable `DENY_COMPLEMENT` obligation. Runtime proof awaits the native adapter. |
+| Rule-specific negotiation | Implemented and tested, including Linux dispatch | Resource classes are hints; exact operation, selector, conditions, dependencies, and complements are negotiated per obligation. Unsupported Linux rules deny before worker release. |
+| Closed-world default deny | Implemented and tested for the Linux subset | A new user, mount, PID, IPC, UTS, cgroup, and network namespace; clear environment; dropped capabilities; explicit mounts; no host network; and default-deny seccomp establish the local baseline. Semantic service restrictions still require a broker and therefore deny. |
 | `need`/`want` revalidation | Implemented and tested through policy filtering and lowering | Source lineage survives DAC intersection, rule splitting, policy subtraction, waivers, and adapter selection. Activation-time reductions remain to be wired. |
-| Host evidence trust and context binding | Implemented and tested as a contract | An explicit verifier checks nonce, freshness, and trust; activation binds boot, worker, namespaces, credentials, cgroup, broker epoch, plan, and obligations. A host probe/attestor is not yet shipped. |
-| Worker activation receipt and lease invalidation | Activation receipt implemented; live invalidation not implemented | A receipt must cover every assigned obligation and exact worker context. The startup barrier and renewable dependency leases remain. |
+| Host evidence trust and context binding | Implemented and tested for the local Linux executor | A process-local authenticated attestor checks nonce, freshness, boot, adapter binary, worker identity, namespaces, credentials, cgroup, plan, and obligations. This is local activation evidence, not TPM or remote-host attestation. |
+| Worker activation receipt and lease invalidation | Startup receipt and barrier implemented; live revocation not implemented | The worker blocks before importing tool code, every obligation is covered by verified evidence, and the receipt is retained in a bounded executor snapshot. Workers are one-call and killed at completion; accepted external effects remain irrevocable. |
 | Multi-component enforcement | Implemented and tested as an obligation DAG | Each obligation has one explicit primary enforcer, dependencies are complete and acyclic, and activation evidence must cover all assigned obligations. Semantic obligation compilers and native adapters remain. |
 | Advisory security claim | Implemented and tested in negotiation | Only explicitly waivable obligations may degrade; closed-world complements and required source lines cannot be waived. A waiver never retains authority while dropping its restriction, and no confinement or confidentiality claim applies to an unknown effective-authority bound. Runtime propagation remains. |
 | Module output to Cedar | Typed forbid-only output implemented and tested | The framework owns module attribution and rejects spoofed or malformed outputs. Cedar translation remains replaceable backend work. |
 | Broad-resource mandatory filtering | Implemented and tested in the reference backend | Filesystem child subtrees become explicit exclusions; unrepresentable conditional differences remove the broad rule and requirements are rechecked. |
 | Cedar diagnostics and aggregate combinations | Backend diagnostics and aggregate combinations implemented; Cedar adapter not implemented | Any backend diagnostic denies; typed combinations can reject cross-domain authority sets. |
-| Pre-confinement execution | Current decorators, tool construction, normalizers, hooks, and imports execute in the trusted process | Strict mode uses declarative manifests and imports tool code only after activation; custom transformations run confined and are reauthorized. |
-| Ambient authority and runtime baseline | Baseline is specified; enforcement not implemented | Start from a clean worker, enumerate every retained capability, and include it in grant obligations and activation evidence. |
+| Pre-confinement execution | Linux entry-point import is deferred; schema stubs, decorators, normalizers, and hooks remain trusted | `LinuxToolSpec` pins an artifact path and digest; verified bytes are copied to a private launch file, and the worker imports only after the activation barrier. Custom tool-authored preflight transforms are not supported by this executor. |
+| Ambient authority and runtime baseline | Implemented and tested for the Linux worker | The worker receives a clear environment, explicit read-only runtime roots, ephemeral `/tmp`, no inherited application descriptors, no host network namespace, no process creation, and default resource limits. Every retained mount and ceiling is a baseline grant line. |
 | Delegated labels and budgets | Scope subset and blob copying implemented and tested; richer semantics not addressed in code | Typed label partial orders and a shared atomic escrow ledger govern children. |
 | Approval subject binding | Principal, roles, scopes, delegation, tool, call, raw and normalized arguments, expiry, and one-time use are implemented and tested | Artifact, final-grant, policy, ledger, and activation nonce binding require the strict execution path. |
 | Atomic history, retries, audit outcomes, truncation | Dispatch/outcome states, pre-dispatch audit failure, post-dispatch `INDETERMINATE`, hash chains, and external seals are implemented and tested | Durable quota reservation, side-effect idempotency, outbox delivery, and automatic external witnessing remain. |
@@ -79,11 +79,20 @@ None of these names is a shipped public API.
 
 ## Present security claim
 
-The present branch can claim complete mediation only for calls crossing a
-configured `ToolNode` or the returned `guarded_tool` wrapper. It cannot claim
-process-wide MAC, confinement of an allowed tool, syscall enforcement,
-credential isolation, or automatic compile-time rejection of every analyzer
-finding.
+The branch claims complete mediation for calls crossing a configured `ToolNode`
+or returned `guarded_tool` wrapper. When `LinuxSandboxExecutor` is configured,
+an allowed supported call executes in a fresh Linux worker only after exact
+grant filtering, obligation negotiation, kernel isolation, and a verified
+worker-specific activation receipt. Tests demonstrate denial of undeclared file
+reads, ambient network sockets, process execution, changed artifacts, and
+unrepresentable writable grants. The original in-process callback is not run.
+
+This is not process-wide MAC. Ordinary graph nodes, callbacks, model clients,
+and an unwrapped tool alias remain outside the boundary. The current Linux
+adapter supports filesystem and resource-limit authority only. It fails closed
+for network, service, credential, delegation, and executable grants rather than
+pretending a capability-class match is enforcement. Its host evidence is rooted
+in a process-local key, not hardware or remote attestation.
 
 Without `SessionFlowPolicy`, the claim remains per-execution resource access
 control. With an operator-complete flow policy and shared durable store,
@@ -95,16 +104,15 @@ bounded by trusted code or active confinement. Background descendants,
 unmediated consumers, and copies that bypass transfer remain outside the claim.
 See [security properties](security-properties.md) for the exact boundary.
 
-For untrusted tool code today, use an external OS sandbox and run
-`langgraph-security-taint` as an explicit CI gate. Do not treat an allow verdict,
-effect declaration, profile grant, audit record, or accepted ADR as evidence of
-kernel enforcement.
+For untrusted local Python tools on Linux, use the documented
+`LinuxSandboxExecutor` path and run `langgraph-security-taint` as an explicit CI
+gate. An allow verdict, effect declaration, profile grant, or accepted ADR alone
+is never evidence of kernel enforcement; the activation receipt is.
 
 ## Target security claim
 
-After phase-one steps 2 through 5 land and exact obligation negotiation passes,
-local untrusted tool code will run only after a verified worker-specific activation
-receipt. A waived obligation produces an explicitly `DEGRADED` result for which
-the complete grant-subset claim is not made. The final claim still excludes model
+Additional adapters extend the same grant without changing policy vocabulary.
+A waived obligation produces an explicitly `DEGRADED` result for which the
+complete grant-subset claim is not made. The final claim still excludes model
 final text, kernel or trusted-adapter bugs, and remote APIs that cannot scope
 credentials; missing domain-level egress mediation prevents an enforced result.
