@@ -24,7 +24,10 @@ from langgraph.prebuilt.security.errors import (
     SecurityConfigurationError,
     SecurityIndeterminateError,
 )
-from langgraph.prebuilt.security.execution import HostExecutionDenied
+from langgraph.prebuilt.security.execution import (
+    HostExecutionDenied,
+    HostExecutionError,
+)
 from langgraph.prebuilt.security.flow import ToolFlowRule
 from langgraph.prebuilt.security.introspect import (
     ToolInventoryEntry,
@@ -121,9 +124,16 @@ class _GuardedExecutor:
         outcome = ExecutionOutcome.INDETERMINATE
         try:
             if self.security.host_executor is not None:
-                result = self.security.host_executor.invoke(
+                host_result = self.security.host_executor.invoke(
                     principal, call, policy_constraints
                 )
+                self.stack.record_framework_event(
+                    principal,
+                    call,
+                    "activation",
+                    Decision(Verdict.ALLOW, host_result.receipt.audit_reason()),
+                )
+                result = host_result.value
             else:
                 result = self.target.invoke(dict(call.args), config=config)
             outcome = ExecutionOutcome.SUCCEEDED
@@ -131,6 +141,20 @@ class _GuardedExecutor:
         except HostExecutionDenied as exc:
             outcome = ExecutionOutcome.DENIED_BEFORE_DISPATCH
             raise SecurityDeniedError(str(exc)) from exc
+        except HostExecutionError as exc:
+            outcome = exc.outcome
+            try:
+                self.stack.record_framework_event(
+                    principal,
+                    call,
+                    "activation",
+                    Decision(Verdict.ALLOW, exc.receipt.audit_reason()),
+                )
+            except SecurityAuditError as audit_exc:
+                raise SecurityIndeterminateError(
+                    "tool activation evidence could not be persisted"
+                ) from audit_exc
+            raise
         finally:
             try:
                 self.stack.post(principal, call, result)
@@ -175,9 +199,16 @@ class _GuardedExecutor:
         outcome = ExecutionOutcome.INDETERMINATE
         try:
             if self.security.host_executor is not None:
-                result = await self.security.host_executor.ainvoke(
+                host_result = await self.security.host_executor.ainvoke(
                     principal, call, policy_constraints
                 )
+                self.stack.record_framework_event(
+                    principal,
+                    call,
+                    "activation",
+                    Decision(Verdict.ALLOW, host_result.receipt.audit_reason()),
+                )
+                result = host_result.value
             else:
                 result = await self.target.ainvoke(dict(call.args), config=config)
             outcome = ExecutionOutcome.SUCCEEDED
@@ -185,6 +216,20 @@ class _GuardedExecutor:
         except HostExecutionDenied as exc:
             outcome = ExecutionOutcome.DENIED_BEFORE_DISPATCH
             raise SecurityDeniedError(str(exc)) from exc
+        except HostExecutionError as exc:
+            outcome = exc.outcome
+            try:
+                self.stack.record_framework_event(
+                    principal,
+                    call,
+                    "activation",
+                    Decision(Verdict.ALLOW, exc.receipt.audit_reason()),
+                )
+            except SecurityAuditError as audit_exc:
+                raise SecurityIndeterminateError(
+                    "tool activation evidence could not be persisted"
+                ) from audit_exc
+            raise
         finally:
             try:
                 await self.stack.apost(principal, call, result)

@@ -63,6 +63,8 @@ from langgraph.prebuilt.security.errors import (
 )
 from langgraph.prebuilt.security.execution import (
     HostExecutionDenied,
+    HostExecutionError,
+    HostExecutionResult,
     HostToolExecutor,
 )
 from langgraph.prebuilt.security.flow import (
@@ -200,6 +202,8 @@ __all__ = (
     "HostAttestation",
     "HostAttestationVerifier",
     "HostExecutionDenied",
+    "HostExecutionError",
+    "HostExecutionResult",
     "HostToolExecutor",
     "HmacAuditWitness",
     "Limits",

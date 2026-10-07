@@ -78,7 +78,7 @@ remain mutable only through module-owned slots.
 | `SecurityModule` | Base class exposing the seven hooks: allocation, credential preparation and transfer, call preparation, call permission, post-call observation, and resume permission. |
 | `CapModule` | Framework-owned first module. It prevents scope growth and rejects negative approval input. Applications do not register it manually. |
 | `SecurityStack` | Restrictive composition engine for DAC, capability checks, ordered modules, timeout handling, audit, and observation. Application code normally creates `SecurityConfig` instead. |
-| `SecurityConfig` | Frozen configuration for modules, DAC overrides, audit sink, observer, policy timeout, and principal requirement. It configures `ToolNode` directly or through `StateGraph.compile`. |
+| `SecurityConfig` | Frozen configuration for modules, DAC overrides, audit sink, observer, policy timeout, principal requirement, flow policy, and optional host executor. It configures `ToolNode` directly or through `StateGraph.compile`. |
 | `SecurityDeniedError` | `PermissionError` subclass raised when a guarded direct call or delegation is denied. `ToolNode` instead returns an error `ToolMessage`. |
 | `SecurityAuditError` | Raised when a required audit record cannot be persisted before dispatch. |
 | `SecurityIndeterminateError` | Raised after dispatch when the operation may have executed but its outcome cannot be durably recorded. |
@@ -113,6 +113,8 @@ TCB component and must pass its platform contract suite.
 | `HostAttestation` | Fresh, nonce-bound host statement whose digest is meaningful only after trust-anchor verification. |
 | `HostAttestationVerifier` | Protocol that authenticates a `HostAttestation` against deployment trust anchors. |
 | `HostExecutionDenied` | Fail-closed error raised before tool code runs when an exact host plan cannot be activated. |
+| `HostExecutionError` | Post-activation failure carrying the verified receipt and explicit failed or indeterminate outcome. |
+| `HostExecutionResult` | Successful host result paired with the verified receipt that must enter durable audit before its value is accepted. |
 | `HostToolExecutor` | Portable execution bridge used by `ToolNode` and `guarded_tool` after authorization. |
 | `LinuxSandboxExecutor` | Linux implementation that lowers supported grants into a fresh bubblewrap worker, validates activation evidence, and releases the startup barrier before tool import. `activation_receipts()` exposes a bounded operational snapshot. |
 | `LinuxToolSpec` | Trusted manifest binding a tool name to an importable entry point and operator-verified artifact digest. |

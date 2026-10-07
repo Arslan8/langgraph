@@ -45,6 +45,8 @@
   "HostAttestation",
   "HostAttestationVerifier",
   "HostExecutionDenied",
+  "HostExecutionError",
+  "HostExecutionResult",
   "HostToolExecutor",
   "HmacAuditWitness",
   "Limits",

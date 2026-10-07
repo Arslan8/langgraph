@@ -733,6 +733,43 @@ class ActivationReceipt:
         if self.valid_until <= 0:
             raise ValueError("activation receipt expiry must be positive")
 
+    def canonical(self) -> Mapping[str, Any]:
+        """Return complete canonical evidence suitable for durable audit."""
+        return {
+            "activated_obligations": sorted(self.activated_obligations),
+            "context_digest": self.context_digest,
+            "evidence": [
+                {
+                    "activated_at": item.activated_at,
+                    "adapter_id": item.adapter_id,
+                    "context_digest": item.context_digest,
+                    "expires_at": item.expires_at,
+                    "native_plan_digest": item.native_plan_digest,
+                    "nonce": item.nonce,
+                    "obligation_ids": sorted(item.obligation_ids),
+                    "signature": item.signature,
+                }
+                for item in sorted(self.evidence, key=lambda value: value.adapter_id)
+            ],
+            "grant_digest": self.grant_digest,
+            "host_digest": self.host_digest,
+            "mode": self.mode.value,
+            "nonce": self.nonce,
+            "plan_digest": self.plan_digest,
+            "valid_until": self.valid_until,
+        }
+
+    @property
+    def digest(self) -> str:
+        """Return the canonical SHA-256 digest of this receipt."""
+        return _digest(self.canonical())
+
+    def audit_reason(self) -> str:
+        """Serialize complete activation evidence into an audit-safe reason."""
+        return "activation_receipt:" + json.dumps(
+            self.canonical(), sort_keys=True, separators=(",", ":")
+        )
+
 
 class EnforcementCoordinator:
     """Fail-closed negotiation and worker-activation coordinator."""

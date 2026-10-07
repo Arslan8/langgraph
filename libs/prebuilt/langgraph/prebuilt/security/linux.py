@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import ctypes
 import hashlib
 import hmac
 import json
@@ -40,23 +41,44 @@ from langgraph.prebuilt.security.enforcement import (
     compile_grant,
     compile_obligations,
 )
-from langgraph.prebuilt.security.execution import HostExecutionDenied
+from langgraph.prebuilt.security.execution import (
+    HostExecutionDenied,
+    HostExecutionError,
+    HostExecutionResult,
+)
 from langgraph.prebuilt.security.policy import (
     MandatoryPolicyBackend,
     TypedPolicyBackend,
 )
 from langgraph.prebuilt.security.profile import ProfileDocument
-from langgraph.prebuilt.security.types import PolicyConstraint, Principal, ToolCall
+from langgraph.prebuilt.security.types import (
+    ExecutionOutcome,
+    PolicyConstraint,
+    Principal,
+    ToolCall,
+)
 
 _ADAPTER_ID = "linux-bubblewrap-v1"
-_SUPPORTED_LIMITS = frozenset({"cpu_ms", "memory_bytes", "pids", "nofile", "wall_ms"})
+_SUPPORTED_LIMITS = frozenset(
+    {
+        "cpu_ms",
+        "file_bytes",
+        "memory_bytes",
+        "nofile",
+        "pids",
+        "tmpfs_bytes",
+        "wall_ms",
+    }
+)
 _WRITE_OPERATIONS = frozenset({"write", "create", "delete", "truncate"})
 _DEFAULT_LIMITS = MappingProxyType(
     {
         "cpu_ms": 30_000,
+        "file_bytes": 67_108_864,
         "memory_bytes": 1_073_741_824,
         "nofile": 64,
         "pids": 1,
+        "tmpfs_bytes": 67_108_864,
         "wall_ms": 30_000,
     }
 )
@@ -126,6 +148,12 @@ class LinuxSandboxExecutor:
     ) -> None:
         if platform.system() != "Linux":
             raise RuntimeError("LinuxSandboxExecutor requires Linux")
+        try:
+            ctypes.CDLL("libseccomp.so.2")
+        except OSError as exc:
+            raise RuntimeError(
+                "libseccomp.so.2 is required for Linux host execution"
+            ) from exc
         bwrap = shutil.which(os.fspath(bubblewrap_path))
         if bwrap is None:
             raise RuntimeError("bubblewrap is required for Linux host execution")
@@ -137,13 +165,14 @@ class LinuxSandboxExecutor:
             raise ValueError("at least one explicit runtime root is required")
         if startup_timeout_s <= 0 or default_wall_timeout_s <= 0:
             raise ValueError("Linux sandbox timeouts must be positive")
+        _verify_bubblewrap_host(bwrap, startup_timeout_s)
         limits = dict(_DEFAULT_LIMITS if default_limits is None else default_limits)
         if set(limits) != _SUPPORTED_LIMITS or any(
             type(value) is not int or value <= 0 for value in limits.values()
         ):
             raise ValueError(
-                "default_limits must provide positive cpu_ms, memory_bytes, "
-                "pids, nofile, and wall_ms values"
+                "default_limits must provide positive cpu_ms, file_bytes, "
+                "memory_bytes, nofile, pids, tmpfs_bytes, and wall_ms values"
             )
         copied_tools = dict(tools)
         if not copied_tools:
@@ -161,6 +190,16 @@ class LinuxSandboxExecutor:
                 "Linux tool profiles must declare 'runs linux': "
                 + ", ".join(sorted(wrong_locus))
             )
+        wrong_syscalls = {
+            name
+            for name in copied_tools
+            if profiles.tools[name].syscall_sets != frozenset({"minimal"})
+        }
+        if wrong_syscalls:
+            raise ValueError(
+                "Linux tool profiles require exactly 'syscalls @minimal': "
+                + ", ".join(sorted(wrong_syscalls))
+            )
         self.profiles = profiles
         self.tools = MappingProxyType(copied_tools)
         self.runtime_roots = roots
@@ -174,12 +213,19 @@ class LinuxSandboxExecutor:
         self.bubblewrap_path = bwrap
         self.python_executable = python
         self._worker_script = Path(__file__).with_name("_linux_worker.py").resolve()
+        self._python_digest = _file_digest(self.python_executable)
+        self._worker_digest = _file_digest(self._worker_script)
         self.startup_timeout_s = startup_timeout_s
         self.default_wall_timeout_s = default_wall_timeout_s
         self.default_limits = MappingProxyType(limits)
         self._adapter = _LinuxBubblewrapAdapter(
             bwrap,
             attestation_key or secrets.token_bytes(32),
+            self.python_executable,
+            self._worker_script,
+            startup_timeout_s
+            + max(default_wall_timeout_s, limits["wall_ms"] / 1000)
+            + 5.0,
         )
         self._coordinator = EnforcementCoordinator([self._adapter], self._adapter)
         self._receipts: deque[ActivationReceipt] = deque(maxlen=1024)
@@ -203,7 +249,7 @@ class LinuxSandboxExecutor:
         principal: Principal,
         call: ToolCall,
         constraints: Sequence[PolicyConstraint],
-    ) -> Any:
+    ) -> HostExecutionResult:
         """Compile, activate, and execute one call in a fresh Linux worker."""
         return self._invoke(principal, call, constraints, asynchronous=False)
 
@@ -212,7 +258,7 @@ class LinuxSandboxExecutor:
         principal: Principal,
         call: ToolCall,
         constraints: Sequence[PolicyConstraint],
-    ) -> Any:
+    ) -> HostExecutionResult:
         """Compile, activate, and execute one async call off the event loop."""
         return await asyncio.to_thread(
             self._invoke,
@@ -354,6 +400,7 @@ class LinuxSandboxExecutor:
                 AuthorityDomain.RUNTIME,
                 "read",
                 os.fspath(self._worker_script),
+                {"sha256": self._worker_digest},
                 baseline=True,
             ),
             GrantRule(
@@ -361,6 +408,103 @@ class LinuxSandboxExecutor:
                 AuthorityDomain.RUNTIME,
                 "read",
                 os.fspath(spec.artifact_path),
+                {"sha256": spec.artifact_digest},
+                baseline=True,
+            ),
+            GrantRule(
+                "runtime:interpreter",
+                AuthorityDomain.RUNTIME,
+                "read",
+                os.fspath(self.python_executable),
+                {"sha256": self._python_digest},
+                baseline=True,
+            ),
+            GrantRule(
+                "runtime:env:path",
+                AuthorityDomain.RUNTIME,
+                "environment",
+                "PATH",
+                {"value": "/usr/bin"},
+                baseline=True,
+            ),
+            GrantRule(
+                "runtime:env:pythonpath",
+                AuthorityDomain.RUNTIME,
+                "environment",
+                "PYTHONPATH",
+                {"value": ":".join(os.fspath(item) for item in self.runtime_roots)},
+                baseline=True,
+            ),
+            GrantRule(
+                "runtime:env:no-bytecode",
+                AuthorityDomain.RUNTIME,
+                "environment",
+                "PYTHONDONTWRITEBYTECODE",
+                {"value": "1"},
+                baseline=True,
+            ),
+            GrantRule(
+                "runtime:env:no-locale-coercion",
+                AuthorityDomain.RUNTIME,
+                "environment",
+                "PYTHONCOERCECLOCALE",
+                {"value": "0"},
+                baseline=True,
+            ),
+            GrantRule(
+                "runtime:env:no-user-site",
+                AuthorityDomain.RUNTIME,
+                "environment",
+                "PYTHONNOUSERSITE",
+                {"value": "1"},
+                baseline=True,
+            ),
+            GrantRule(
+                "runtime:env:safe-path",
+                AuthorityDomain.RUNTIME,
+                "environment",
+                "PYTHONSAFEPATH",
+                {"value": "1"},
+                baseline=True,
+            ),
+            GrantRule(
+                "runtime:env:unbuffered",
+                AuthorityDomain.RUNTIME,
+                "environment",
+                "PYTHONUNBUFFERED",
+                {"value": "1"},
+                baseline=True,
+            ),
+            GrantRule(
+                "runtime:env:utf8",
+                AuthorityDomain.RUNTIME,
+                "environment",
+                "PYTHONUTF8",
+                {"value": "1"},
+                baseline=True,
+            ),
+            GrantRule(
+                "runtime:protocol:request",
+                AuthorityDomain.IPC,
+                "read",
+                "parent-request-pipe",
+                {"descriptor": 0},
+                baseline=True,
+            ),
+            GrantRule(
+                "runtime:protocol:response",
+                AuthorityDomain.IPC,
+                "write",
+                "parent-response-pipe",
+                {"descriptor": 1},
+                baseline=True,
+            ),
+            GrantRule(
+                "runtime:protocol:diagnostic",
+                AuthorityDomain.IPC,
+                "write",
+                "parent-diagnostic-pipe",
+                {"descriptor": 2},
                 baseline=True,
             ),
         ]
@@ -400,10 +544,14 @@ class LinuxSandboxExecutor:
         plan: EnforcementPlan,
         *,
         asynchronous: bool,
-    ) -> Any:
+    ) -> HostExecutionResult:
         adapter_plan = next(
             item for item in plan.adapter_plans if item.adapter_id == _ADAPTER_ID
         )
+        if _file_digest(self.python_executable) != self._python_digest:
+            raise HostExecutionDenied("host:interpreter_changed")
+        if _file_digest(self._worker_script) != self._worker_digest:
+            raise HostExecutionDenied("host:worker_shim_changed")
         command, inherited_fds, status_read, status_write, artifact_directory = (
             self._worker_command(adapter_plan, spec)
         )
@@ -418,6 +566,7 @@ class LinuxSandboxExecutor:
             "tool_name": call.tool.name,
         }
         process: subprocess.Popen[str] | None = None
+        receipt: ActivationReceipt | None = None
         released = False
         try:
             process = subprocess.Popen(
@@ -475,20 +624,36 @@ class LinuxSandboxExecutor:
             return_code = process.wait(timeout=1.0)
             if response.get("status") == "ok" and "result" in response:
                 if return_code != 0:
-                    raise RuntimeError("sandboxed tool exited unsuccessfully")
-                return response["result"]
+                    raise HostExecutionError(
+                        "sandboxed tool outcome is indeterminate",
+                        receipt,
+                        ExecutionOutcome.INDETERMINATE,
+                    )
+                return HostExecutionResult(response["result"], receipt)
             error_type = str(response.get("error_type", "Exception"))
-            raise RuntimeError(f"sandboxed tool failed:{error_type}")
+            raise HostExecutionError(
+                f"sandboxed tool failed:{error_type}",
+                receipt,
+                ExecutionOutcome.FAILED,
+            )
+        except HostExecutionError:
+            raise
         except HostExecutionDenied:
             raise
         except TimeoutError as exc:
             reason = "host:worker_startup_timeout" if not released else "tool_timeout"
-            if released:
-                raise RuntimeError(reason) from exc
+            if released and receipt is not None:
+                raise HostExecutionError(
+                    reason, receipt, ExecutionOutcome.INDETERMINATE
+                ) from exc
             raise HostExecutionDenied(reason) from exc
         except (KeyError, OSError, ValueError, subprocess.SubprocessError) as exc:
-            if released:
-                raise RuntimeError("sandboxed tool outcome is indeterminate") from exc
+            if receipt is not None:
+                raise HostExecutionError(
+                    "sandboxed tool outcome is indeterminate",
+                    receipt,
+                    ExecutionOutcome.INDETERMINATE,
+                ) from exc
             raise HostExecutionDenied("host:worker_activation_failed") from exc
         finally:
             if status_read >= 0:
@@ -507,6 +672,29 @@ class LinuxSandboxExecutor:
         self, plan: AdapterPlan, spec: LinuxToolSpec
     ) -> tuple[list[str], tuple[int, ...], int, int, Path]:
         mounts = tuple(plan.payload.get("mounts", ()))
+        environment = _plain_mapping(plan.payload.get("environment", {}))
+        expected_environment = {
+            "PATH": "/usr/bin",
+            "PYTHONPATH": ":".join(os.fspath(item) for item in self.runtime_roots),
+            "PYTHONCOERCECLOCALE": "0",
+            "PYTHONDONTWRITEBYTECODE": "1",
+            "PYTHONNOUSERSITE": "1",
+            "PYTHONSAFEPATH": "1",
+            "PYTHONUNBUFFERED": "1",
+            "PYTHONUTF8": "1",
+        }
+        protocol = set(plan.payload.get("protocol", ()))
+        limits = _plain_mapping(plan.payload.get("limits", {}))
+        if environment != expected_environment or protocol != {
+            "parent-request-pipe",
+            "parent-response-pipe",
+            "parent-diagnostic-pipe",
+        }:
+            raise HostExecutionDenied("host:invalid_runtime_baseline")
+        if set(limits) != _SUPPORTED_LIMITS or any(
+            type(value) is not int or value <= 0 for value in limits.values()
+        ):
+            raise HostExecutionDenied("host:invalid_resource_limits")
         descriptors: list[int] = []
         mount_args: list[str] = []
         destinations: set[str] = set()
@@ -563,26 +751,18 @@ class LinuxSandboxExecutor:
             "--symlink",
             "usr/lib64",
             "/lib64",
+            "--size",
+            str(limits["tmpfs_bytes"]),
             "--tmpfs",
             "/tmp",
         ]
         for directory in directories:
             command.extend(["--dir", directory])
         command.extend(mount_args)
+        for name, value in sorted(environment.items()):
+            command.extend(["--setenv", name, str(value)])
         command.extend(
             [
-                "--setenv",
-                "PATH",
-                "/usr/bin",
-                "--setenv",
-                "PYTHONPATH",
-                ":".join(os.fspath(item) for item in self.runtime_roots),
-                "--setenv",
-                "PYTHONDONTWRITEBYTECODE",
-                "1",
-                "--setenv",
-                "PYTHONUNBUFFERED",
-                "1",
                 "--chdir",
                 "/tmp",
                 "--json-status-fd",
@@ -604,13 +784,25 @@ class LinuxSandboxExecutor:
 class _LinuxBubblewrapAdapter:
     """Exact-obligation adapter used by `LinuxSandboxExecutor`."""
 
-    def __init__(self, bwrap_path: str, key: bytes) -> None:
+    def __init__(
+        self,
+        bwrap_path: str,
+        key: bytes,
+        python_executable: Path,
+        worker_script: Path,
+        lease_s: float,
+    ) -> None:
         self.bwrap_path = bwrap_path
         self._key = key
         self._pending: dict[str, str] = {}
         self._lock = RLock()
         self._boot_id = Path("/proc/sys/kernel/random/boot_id").read_text().strip()
         self._binary_digest = _file_digest(Path(bwrap_path))
+        self._python_executable = python_executable
+        self._python_digest = _file_digest(python_executable)
+        self._worker_script = worker_script
+        self._worker_digest = _file_digest(worker_script)
+        self._lease_s = lease_s
 
     @property
     def adapter_id(self) -> str:
@@ -619,6 +811,12 @@ class _LinuxBubblewrapAdapter:
 
     def attest(self, nonce: str) -> HostAttestation:
         """Return fresh locally authenticated host evidence."""
+        if _file_digest(Path(self.bwrap_path)) != self._binary_digest:
+            raise HostExecutionDenied("host:bubblewrap_changed")
+        if _file_digest(self._python_executable) != self._python_digest:
+            raise HostExecutionDenied("host:interpreter_changed")
+        if _file_digest(self._worker_script) != self._worker_digest:
+            raise HostExecutionDenied("host:worker_shim_changed")
         now = time.time()
         attestation = HostAttestation(
             "slanggraph-local-linux",
@@ -626,7 +824,7 @@ class _LinuxBubblewrapAdapter:
             self._boot_id,
             "linux",
             now,
-            now + 30.0,
+            now + self._lease_s,
             frozenset(
                 {
                     "bubblewrap",
@@ -641,6 +839,8 @@ class _LinuxBubblewrapAdapter:
                 "adapter": self.adapter_id,
                 "bubblewrap_digest": self._binary_digest,
                 "kernel": platform.release(),
+                "python_digest": self._python_digest,
+                "worker_digest": self._worker_digest,
             },
             "pending",
         )
@@ -666,7 +866,23 @@ class _LinuxBubblewrapAdapter:
             support = SupportLevel.EXACT
             reason = "isolated_empty_authority_domain"
         elif obligation.domain in {AuthorityDomain.FILESYSTEM, AuthorityDomain.RUNTIME}:
-            support, reason = _assess_path_obligation(obligation)
+            if obligation.operation == "environment":
+                support = SupportLevel.EXACT
+                reason = "clearenv_explicit_value"
+            else:
+                support, reason = _assess_path_obligation(obligation)
+        elif (
+            obligation.domain is AuthorityDomain.IPC
+            and obligation.operation in {"read", "write"}
+            and obligation.selector
+            in {
+                "parent-request-pipe",
+                "parent-response-pipe",
+                "parent-diagnostic-pipe",
+            }
+        ):
+            support = SupportLevel.EXACT
+            reason = "explicit_protocol_descriptor"
         elif (
             obligation.domain is AuthorityDomain.PROCESS
             and obligation.operation == "syscall_set"
@@ -704,7 +920,13 @@ class _LinuxBubblewrapAdapter:
             rules[item.rule_id]
             for item in obligations
             if item.kind is ObligationKind.OPERATE
-            and item.domain in {AuthorityDomain.FILESYSTEM, AuthorityDomain.RUNTIME}
+            and (
+                item.domain is AuthorityDomain.FILESYSTEM
+                or (
+                    item.domain is AuthorityDomain.RUNTIME
+                    and item.operation in {"read", *_WRITE_OPERATIONS}
+                )
+            )
         ]
         operations: dict[tuple[AuthorityDomain, str], set[str]] = {}
         for rule in path_rules:
@@ -739,13 +961,30 @@ class _LinuxBubblewrapAdapter:
                 limits[item.selector] = (
                     maximum if prior is None else min(prior, maximum)
                 )
+        environment = {
+            rules[item.rule_id].selector: str(
+                rules[item.rule_id].conditions.get("value", "")
+            )
+            for item in obligations
+            if item.kind is ObligationKind.OPERATE
+            and item.domain is AuthorityDomain.RUNTIME
+            and item.operation == "environment"
+        }
+        protocol = sorted(
+            rules[item.rule_id].selector
+            for item in obligations
+            if item.kind is ObligationKind.OPERATE
+            and item.domain is AuthorityDomain.IPC
+        )
         payload = {
+            "environment": environment,
             "limits": limits,
             "mounts": [
                 {"mode": mounts[path], "path": path, "subtree": subtrees[path]}
                 for path in sorted(mounts)
             ],
             "network": "isolated",
+            "protocol": protocol,
             "seccomp": "minimal",
         }
         native_digest = _digest(payload)
@@ -777,7 +1016,7 @@ class _LinuxBubblewrapAdapter:
             nonce,
             plan.obligation_ids,
             now,
-            now + 30.0,
+            now + self._lease_s,
             "pending",
         )
         return replace(evidence, signature=self._sign(_activation_payload(evidence)))
@@ -928,6 +1167,55 @@ def _canonical_existing_path(value: str | Path) -> Path:
     if raw != resolved:
         raise ValueError("sandbox paths must be canonical and symlink-free")
     return resolved
+
+
+def _verify_bubblewrap_host(bwrap_path: str, timeout: float) -> None:
+    """Fail configuration unless the installed host can create our boundary."""
+    try:
+        help_result = subprocess.run(
+            (bwrap_path, "--help"),
+            check=True,
+            capture_output=True,
+            text=True,
+            timeout=timeout,
+        )
+        help_text = help_result.stdout + help_result.stderr
+        required = {
+            "--assert-userns-disabled",
+            "--bind-fd",
+            "--disable-userns",
+            "--json-status-fd",
+            "--ro-bind-fd",
+        }
+        if not required.issubset(help_text.split()):
+            raise RuntimeError("bubblewrap lacks required file-descriptor features")
+        probe = subprocess.run(
+            (
+                bwrap_path,
+                "--unshare-all",
+                "--unshare-user",
+                "--die-with-parent",
+                "--new-session",
+                "--disable-userns",
+                "--assert-userns-disabled",
+                "--clearenv",
+                "--cap-drop",
+                "ALL",
+                "--ro-bind",
+                "/",
+                "/",
+                "--",
+                "/usr/bin/true",
+            ),
+            check=False,
+            capture_output=True,
+            text=True,
+            timeout=timeout,
+        )
+    except (OSError, subprocess.SubprocessError) as exc:
+        raise RuntimeError("bubblewrap host preflight failed") from exc
+    if probe.returncode != 0:
+        raise RuntimeError("bubblewrap isolation is unavailable on this host")
 
 
 def _missing_parent_directories(value: str) -> tuple[str, ...]:

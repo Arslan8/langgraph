@@ -9,8 +9,9 @@ adapter that lowers supported obligations to Linux mechanisms.
 
 The host needs Linux, bubblewrap, and `libseccomp.so.2`. Unprivileged user
 namespaces must be available to the application account. Construction fails if
-bubblewrap is unavailable; worker activation fails closed if isolation or
-seccomp cannot be established.
+bubblewrap or libseccomp is unavailable. Construction also runs a real namespace
+preflight and checks the exact bubblewrap features used by the launcher, so an
+installed but unusable sandbox fails before the graph accepts traffic.
 
 Put the callable imported by the worker in a module that is separate from the
 trusted schema stub registered with LangGraph. The operator manifest binds that
@@ -103,7 +104,8 @@ missing manifests fail during configuration.
    constraints filter that grant and requirements are rechecked.
 3. Exact operation, selector, condition, default-deny, syscall, and resource
    obligations are negotiated. Any unsupported required obligation denies.
-4. The verified artifact bytes are copied into a private launch file. A fresh
+4. The verified artifact bytes are copied into a private launch file. The worker
+   compiles those source bytes directly and never consults a bytecode cache. A fresh
    bubblewrap worker receives only explicit mounts, an ephemeral `/tmp`, a clear
    environment, dropped capabilities, isolated namespaces, a default-deny
    seccomp allowlist, and resource ceilings.
@@ -115,7 +117,10 @@ missing manifests fail during configuration.
    request, returns a bounded JSON result, and exits. The supervisor kills a
    worker that times out or survives completion.
 
-Recent receipts are available for operational evidence:
+Every successful or failed post-activation call writes the complete canonical
+receipt into the normal hash-chained audit stream before its result is accepted.
+With `SqliteAuditSink`, that evidence survives restart and participates in
+external audit seals. Recent receipts are also available for operational access:
 
 ```python
 receipts = executor.activation_receipts()
@@ -124,9 +129,9 @@ assert receipt.activated_obligations
 assert receipt.context_digest
 ```
 
-The snapshot is bounded to the most recent 1,024 receipts. Configure the normal
-audit sink and external audit-head anchoring for durable evidence; the snapshot
-is not an audit archive.
+The snapshot is bounded to the most recent 1,024 receipts and is not an audit
+archive. Production deployments must use `SqliteAuditSink` and retain externally
+witnessed chain seals.
 
 ## Supported authority
 
@@ -140,8 +145,14 @@ The reference adapter currently supports:
 - `@minimal`, implemented as a default-deny syscall allowlist that excludes
   sockets, process creation, executable replacement, namespace changes, mounts,
   ptrace, kernel-key access, and similar escape surfaces; and
-- CPU time, address space, process count, descriptor count, and wall-clock
-  ceilings. Conservative defaults apply even when the profile omits limits.
+- CPU time, address space, per-file size, private `/tmp` size, process count,
+  descriptor count, and wall-clock ceilings. Conservative defaults apply even
+  when the profile omits limits; operators may replace the complete
+  `default_limits` mapping when constructing `LinuxSandboxExecutor`.
+
+Profiles used by this adapter must declare exactly `syscalls @minimal`. Injected
+state, store, or `ToolRuntime` arguments are rejected during configuration
+because the worker protocol does not carry coordinator capabilities.
 
 The adapter rejects rather than approximates network, HTTP, mail, database,
 service, credential, delegation, and executable authority. Those operations need
@@ -152,9 +163,35 @@ obligations; applications and mandatory modules do not depend on bubblewrap.
 ## Runtime baseline and trust boundary
 
 `/usr`, the trusted worker shim, the pinned artifact, every `runtime_roots`
-entry, ephemeral `/tmp`, and default resource ceilings are explicit baseline
-grant lines. Mandatory aggregate policy sees them. Keep runtime roots minimal:
-mounting an application source tree makes that tree readable by the worker.
+entry, ephemeral `/tmp`, the exact cleared-environment values, parent protocol
+descriptors, and default resource ceilings are explicit baseline grant lines.
+Mandatory aggregate policy sees them. Interpreter, worker, bubblewrap, and tool
+artifact digests are rechecked at dispatch. Keep runtime roots minimal: mounting
+an application source tree makes that tree readable by the worker.
+
+## Production deployment checklist
+
+A filesystem-only Linux deployment is supported when all of the following hold:
+
+- the orchestrator, policy modules, profiles, schema stubs, and host executor are
+  trusted and cannot be modified by the tool account;
+- each untrusted entry point is a plain JSON-input/JSON-output Python callable
+  with a pinned canonical source file and no injected LangGraph arguments;
+- runtime roots contain only required code and public runtime data;
+- every requested operation fits the supported filesystem/resource subset;
+  unsupported network, service, credential, executable, or delegation rules are
+  allowed to fail closed;
+- `SqliteAuditSink` is on protected storage and its chain head is periodically
+  sealed with a separately retained witness key;
+- `langgraph-security-taint` reports no unmediated effect path, and the original
+  in-process tool aliases are not reachable; and
+- deployment tests run on each kernel/distribution image used in production;
+- the operator has selected explicit CPU, memory, file-size, temporary-storage,
+  process, descriptor, and wall-time ceilings for the workload.
+
+Within that boundary, this is a deployable enforcement implementation, not a
+simulation. It is not a general-purpose container service or a substitute for a
+network/service broker.
 
 The schema stub, decorators, built-in normalizers, principal construction,
 profiles, mandatory modules, policy backend, executor, bubblewrap, libseccomp,

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import os
 import socket
 import subprocess
 from pathlib import Path
@@ -46,3 +47,29 @@ def exec_probe() -> str:
     """Attempt an undeclared child executable after seccomp activation."""
     subprocess.run(("/usr/bin/true",), check=True)
     return "executed"
+
+
+def environment_probe() -> dict[str, object]:
+    """Return the worker environment and cwd for baseline assertions."""
+    return {"cwd": os.getcwd(), "environment": dict(os.environ)}
+
+
+def fork_probe() -> str:
+    """Attempt undeclared process creation after seccomp activation."""
+    os.fork()
+    return "forked"
+
+
+def unix_socket_probe() -> str:
+    """Attempt an undeclared local IPC socket after seccomp activation."""
+    socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+    return "socket-created"
+
+
+def file_limit_probe(size: int) -> str:
+    """Attempt to grow one file beyond the configured resource ceiling."""
+    try:
+        Path("/tmp/oversized").write_bytes(b"x" * size)
+    except OSError as exc:
+        return f"blocked:{exc.errno}"
+    return "written"

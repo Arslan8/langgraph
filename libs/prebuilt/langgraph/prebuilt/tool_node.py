@@ -110,7 +110,11 @@ from langgraph.prebuilt.security.errors import (
     SecurityAuditError,
     SecurityIndeterminateError,
 )
-from langgraph.prebuilt.security.execution import HostExecutionDenied, HostToolExecutor
+from langgraph.prebuilt.security.execution import (
+    HostExecutionDenied,
+    HostExecutionError,
+    HostToolExecutor,
+)
 from langgraph.prebuilt.security.flow import SessionFlowPolicy, ToolFlowRule
 from langgraph.prebuilt.security.stack import (
     SecurityStack,
@@ -1359,16 +1363,49 @@ class ToolNode(RunnableCallable):
                     and security_call is not None
                     and request.principal is not None
                 ):
-                    response = self._security_host_executor.invoke(
+                    host_result = self._security_host_executor.invoke(
                         request.principal, security_call, policy_constraints
                     )
+                    try:
+                        self._audit_security(
+                            request.principal,
+                            security_call,
+                            "activation",
+                            Decision(
+                                Verdict.ALLOW,
+                                host_result.receipt.audit_reason(),
+                            ),
+                            force=True,
+                        )
+                    except SecurityAuditError as exc:
+                        raise SecurityIndeterminateError(
+                            "tool activation evidence could not be persisted"
+                        ) from exc
                     response = ToolMessage(
-                        content=cast("str | list", msg_content_output(response)),
+                        content=cast(
+                            "str | list", msg_content_output(host_result.value)
+                        ),
                         name=call["name"],
                         tool_call_id=call["id"],
                     )
                 else:
                     response = tool.invoke(call_args, config)
+            except HostExecutionError as exc:
+                outcome = exc.outcome
+                assert security_call is not None and request.principal is not None
+                try:
+                    self._audit_security(
+                        request.principal,
+                        security_call,
+                        "activation",
+                        Decision(Verdict.ALLOW, exc.receipt.audit_reason()),
+                        force=True,
+                    )
+                except SecurityAuditError as audit_exc:
+                    raise SecurityIndeterminateError(
+                        "tool activation evidence could not be persisted"
+                    ) from audit_exc
+                raise
             except ValidationError as exc:
                 # Filter out errors for injected arguments
                 injected = self._injected_args.get(call["name"])
@@ -1400,6 +1437,8 @@ class ToolNode(RunnableCallable):
             outcome = ExecutionOutcome.DENIED_BEFORE_DISPATCH
             post_result = self._security_denial(call, Decision(Verdict.DENY, str(exc)))
             return post_result
+        except SecurityIndeterminateError:
+            raise
         except Exception as e:
             # Determine which exception types are handled
             handled_types: tuple[type[Exception], ...]
@@ -1612,16 +1651,49 @@ class ToolNode(RunnableCallable):
                     and security_call is not None
                     and request.principal is not None
                 ):
-                    response = await self._security_host_executor.ainvoke(
+                    host_result = await self._security_host_executor.ainvoke(
                         request.principal, security_call, policy_constraints
                     )
+                    try:
+                        self._audit_security(
+                            request.principal,
+                            security_call,
+                            "activation",
+                            Decision(
+                                Verdict.ALLOW,
+                                host_result.receipt.audit_reason(),
+                            ),
+                            force=True,
+                        )
+                    except SecurityAuditError as exc:
+                        raise SecurityIndeterminateError(
+                            "tool activation evidence could not be persisted"
+                        ) from exc
                     response = ToolMessage(
-                        content=cast("str | list", msg_content_output(response)),
+                        content=cast(
+                            "str | list", msg_content_output(host_result.value)
+                        ),
                         name=call["name"],
                         tool_call_id=call["id"],
                     )
                 else:
                     response = await tool.ainvoke(call_args, config)
+            except HostExecutionError as exc:
+                outcome = exc.outcome
+                assert security_call is not None and request.principal is not None
+                try:
+                    self._audit_security(
+                        request.principal,
+                        security_call,
+                        "activation",
+                        Decision(Verdict.ALLOW, exc.receipt.audit_reason()),
+                        force=True,
+                    )
+                except SecurityAuditError as audit_exc:
+                    raise SecurityIndeterminateError(
+                        "tool activation evidence could not be persisted"
+                    ) from audit_exc
+                raise
             except ValidationError as exc:
                 # Filter out errors for injected arguments
                 injected = self._injected_args.get(call["name"])
@@ -1653,6 +1725,8 @@ class ToolNode(RunnableCallable):
             outcome = ExecutionOutcome.DENIED_BEFORE_DISPATCH
             post_result = self._security_denial(call, Decision(Verdict.DENY, str(exc)))
             return post_result
+        except SecurityIndeterminateError:
+            raise
         except Exception as e:
             # Determine which exception types are handled
             handled_types: tuple[type[Exception], ...]

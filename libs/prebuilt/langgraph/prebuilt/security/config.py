@@ -90,6 +90,19 @@ class SecurityConfig:
             self.flow_policy.validate_tools(tuple(node._security_tools_by_name))
         if self.host_executor is not None:
             self.host_executor.validate_tools(tuple(node._security_tools_by_name))
+            injected = [
+                name
+                for name, args in node._injected_args.items()
+                if args.state
+                or args.store is not None
+                or args.runtime is not None
+                or args.all_injected_keys
+            ]
+            if injected:
+                raise SecurityConfigurationError(
+                    "host execution does not support injected tool arguments: "
+                    + ", ".join(sorted(injected))
+                )
         stack = SecurityStack(
             self.modules,
             policy_timeout_s=self.policy_timeout_s,

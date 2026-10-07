@@ -52,6 +52,8 @@ def test_security_package_exports_descriptor_api() -> None:
         "HostAttestation",
         "HostAttestationVerifier",
         "HostExecutionDenied",
+        "HostExecutionError",
+        "HostExecutionResult",
         "HostToolExecutor",
         "HmacAuditWitness",
         "Limits",

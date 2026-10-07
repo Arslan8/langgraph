@@ -10,7 +10,6 @@ import asyncio
 import contextlib
 import ctypes
 import errno
-import importlib.util
 import inspect
 import io
 import json
@@ -18,6 +17,7 @@ import math
 import resource
 import sys
 from collections.abc import Mapping
+from types import ModuleType
 from typing import Any
 
 _MAX_FRAME = 1_048_576
@@ -166,6 +166,9 @@ def _apply_limits(raw: object) -> None:
     memory = limits.get("memory_bytes")
     if isinstance(memory, int):
         resource.setrlimit(resource.RLIMIT_AS, (memory, memory))
+    file_bytes = limits.get("file_bytes")
+    if isinstance(file_bytes, int):
+        resource.setrlimit(resource.RLIMIT_FSIZE, (file_bytes, file_bytes))
     nofile = limits.get("nofile")
     if isinstance(nofile, int):
         resource.setrlimit(resource.RLIMIT_NOFILE, (nofile, nofile))
@@ -214,12 +217,13 @@ def _invoke(
     entrypoint = str(request["entrypoint"])
     module_name, _, attribute_path = entrypoint.partition(":")
     artifact_path = str(request["artifact_path"])
-    module_spec = importlib.util.spec_from_file_location(module_name, artifact_path)
-    if module_spec is None or module_spec.loader is None:
-        raise ImportError("sandbox artifact cannot be loaded")
-    module = importlib.util.module_from_spec(module_spec)
+    module = ModuleType(module_name)
+    module.__file__ = artifact_path
+    module.__package__ = module_name.rpartition(".")[0]
     sys.modules[module_name] = module
-    module_spec.loader.exec_module(module)
+    with open(artifact_path, "rb") as source:
+        code = compile(source.read(), artifact_path, "exec", dont_inherit=True)
+    exec(code, module.__dict__)
     target: Any = module
     for part in attribute_path.split("."):
         target = getattr(target, part)
