@@ -116,7 +116,11 @@ def main() -> int:
         _apply_seccomp()
         _write(
             protocol_output,
-            {"plan_digest": request["plan_digest"], "status": "ready"},
+            {
+                "plan_digest": request["plan_digest"],
+                "startup_challenge": request["startup_challenge"],
+                "status": "ready",
+            },
         )
         if sys.stdin.readline(16) != "GO\n":
             return 73
@@ -150,6 +154,8 @@ def _read_request() -> Mapping[str, Any]:
         "call_id",
         "entrypoint",
         "plan_digest",
+        "runtime_roots",
+        "startup_challenge",
         "tool_name",
     }
     if not required.issubset(value):
@@ -217,6 +223,12 @@ def _invoke(
     entrypoint = str(request["entrypoint"])
     module_name, _, attribute_path = entrypoint.partition(":")
     artifact_path = str(request["artifact_path"])
+    runtime_roots = request["runtime_roots"]
+    if not isinstance(runtime_roots, list) or any(
+        type(item) is not str for item in runtime_roots
+    ):
+        raise TypeError("runtime_roots must be a list of paths")
+    sys.path[:0] = runtime_roots
     module = ModuleType(module_name)
     module.__file__ = artifact_path
     module.__package__ = module_name.rpartition(".")[0]

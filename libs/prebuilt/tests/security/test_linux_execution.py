@@ -6,6 +6,7 @@ import hashlib
 import json
 import os
 import py_compile
+import time
 from dataclasses import replace
 from pathlib import Path
 from typing import Annotated
@@ -39,6 +40,7 @@ from langgraph.prebuilt.security import (
     parse_profiles,
     with_principal,
 )
+from langgraph.prebuilt.security import linux as linux_security
 from langgraph.prebuilt.security.execution import HostExecutionDenied
 from langgraph.prebuilt.security.linux import _verified_resource_fd
 
@@ -291,6 +293,7 @@ principal alice {{
         ("linux_tools:network_probe", "PermissionError"),
         ("linux_tools:exec_probe", "PermissionError"),
         ("linux_tools:fork_probe", "PermissionError"),
+        ("linux_tools:thread_probe", "RuntimeError"),
         ("linux_tools:unix_socket_probe", "PermissionError"),
     ],
 )
@@ -468,6 +471,260 @@ def test_linux_mount_descriptor_is_bound_to_authorized_object(
 
     with pytest.raises(HostExecutionDenied, match="resource_identity_changed"):
         _verified_resource_fd(authorized)
+
+
+def test_untrusted_runtime_root_cannot_initialize_before_confinement(
+    tmp_path: Path,
+) -> None:
+    """Python isolated mode prevents runtime-root startup hooks before seccomp."""
+    runtime_root = tmp_path / "runtime"
+    writable = tmp_path / "writable"
+    runtime_root.mkdir()
+    writable.mkdir()
+    marker = writable / "preconfinement.txt"
+    (runtime_root / "sitecustomize.py").write_text(
+        f"from pathlib import Path\nPath({str(marker)!r}).write_text('escaped')\n"
+    )
+    profiles = parse_profiles(
+        f"""
+tool read_file {{
+  owner analyst
+  grant analyst: call
+  runs linux
+  syscalls @minimal
+  fs read+write+create+delete+truncate ${{path}}/** need
+}}
+principal alice {{
+  roles analyst
+  fs read+write+create+delete+truncate {writable}/**
+}}
+""",
+        source="linux-test.slp",
+    )
+    artifact = _FIXTURES / "linux_tools.py"
+    executor = LinuxSandboxExecutor(
+        profiles,
+        {
+            "read_file": LinuxToolSpec(
+                "linux_tools:noop_path",
+                artifact,
+                hashlib.sha256(artifact.read_bytes()).hexdigest(),
+            )
+        },
+        runtime_roots=(runtime_root, _FIXTURES),
+    )
+    security = SecurityConfig(
+        dac_overrides=DacOverrides(profiles=profiles.tools),
+        host_executor=executor,
+    )
+
+    @tool
+    @dac(owner="analyst", grants={"analyst": "x", "*": "-"})
+    @effects(Effect.WRITE, resources=[ResourceArg("path", "path", "realpath")])
+    def read_file(path: str) -> str:
+        """Parent callback that must not execute."""
+        raise AssertionError(path)
+
+    guarded = guarded_tool(read_file, security=security)
+    principal = Principal("alice", frozenset({"analyst"}), frozenset(), "session")
+
+    assert guarded.invoke({"path": str(writable)}, config=_config(principal)) == "noop"
+    assert not marker.exists()
+
+
+def test_writable_directory_exposes_only_supported_operation_set(
+    tmp_path: Path,
+) -> None:
+    """Full directory grants allow data mutation but not rename or metadata changes."""
+    writable = tmp_path / "writable"
+    writable.mkdir()
+    profiles = f"""
+tool read_file {{
+  owner analyst
+  grant analyst: call
+  runs linux
+  syscalls @minimal
+  fs read+write+create+delete+truncate ${{path}}/** need
+}}
+principal alice {{
+  roles analyst
+  fs read+write+create+delete+truncate {writable}/**
+}}
+"""
+
+    @tool
+    @dac(owner="analyst", grants={"analyst": "x", "*": "-"})
+    @effects(Effect.WRITE, resources=[ResourceArg("path", "path", "realpath")])
+    def read_file(path: str) -> dict[str, str]:
+        """Parent callback that must not execute."""
+        raise AssertionError(path)
+
+    guarded = guarded_tool(
+        read_file,
+        security=_security(profiles, "linux_tools:directory_operation_probe"),
+    )
+    principal = Principal("alice", frozenset({"analyst"}), frozenset(), "session")
+
+    result = guarded.invoke({"path": str(writable)}, config=_config(principal))
+
+    assert result == {"metadata": "blocked", "rename": "blocked"}
+    assert list(writable.iterdir()) == []
+
+
+@pytest.mark.parametrize("operations", ["write", "create", "delete", "truncate"])
+def test_narrow_directory_mutation_grants_fail_lowering(
+    tmp_path: Path, operations: str
+) -> None:
+    """A writable bind is rejected unless every operation it exposes is granted."""
+    writable = tmp_path / "writable"
+    writable.mkdir()
+    profiles = f"""
+tool read_file {{
+  owner analyst
+  grant analyst: call
+  runs linux
+  syscalls @minimal
+  fs {operations} ${{path}}/** need
+}}
+principal alice {{
+  roles analyst
+  fs {operations} {writable}/**
+}}
+"""
+
+    @tool
+    @dac(owner="analyst", grants={"analyst": "x", "*": "-"})
+    @effects(Effect.WRITE, resources=[ResourceArg("path", "path", "realpath")])
+    def read_file(path: str) -> str:
+        """Parent callback that must not execute."""
+        raise AssertionError(path)
+
+    node = ToolNode(
+        (read_file,),
+        security=_security(profiles, "linux_tools:noop_path"),
+    )
+    principal = Principal("alice", frozenset({"analyst"}), frozenset(), "session")
+
+    result = node.invoke(
+        _input("read_file", {"path": str(writable)}), config=_config(principal)
+    )
+
+    assert result["messages"][0].status == "error"
+    assert "adapter_lowering_failed" in str(result["messages"][0].content)
+
+
+def test_worker_protocol_bounds_request_and_response(tmp_path: Path) -> None:
+    """Both protocol directions reject oversized and deeply nested values."""
+    profiles = """
+tool read_file {
+  owner analyst
+  grant analyst: call
+  runs linux
+  syscalls @minimal
+}
+principal alice {
+  roles analyst
+}
+"""
+
+    @tool
+    @dac(owner="analyst", grants={"analyst": "x", "*": "-"})
+    def read_file(size: int = 0, depth: int = 0, payload: str = "") -> object:
+        """Parent callback that must not execute."""
+        raise AssertionError(size, depth, payload)
+
+    principal = Principal("alice", frozenset({"analyst"}), frozenset(), "session")
+    oversized_security = _security(profiles, "linux_tools:oversized_result")
+    oversized = ToolNode(
+        (read_file,), security=oversized_security, handle_tool_errors=True
+    )
+    oversized_result = oversized.invoke(
+        _input("read_file", {"size": 2_000_000}), config=_config(principal)
+    )
+    assert oversized_result["messages"][0].status == "error"
+    assert "ValueError" in str(oversized_result["messages"][0].content)
+
+    nested = ToolNode(
+        (read_file,),
+        security=_security(profiles, "linux_tools:deeply_nested_result"),
+        handle_tool_errors=True,
+    )
+    nested_result = nested.invoke(
+        _input("read_file", {"depth": 80}), config=_config(principal)
+    )
+    assert nested_result["messages"][0].status == "error"
+    assert "indeterminate" in str(nested_result["messages"][0].content)
+
+    request_security = _security(profiles, "linux_tools:noop_path")
+    request = ToolNode((read_file,), security=request_security)
+    request_result = request.invoke(
+        _input("read_file", {"payload": "x" * 2_000_000}),
+        config=_config(principal),
+    )
+    assert request_result["messages"][0].status == "error"
+    assert "request_not_serializable" in str(request_result["messages"][0].content)
+    assert isinstance(request_security.host_executor, LinuxSandboxExecutor)
+    assert request_security.host_executor.activation_receipts() == ()
+
+
+def test_wall_timeout_confirms_worker_termination_before_return(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The supervisor confirms the concrete worker PID is gone before returning."""
+    profiles = """
+tool read_file {
+  owner analyst
+  grant analyst: call
+  runs linux
+  syscalls @minimal
+}
+principal alice {
+  roles analyst
+}
+"""
+    limits = {
+        "cpu_ms": 30_000,
+        "file_bytes": 1_048_576,
+        "memory_bytes": 1_073_741_824,
+        "nofile": 64,
+        "pids": 1,
+        "tmpfs_bytes": 1_048_576,
+        "wall_ms": 100,
+    }
+    confirmations: list[bool] = []
+    original = linux_security._confirm_worker_terminated
+
+    def track(pid: int, start_time: str, *, timeout_s: float) -> bool:
+        confirmed = original(pid, start_time, timeout_s=timeout_s)
+        confirmations.append(confirmed)
+        return confirmed
+
+    monkeypatch.setattr(linux_security, "_confirm_worker_terminated", track)
+
+    @tool
+    @dac(owner="analyst", grants={"analyst": "x", "*": "-"})
+    def read_file() -> str:
+        """Parent callback that must not execute."""
+        raise AssertionError
+
+    node = ToolNode(
+        (read_file,),
+        security=_security(
+            profiles,
+            "linux_tools:slow_probe",
+            default_limits=limits,
+        ),
+        handle_tool_errors=True,
+    )
+    principal = Principal("alice", frozenset({"analyst"}), frozenset(), "session")
+
+    started = time.monotonic()
+    result = node.invoke(_input("read_file", {}), config=_config(principal))
+
+    assert time.monotonic() - started < 3
+    assert result["messages"][0].status == "error"
+    assert "tool_timeout" in str(result["messages"][0].content)
+    assert confirmations == [True]
 
 
 def test_guarded_tool_uses_linux_host_executor(tmp_path: Path) -> None:

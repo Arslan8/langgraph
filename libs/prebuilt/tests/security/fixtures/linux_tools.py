@@ -6,6 +6,8 @@ import asyncio
 import os
 import socket
 import subprocess
+import threading
+import time
 from pathlib import Path
 
 
@@ -85,3 +87,62 @@ def descriptor_probe() -> list[int]:
             continue
         inherited.append(descriptor)
     return inherited
+
+
+def thread_probe() -> str:
+    """Attempt to create an execution context outside the supervised thread."""
+    worker = threading.Thread(target=lambda: None)
+    worker.start()
+    worker.join()
+    return "thread-created"
+
+
+def noop_path(path: str) -> str:
+    """Accept a resource argument without touching it."""
+    del path
+    return "noop"
+
+
+def directory_operation_probe(path: str) -> dict[str, str]:
+    """Exercise the exact operation set represented by a writable directory."""
+    root = Path(path)
+    created = root / "created.txt"
+    renamed = root / "renamed.txt"
+    created.write_text("created")
+    with created.open("w") as stream:
+        stream.truncate(0)
+        stream.write("updated")
+    try:
+        created.rename(renamed)
+    except PermissionError:
+        rename = "blocked"
+    else:
+        rename = "allowed"
+        created = renamed
+    try:
+        root.chmod(0o700)
+    except PermissionError:
+        metadata = "blocked"
+    else:
+        metadata = "allowed"
+    created.unlink()
+    return {"metadata": metadata, "rename": rename}
+
+
+def oversized_result(size: int) -> str:
+    """Return more data than the worker protocol permits."""
+    return "x" * size
+
+
+def deeply_nested_result(depth: int) -> object:
+    """Return a structurally expensive but byte-small JSON value."""
+    value: object = "leaf"
+    for _ in range(depth):
+        value = [value]
+    return value
+
+
+def slow_probe() -> str:
+    """Remain active until the supervisor enforces the wall deadline."""
+    while True:
+        time.sleep(1)

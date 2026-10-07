@@ -60,6 +60,9 @@ from langgraph.prebuilt.security.types import (
 )
 
 _ADAPTER_ID = "linux-bubblewrap-v1"
+_MAX_FRAME = 1_048_576
+_MAX_PROTOCOL_DEPTH = 64
+_MAX_PROTOCOL_NODES = 100_000
 _SUPPORTED_LIMITS = frozenset(
     {
         "cpu_ms",
@@ -429,14 +432,6 @@ class LinuxSandboxExecutor:
                 baseline=True,
             ),
             GrantRule(
-                "runtime:env:pythonpath",
-                AuthorityDomain.RUNTIME,
-                "environment",
-                "PYTHONPATH",
-                {"value": ":".join(os.fspath(item) for item in self.runtime_roots)},
-                baseline=True,
-            ),
-            GrantRule(
                 "runtime:env:no-bytecode",
                 AuthorityDomain.RUNTIME,
                 "environment",
@@ -553,30 +548,38 @@ class LinuxSandboxExecutor:
             raise HostExecutionDenied("host:interpreter_changed")
         if _file_digest(self._worker_script) != self._worker_digest:
             raise HostExecutionDenied("host:worker_shim_changed")
+        startup_challenge = secrets.token_hex(16)
+        try:
+            request = {
+                "args": _json_value(call.args),
+                "artifact_path": os.fspath(spec.artifact_path),
+                "asynchronous": asynchronous,
+                "call_id": call.call_id,
+                "entrypoint": spec.entrypoint,
+                "limits": _plain_mapping(adapter_plan.payload.get("limits", {})),
+                "plan_digest": adapter_plan.native_plan_digest,
+                "runtime_roots": [os.fspath(item) for item in self.runtime_roots],
+                "startup_challenge": startup_challenge,
+                "tool_name": call.tool.name,
+            }
+            encoded_request = _encode_worker_request(request)
+        except (RecursionError, TypeError, ValueError) as exc:
+            raise HostExecutionDenied("host:request_not_serializable") from exc
         command, inherited_fds, status_read, status_write, artifact_directory = (
             self._worker_command(adapter_plan, spec)
         )
-        request = {
-            "args": _json_value(call.args),
-            "artifact_path": os.fspath(spec.artifact_path),
-            "asynchronous": asynchronous,
-            "call_id": call.call_id,
-            "entrypoint": spec.entrypoint,
-            "limits": _plain_mapping(adapter_plan.payload.get("limits", {})),
-            "plan_digest": adapter_plan.native_plan_digest,
-            "tool_name": call.tool.name,
-        }
-        process: subprocess.Popen[str] | None = None
+        process: subprocess.Popen[bytes] | None = None
         receipt: ActivationReceipt | None = None
         released = False
+        child_pid: int | None = None
+        child_start_time: str | None = None
         try:
             process = subprocess.Popen(
                 command,
                 stdin=subprocess.PIPE,
                 stdout=subprocess.PIPE,
                 stderr=subprocess.PIPE,
-                text=True,
-                bufsize=1,
+                bufsize=0,
                 close_fds=True,
                 pass_fds=(*inherited_fds, status_write),
             )
@@ -587,19 +590,24 @@ class LinuxSandboxExecutor:
             inherited_fds = ()
             if process.stdin is None or process.stdout is None:
                 raise HostExecutionDenied("host:worker_pipe_failed")
-            process.stdin.write(json.dumps(request, sort_keys=True) + "\n")
+            process.stdin.write(encoded_request)
             process.stdin.flush()
             status = _read_fd_json(status_read, self.startup_timeout_s)
-            child_pid = int(status["child-pid"])
+            sandbox_init_pid = int(status["child-pid"])
             ready = _readline_json(process, self.startup_timeout_s)
             _remove_private_artifact(artifact_directory)
             artifact_directory = None
             if ready != {
                 "plan_digest": adapter_plan.native_plan_digest,
+                "startup_challenge": startup_challenge,
                 "status": "ready",
             }:
                 raise HostExecutionDenied("host:worker_startup_protocol")
+            child_pid = _sandbox_payload_pid(
+                sandbox_init_pid, timeout_s=self.startup_timeout_s
+            )
             context = _execution_context(child_pid)
+            child_start_time = context.process_identity.rpartition(":")[2]
             self._adapter.register_pending(adapter_plan, context)
             activation_nonce = secrets.token_hex(16)
             receipt = self._coordinator.activate(
@@ -615,7 +623,7 @@ class LinuxSandboxExecutor:
                 raise HostExecutionDenied("host:activation_receipt_invalid")
             with self._receipt_lock:
                 self._receipts.append(receipt)
-            process.stdin.write("GO\n")
+            process.stdin.write(b"GO\n")
             process.stdin.flush()
             released = True
             wall_timeout = _wall_timeout(
@@ -648,7 +656,13 @@ class LinuxSandboxExecutor:
                     reason, receipt, ExecutionOutcome.INDETERMINATE
                 ) from exc
             raise HostExecutionDenied(reason) from exc
-        except (KeyError, OSError, ValueError, subprocess.SubprocessError) as exc:
+        except (
+            KeyError,
+            OSError,
+            RecursionError,
+            ValueError,
+            subprocess.SubprocessError,
+        ) as exc:
             if receipt is not None:
                 raise HostExecutionError(
                     "sandboxed tool outcome is indeterminate",
@@ -666,8 +680,19 @@ class LinuxSandboxExecutor:
             if process is not None and process.poll() is None:
                 process.kill()
                 process.wait(timeout=2.0)
+            termination_confirmed = not (
+                child_pid is not None and child_start_time is not None
+            ) or _confirm_worker_terminated(child_pid, child_start_time, timeout_s=2.0)
             if artifact_directory is not None:
                 _remove_private_artifact(artifact_directory)
+            if not termination_confirmed:
+                if receipt is not None:
+                    raise HostExecutionError(
+                        "host:worker_termination_unconfirmed",
+                        receipt,
+                        ExecutionOutcome.INDETERMINATE,
+                    )
+                raise HostExecutionDenied("host:worker_termination_unconfirmed")
 
     def _worker_command(
         self, plan: AdapterPlan, spec: LinuxToolSpec
@@ -676,7 +701,6 @@ class LinuxSandboxExecutor:
         environment = _plain_mapping(plan.payload.get("environment", {}))
         expected_environment = {
             "PATH": "/usr/bin",
-            "PYTHONPATH": ":".join(os.fspath(item) for item in self.runtime_roots),
             "PYTHONCOERCECLOCALE": "0",
             "PYTHONDONTWRITEBYTECODE": "1",
             "PYTHONNOUSERSITE": "1",
@@ -770,6 +794,12 @@ class LinuxSandboxExecutor:
                 str(status_write),
                 "--",
                 os.fspath(self.python_executable),
+                "-I",
+                "-S",
+                "-B",
+                "-u",
+                "-X",
+                "utf8",
                 os.fspath(self._worker_script),
             ]
         )
@@ -1117,18 +1147,47 @@ def _wall_timeout(payload: Mapping[str, Any], default: float) -> float:
 
 def _execution_context(pid: int) -> ExecutionContext:
     status = Path(f"/proc/{pid}/status").read_text()
+    fields = {
+        name: value.strip()
+        for line in status.splitlines()
+        if ":" in line
+        for name, value in (line.split(":", 1),)
+    }
+    if (
+        fields.get("NoNewPrivs") != "1"
+        or fields.get("Seccomp") != "2"
+        or fields.get("Threads") != "1"
+        or any(
+            fields.get(name) != "0000000000000000"
+            for name in ("CapAmb", "CapBnd", "CapEff", "CapInh", "CapPrm")
+        )
+    ):
+        raise HostExecutionDenied("host:kernel_activation_state_invalid")
     credential_lines = [
-        line for line in status.splitlines() if line.startswith(("Uid:", "Gid:", "Cap"))
+        line
+        for line in status.splitlines()
+        if line.startswith(
+            ("Uid:", "Gid:", "Cap", "NoNewPrivs:", "Seccomp:", "Threads:")
+        )
     ]
     stat = Path(f"/proc/{pid}/stat").read_text().split()
     cgroup = Path(f"/proc/{pid}/cgroup").read_text().strip() or "isolated"
     boot_id = Path("/proc/sys/kernel/random/boot_id").read_text().strip()
+    namespaces = _namespace_links(pid)
+    parent_namespaces = _namespace_links(os.getpid())
+    if any(namespaces[name] == parent_namespaces[name] for name in namespaces):
+        raise HostExecutionDenied("host:namespace_activation_state_invalid")
+    mountinfo_digest = hashlib.sha256(
+        Path(f"/proc/{pid}/mountinfo").read_bytes()
+    ).hexdigest()
     return ExecutionContext(
         worker_id=f"linux-worker:{pid}:{stat[21]}",
         process_identity=f"pid:{pid}:start:{stat[21]}",
         boot_id=boot_id,
-        namespaces=_namespace_links(pid),
-        credential_digest=_digest(credential_lines),
+        namespaces=namespaces,
+        credential_digest=_digest(
+            {"mountinfo_digest": mountinfo_digest, "status": credential_lines}
+        ),
         cgroup_id=cgroup,
         broker_epoch="no-broker",
     )
@@ -1167,19 +1226,79 @@ def _read_fd_json(descriptor: int, timeout: float) -> Mapping[str, Any]:
     return value
 
 
-def _readline_json(process: subprocess.Popen[str], timeout: float) -> Mapping[str, Any]:
+def _readline_json(
+    process: subprocess.Popen[bytes], timeout: float
+) -> Mapping[str, Any]:
     if process.stdout is None:
         raise ValueError("worker stdout is unavailable")
     ready, _, _ = select.select([process.stdout.fileno()], [], [], timeout)
     if not ready:
         raise TimeoutError
-    line = process.stdout.readline(1_048_577)
-    if not line or len(line) > 1_048_576 or not line.endswith("\n"):
+    line = process.stdout.readline(_MAX_FRAME + 1)
+    if not line or len(line) > _MAX_FRAME or not line.endswith(b"\n"):
         raise ValueError("invalid worker protocol frame")
     value = json.loads(line)
     if not isinstance(value, dict):
         raise ValueError("invalid worker protocol frame")
+    _validate_protocol_shape(value)
     return value
+
+
+def _encode_worker_request(request: Mapping[str, Any]) -> bytes:
+    encoded = (
+        json.dumps(request, sort_keys=True, separators=(",", ":")).encode() + b"\n"
+    )
+    if len(encoded) > _MAX_FRAME:
+        raise ValueError("worker request exceeds protocol limit")
+    return encoded
+
+
+def _validate_protocol_shape(value: object) -> None:
+    stack = [(value, 0)]
+    nodes = 0
+    while stack:
+        item, depth = stack.pop()
+        nodes += 1
+        if depth > _MAX_PROTOCOL_DEPTH or nodes > _MAX_PROTOCOL_NODES:
+            raise ValueError("worker response exceeds structural limits")
+        if isinstance(item, dict):
+            stack.extend((child, depth + 1) for child in item.values())
+        elif isinstance(item, list):
+            stack.extend((child, depth + 1) for child in item)
+
+
+def _confirm_worker_terminated(pid: int, start_time: str, *, timeout_s: float) -> bool:
+    deadline = time.monotonic() + timeout_s
+    while time.monotonic() < deadline:
+        stat_path = Path(f"/proc/{pid}/stat")
+        try:
+            current = stat_path.read_text().split()[21]
+        except (FileNotFoundError, ProcessLookupError):
+            return True
+        if current != start_time:
+            return True
+        try:
+            os.kill(pid, 9)
+        except ProcessLookupError:
+            return True
+        time.sleep(0.01)
+    return False
+
+
+def _sandbox_payload_pid(init_pid: int, *, timeout_s: float) -> int:
+    children_path = Path(f"/proc/{init_pid}/task/{init_pid}/children")
+    deadline = time.monotonic() + timeout_s
+    while time.monotonic() < deadline:
+        try:
+            children = children_path.read_text().split()
+        except FileNotFoundError as exc:
+            raise HostExecutionDenied("host:sandbox_init_exited") from exc
+        if len(children) == 1:
+            return int(children[0])
+        if len(children) > 1:
+            raise HostExecutionDenied("host:ambiguous_worker_identity")
+        time.sleep(0.01)
+    raise HostExecutionDenied("host:worker_identity_timeout")
 
 
 def _canonical_existing_path(value: str | Path) -> Path:

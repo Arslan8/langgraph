@@ -104,20 +104,29 @@ missing manifests fail during configuration.
    constraints filter that grant and requirements are rechecked.
 3. Exact operation, selector, condition, default-deny, syscall, and resource
    obligations are negotiated. Any unsupported required obligation denies.
-4. The verified artifact bytes are copied into a private launch file. The worker
-   compiles those source bytes directly and never consults a bytecode cache. A fresh
-   bubblewrap worker receives only explicit mounts, an ephemeral `/tmp`, a clear
-   environment, dropped capabilities, isolated namespaces, a default-deny
-   seccomp allowlist, and resource ceilings.
+4. The verified artifact bytes are copied into a private launch file. Python
+   starts with `-I -S -B`; runtime roots are not placed on its startup path.
+   The trusted shim applies limits and seccomp before the parent releases it,
+   and only then adds runtime roots and compiles the pinned source directly. It
+   never consults a bytecode cache. A fresh bubblewrap worker receives only
+   explicit mounts, an ephemeral `/tmp`, a clear environment, dropped
+   capabilities, isolated namespaces, a default-deny seccomp allowlist, and
+   resource ceilings.
    Each resource mount is opened by descriptor and its device, inode, and object
    type are revalidated against the authorized canonical path before release.
-5. The worker reports ready before importing the entry point. The parent binds
-   the plan to the actual PID, process start time, namespaces, credentials,
-   cgroup, boot identity, and adapter evidence. It verifies an activation
-   receipt covering every obligation, then sends `GO`.
+5. The trusted worker reports a parent challenge and plan digest only after
+   installing limits and seccomp. The parent independently verifies the actual
+   PID, start time, distinct namespaces, zero capability sets, `NoNewPrivs`,
+   seccomp mode, single-thread state, mount-table digest, credentials, cgroup,
+   boot identity, and adapter evidence. It verifies an activation receipt
+   covering every obligation, then sends `GO`.
 6. The worker imports the pinned module, executes exactly one JSON-serializable
-   request, returns a bounded JSON result, and exits. The supervisor kills a
-   worker that times out or survives completion.
+   request, returns a bounded and depth-limited JSON result, and exits. Request
+   and response frames are capped at 1 MiB. Tool stdout is retained only inside
+   the worker's address-space limit, stderr is a bounded pipe, and protocol
+   errors contain only an exception type. The supervisor kills a worker that
+   times out or survives completion and confirms that its PID/start-time pair
+   is gone before returning or releasing flow reservations.
 
 Every successful or failed post-activation call writes the complete canonical
 receipt into the normal hash-chained audit stream before its result is accepted.
@@ -152,6 +161,24 @@ The reference adapter currently supports:
   when the profile omits limits; operators may replace the complete
   `default_limits` mapping when constructing `LinuxSandboxExecutor`.
 
+Filesystem grants have live path-subtree semantics. A directory grant
+authorizes matching children that exist or appear beneath that same mounted
+directory object during the call; it is not a snapshot of initial descendants.
+External processes permitted to mutate the backing object may do so, and the
+worker observes those mutations. Canonical symlink-free selectors and stable
+mount descriptors bind the mounted root object, but do not claim content
+immutability. Deployments that need snapshot semantics must provide immutable
+artifacts or a snapshotting resource adapter.
+
+The writable-mount operation set is deliberately closed. A writable existing
+file is accepted only with `read+write+truncate`; a writable directory subtree
+requires `read+write+create+delete+truncate`. Narrower mutation sets fail
+lowering. Rename, hard-link, symbolic-link, ownership, mode, timestamp, device,
+and extended-attribute operations are absent from `@minimal` and therefore
+denied. Authorization is path based; independently named hard-link or bind-mount
+aliases are not treated as the same policy entity. Operators needing
+object-identity policy must exclude such aliases or use an object-aware broker.
+
 Profiles used by this adapter must declare exactly `syscalls @minimal`. Injected
 state, store, or `ToolRuntime` arguments are rejected during configuration
 because the worker protocol does not carry coordinator capabilities.
@@ -171,6 +198,13 @@ Mandatory aggregate policy sees them. Interpreter, worker, bubblewrap, and tool
 artifact digests are rechecked at dispatch. Keep runtime roots minimal: mounting
 an application source tree makes that tree readable by the worker.
 
+"Pinned tool" means the manifest's primary source file only. Runtime roots,
+imported Python modules, native extensions, and runtime data are not included in
+that artifact digest. They are mounted read-only and cannot initialize through
+`PYTHONPATH`, `site`, `.pth`, or `sitecustomize` before confinement, but they may
+execute after `GO` with the worker's granted authority. Pin a deployment image
+or separately verify dependency artifacts when dependency identity matters.
+
 ## Production deployment checklist
 
 A filesystem-only Linux deployment is supported when all of the following hold:
@@ -188,8 +222,9 @@ A filesystem-only Linux deployment is supported when all of the following hold:
 - `langgraph-security-taint` reports no unmediated effect path, and the original
   in-process tool aliases are not reachable; and
 - deployment tests run on each kernel/distribution image used in production;
-- the operator has selected explicit CPU, memory, file-size, temporary-storage,
-  process, descriptor, and wall-time ceilings for the workload.
+- the operator has selected explicit CPU, virtual-address-space, file-size,
+  temporary-storage, process, descriptor, and wall-time ceilings for the
+  workload. `memory_bytes` is `RLIMIT_AS`, not an RSS or cgroup-memory quota.
 
 Within that boundary, this is a deployable enforcement implementation, not a
 simulation. It is not a general-purpose container service or a substitute for a

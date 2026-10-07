@@ -116,8 +116,8 @@ TCB component and must pass its platform contract suite.
 | `HostExecutionError` | Post-activation failure carrying the verified receipt and explicit failed or indeterminate outcome. |
 | `HostExecutionResult` | Successful host result paired with the verified receipt that must enter durable audit before its value is accepted. |
 | `HostToolExecutor` | Portable execution bridge used by `ToolNode` and `guarded_tool` after authorization. |
-| `LinuxSandboxExecutor` | Linux implementation that lowers supported grants into a fresh bubblewrap worker, validates activation evidence, and releases the startup barrier before tool import. `activation_receipts()` exposes a bounded operational snapshot. |
-| `LinuxToolSpec` | Trusted manifest binding a tool name to an importable entry point and operator-verified artifact digest. |
+| `LinuxSandboxExecutor` | Linux implementation that lowers supported filesystem and resource grants into a fresh bubblewrap worker. Before releasing the startup barrier, it verifies the payload process's namespace, capability, seccomp, no-new-privileges, thread, mount-table, credential, and process state. Frames are capped at 1 MiB, response structure is bounded, and termination is confirmed by PID plus start time. `memory_bytes` is a virtual-address-space (`RLIMIT_AS`) ceiling. `activation_receipts()` exposes a bounded operational snapshot. |
+| `LinuxToolSpec` | Trusted manifest binding a tool name to an importable entry point and operator-verified primary-source digest. Dependencies and runtime roots are not covered by this digest; they enter `sys.path` only after confinement. |
 | `EnforcementAdapter` | Protocol for exact assessment, conservative lowering, worker activation, and activation-evidence verification. |
 | `AdapterPlan` | Opaque native plan digest and the exact obligation IDs assigned to it. |
 | `ObligationAssignment` | One obligation's primary adapter and conservative support relation. |
