@@ -7,16 +7,18 @@ claim:
    concrete operation.
 2. **Worker confinement** limits the authority one worker can exercise while
    that operation runs.
-3. **Session information flow** limits where data learned by any earlier
-   operation may subsequently travel.
+3. **Classified session scheduling** prevents configured sources and sinks from
+   overlapping or running in an order forbidden by operator-supplied bounds.
 4. **Intent integrity** establishes that an allowed operation is authorized for
    the user's current purpose, rather than merely inside the principal's maximum
    envelope.
 
-An exact per-call grant proves only the first two properties. Session
-confidentiality requires the independently configured `SessionFlowPolicy`; it is
-not inferred from descriptors, grants, or per-call decisions. Neither mechanism
-proves safe model behavior or alignment with user intent.
+An exact per-call grant proves only the first two properties. Classified
+session scheduling requires an independently configured `SessionFlowPolicy`;
+it is not inferred from descriptors, grants, or per-call decisions. It becomes
+an information-flow guarantee only when configured labels bound everything an
+operation can actually read and every outward effect is mediated or confined.
+Neither mechanism proves safe model behavior or alignment with user intent.
 
 ## Cross-call information flow and pooled authority
 
@@ -27,8 +29,11 @@ files, IPC, or the orchestrator.
 
 `SessionFlowPolicy` implements a coarse session program-counter label for every
 call mediated by the same configured `ToolNode` and `guarded_tool` trust domain.
-The operator must classify every reachable tool with a possible output label and
-optional sink ceiling. Before a parallel batch fans out, the framework atomically
+The operator must classify every reachable operation with a possible-read label
+and optional outward-effect ceiling. `output_label` is retained as the API name,
+but must bound all information the operation can read, not merely what it claims
+to return. `sink_ceiling` covers effects during execution as well as returned
+data. Before a parallel batch fans out, the framework atomically
 joins every proposed source label into durable state keyed by authenticated user
 and session. Each sink then checks that accumulated label. This deliberately
 overtaints: a denied or unused source in a parallel batch may still raise the
@@ -36,23 +41,32 @@ session label, but a sink cannot win a race against a source. The SQLite store
 preserves labels across reconstructed principals, checkpoints, and process
 restarts. Atomic source/sink reservations also prevent separately invoked graphs
 or workers from overlapping an incompatible source with an already-running
-egress operation. A crashed sink reservation fails closed until it is released
-or repaired by the operator.
+egress operation. A source-and-sink operation joins its possible reads before
+checking its own sink ceiling. A crashed sink reservation fails closed until it
+is released or repaired by the operator.
 
-Because the whole session remains tainted, data retained through model context,
-messages, graph state, checkpoints, tool results, or same-session delegation
-cannot later leave through a classified mediated sink. Siblings share the label
-when they inherit the same security configuration and store. Delegation rejects
-replacement of an inherited configuration.
+The implemented reservation lasts through the mediated Python call, post hooks,
+and outcome audit. It does not supervise descendants or background work that
+outlive that call. Such work is forbidden in the protected in-process model; a
+native worker supervisor must retain the reservation and confinement lease until
+every descendant exits.
 
-This is conservative noninterference for classified mediated tool calls, not
-fine-grained provenance. It has no declassification and cannot identify which
-specific value influenced a sink. Model final text, arbitrary graph nodes,
-trusted callbacks, renderers, artifact handlers, and external actions that do
-not cross `ToolNode` or `guarded_tool` remain outside this guarantee. Those
-actions must be routed through mediation or confined in the same no-egress
-compartment. Declared effects, history, and lossy flow summaries are not used as
-evidence of noninterference; classifications are operator-owned and complete.
+Session identifiers are not declassification tokens. `transfer_session()`
+atomically joins the source label into the target before a mediated checkpoint,
+artifact, or inter-session copy. A copy that bypasses this operation is outside
+the protected model. Only trusted application code may create security sessions
+or authorize deliberate declassification.
+
+This is a scheduling guarantee over operator classifications, not proof of
+noninterference against hostile tool implementations. In the current in-process
+runtime, a falsely public tool may read confidential ambient data or transmit
+internally despite its declaration. Sound confidentiality therefore requires a
+trusted implementation or external confinement whose effective input authority
+and egress channels validate the classification. Model requests, tracing,
+telemetry, callbacks, renderers, and artifact handlers are sinks too. Route each
+through `guard_operation()` with a rule or treat it as an explicitly trusted
+destination. Static inventory and escape analysis are diagnostics; they cannot
+prove arbitrary Python has no unmediated effects.
 
 ## Untrusted results and confused deputies
 
@@ -88,12 +102,14 @@ minimal preflight grant, with no ambient resource or service authority unless an
 operator explicitly authorizes it. Its output is untrusted.
 
 The main request must remain no broader than the request presented to preflight,
-not merely within the principal's envelope. The implemented in-process
-`TRANSFORM` path conservatively requires every normalized security value to stay
-equal or become a structural subset. A transformation requiring a richer
-partial order must use a registered framework-owned normalizer and prove that
-relation. The transformed request then passes normalization, DAC, mandatory
-policy, and lowering again.
+not merely within the principal's envelope. Strings, paths, mappings, and sets
+do not carry a generic authority ordering. The implemented in-process
+`TRANSFORM` path permits non-resource rewrites only when normalized authority is
+identical. A resource-changing transformation must use the typed grant algebra
+and a framework-owned semantic attenuator comparing actions, normalized resource
+sets, conditions, and task constraints. Until that path is wired into execution,
+such a transform denies. The transformed request still passes normalization,
+DAC, and mandatory policy again.
 
 ## Runtime baseline ownership
 
@@ -109,6 +125,13 @@ are not proof of what hostile code can do. Mandatory combination checks use the
 complete effective grant, including baseline authority and authenticated
 channels. Native confinement, not an author declaration, establishes that
 unlisted effects are unavailable.
+
+Degradation never means retaining authority while waiving its restriction. An
+optional `want` that cannot be enforced is removed. If an advisory obligation is
+waived, the execution is `DEGRADED`, carries the conservative effective-authority
+upper bound, and receives no grant-subset or confidentiality claim. Flow labels
+must be computed from that upper bound; if it is unknown, no ordinary label can
+justify an outward effect.
 
 ## Revocation and irreversible effects
 

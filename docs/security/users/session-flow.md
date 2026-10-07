@@ -1,9 +1,10 @@
-# Enforce information flow across calls
+# Schedule classified sources and sinks across calls
 
 Per-call authorization is not enough when a graph remembers data. A tool can
-read a secret into messages or state and a later tool can transmit it. Enable
-`SessionFlowPolicy` when the application requires confidentiality across
-mediated calls.
+read a secret into messages or state and a later tool can transmit it.
+`SessionFlowPolicy` prevents configured source/sink schedules at mediated call
+boundaries. It is a confidentiality control only when classifications
+conservatively bound actual reads and outward effects.
 
 ## Classify every tool
 
@@ -17,6 +18,7 @@ from langgraph.prebuilt.security import (
     SessionFlowPolicy,
     SqliteFlowStateStore,
     ToolFlowRule,
+    Verdict,
 )
 
 flow = SessionFlowPolicy(
@@ -37,9 +39,12 @@ flow = SessionFlowPolicy(
 security = SecurityConfig(flow_policy=flow)
 ```
 
-`output_label` is the highest confidentiality the tool may return. A
-`sink_ceiling` is the highest accumulated session label the tool may accept.
-Configuration fails when a statically configured tool lacks a rule.
+`output_label` is the highest confidentiality the operation may read, including
+ambient inputs and data it does not return. A `sink_ceiling` is the highest
+accumulated session label from which the operation may cause any outward effect
+during execution. A tool that both reads and sends must declare both; the source
+label is joined before its sink is checked. Configuration fails when a statically
+configured tool lacks a rule.
 
 ## Runtime behavior
 
@@ -69,16 +74,53 @@ The in-memory store is thread-safe but process-local. A crashed persistent sink
 reservation fails closed and requires operator repair; never silently discard
 it while the external effect may still be running.
 
+The call boundary defines the implemented lifetime. Do not let a protected
+in-process tool leave threads, processes, callbacks, or asynchronous work alive
+after it returns. Native execution must keep the reservation and confinement
+lease until the worker and all descendants terminate.
+
+## Guard model and framework sinks
+
+Remote model inference, tracing, telemetry, rendering, and artifact publication
+can disclose data before another tool call occurs. Add named rules for them and
+guard the entire effect:
+
+```python
+with flow.guard_operation(principal, "model:remote"):
+    response = model.invoke(messages)
+```
+
+For a remote model, configure `model:remote` with a `sink_ceiling` appropriate
+to the provider and endpoint. This guard is explicit; `ToolNode` does not
+automatically wrap model clients or arbitrary callbacks.
+
+## Preserve taint across sessions and artifacts
+
+A new session identifier does not reset classification. Before importing a
+checkpoint, exposing a shared artifact, or copying protected state, propagate
+the source label:
+
+```python
+decision = flow.transfer_session(source_principal, target_principal)
+if decision.verdict is not Verdict.ALLOW:
+    raise PermissionError(decision.reason)
+```
+
+The transfer is atomic and denies if a newly sensitive target would conflict
+with an active sink. Only trusted application code may create security sessions.
+Copies that bypass this API are outside the protected execution model.
+
 ## Guarantee and boundary
 
-Within calls mediated by `ToolNode` and `guarded_tool`, data remembered through
-messages, model context, graph state, checkpoints, results, and same-session
-delegation cannot later leave through a lower-classified configured sink. The
-policy is coarse session taint, not value-level provenance, and provides no
-automatic declassification.
+The mechanism enforces a coarse scheduling policy over operator classifications;
+it does not inspect or infer data dependencies and is not proof of
+noninterference against hostile code. A public-classified in-process tool can
+still read confidential ambient data, and a source can transmit internally,
+unless the implementation is trusted or external host/service adapters constrain
+its effective input authority and channels.
 
-It does not mediate model final text, arbitrary Python graph nodes, callbacks,
-renderers, or external actions that bypass the tool boundary. Route those
-effects through `guarded_tool`, keep them inside the same no-egress compartment,
-or treat them as trusted TCB behavior. See [security boundary](security-boundary.md).
-
+Flow rules must be derived from the conservatively bounded effective authority,
+including runtime baseline and degradation. If that upper bound is unknown, do
+not authorize an outward effect using an ordinary label. Escape analysis is a
+diagnostic, not proof that arbitrary Python and native dependencies have no
+unmediated effects. See [security boundary](security-boundary.md).

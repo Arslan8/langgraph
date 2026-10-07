@@ -38,14 +38,24 @@ evidence that this branch confined a real worker.
 
 ## Information-flow boundary
 
-`SessionFlowPolicy` prevents classified mediated tool-to-tool egress across
-calls, parallel batches, separate ToolNodes, guarded calls, and workers sharing
-the durable store. It deliberately taints the whole session rather than trying
-to infer value dependencies.
+`SessionFlowPolicy` enforces operator-supplied read and outward-effect bounds
+across calls, parallel batches, separate ToolNodes, guarded calls, and workers
+sharing the durable store. A source-and-sink call is checked after joining its
+possible reads. This is a scheduling property, not evidence that an untrusted
+implementation obeyed its classification.
 
-The model's final text and unmediated trusted callbacks remain outside this
-boundary. If they can publish, write, send, or invoke services, give those
-actions their own guarded operation and originating security context.
+The model request and response path, final text, telemetry, tracing, and
+unmediated callbacks remain outside automatic mediation. If they can receive or
+publish data, give each action a rule and wrap its complete effect lifetime with
+`guard_operation()`, or make it an explicitly trusted destination. Background
+work and descendants may not outlive the reservation unless an external
+supervisor carries the reservation and confinement lease until they exit.
+
+Checkpoint imports, shared artifacts, and inter-session copies must call
+`transfer_session()` before exposing the data to the target. Arbitrary copies
+that bypass this API are outside the protected model. Static inventory and
+escape analysis help find bypasses but do not prove their absence in arbitrary
+Python or native dependencies.
 
 ## Compatibility mode
 
@@ -58,4 +68,3 @@ cannot replace inherited security.
 For the formal property split and limitations, read
 [security properties](../security-properties.md) and
 [implementation status](../status.md).
-

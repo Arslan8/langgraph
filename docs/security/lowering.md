@@ -115,7 +115,11 @@ declares waivable. Identity and artifact binding, closed-world default deny,
 principal and grant integrity, requirement-ledger validity, isolation before
 import, credential custody, approval binding, and audit precommit are
 non-waivable. A run with any waived obligation is `DEGRADED`, not `ENFORCED`, and
-the full grant-subset claim is not made for that run.
+the full grant-subset claim is not made for that run. A waiver never means
+retaining an authority line while dropping the restriction that bounds it: an
+unenforceable optional line is removed. If degradation leaves a broader known
+authority upper bound, flow classification uses that upper bound. If the bound
+is unknown, the run cannot justify an outward effect through ordinary labels.
 
 ## Exact enforcement obligations
 
@@ -274,9 +278,10 @@ sensitive-file authority plus outbound communication even if each line
 separately survived. That grant-local aggregate check does not establish
 cross-call information flow: history, declared effects, or a flow summary cannot
 soundly represent dependencies through model context, graph state, checkpoints,
-results, or delegation. The separately configured `SessionFlowPolicy` addresses
-mediated cross-call egress conservatively by tainting the whole authenticated
-session, not by claiming value-level provenance. Any Cedar evaluation
+results, or delegation. The separately configured `SessionFlowPolicy` schedules
+operator-classified sources and sinks by tainting the whole authenticated
+session. It is not noninterference evidence for hostile implementations until
+native or service enforcement constrains actual reads and outward effects. Any Cedar evaluation
 diagnostic, skipped-policy error, unknown entity, or aggregate error denies. A
 combination deny is never converted into separate allows.
 

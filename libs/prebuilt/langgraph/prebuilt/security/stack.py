@@ -533,21 +533,12 @@ def record_approval(principal: Principal, approval: Approval) -> bool:
 def _normalized_no_broader(
     original: Mapping[str, Any], transformed: Mapping[str, Any]
 ) -> bool:
-    """Conservatively require transformed security resources to be subsets."""
-    if not transformed.keys() <= original.keys():
-        return False
-    return all(
-        _value_no_broader(original[key], value) for key, value in transformed.items()
-    )
+    """Require identical normalized authority absent a semantic attenuator.
 
-
-def _value_no_broader(original: Any, transformed: Any) -> bool:
-    if isinstance(original, Mapping) and isinstance(transformed, Mapping):
-        return _normalized_no_broader(original, transformed)
-    if isinstance(original, set | frozenset) and isinstance(
-        transformed, set | frozenset
-    ):
-        return transformed <= original
+    Collection or string structure does not define an authority ordering. A
+    module may rewrite non-resource arguments, but changing a normalized
+    resource requires a framework-owned semantic grant transformation instead.
+    """
     return bool(transformed == original)
 
 

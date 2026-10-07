@@ -146,8 +146,8 @@ over-taints model context and graph state so it does not depend on inference.
 | Name | Purpose |
 | --- | --- |
 | `Confidentiality` | Ordered built-in lattice: public, internal, confidential, and secret. |
-| `ToolFlowRule` | Operator-owned possible output label and optional maximum label accepted by a sink. |
-| `SessionFlowPolicy` | Atomically raises labels, reserves concurrent source/sink execution, and denies egress above its ceiling. |
+| `ToolFlowRule` | Operator-owned bound on everything an operation may read and optional maximum label from which it may cause an outward effect. It is a policy input, not evidence about hostile code. |
+| `SessionFlowPolicy` | Atomically schedules operator-classified sources and sinks, guards named non-tool operations, and propagates labels across mediated session transfers. Classifications are assumptions unless validated by confinement. |
 | `FlowStateStore` | Atomic label and execution-reservation storage keyed by authenticated user and session identity. |
 | `MemoryFlowStateStore` | Thread-safe process-local implementation. |
 | `SqliteFlowStateStore` | Durable SQLite WAL implementation that survives principal reconstruction and restarts. |

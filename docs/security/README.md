@@ -20,7 +20,7 @@ recorded in the [`adr/`](adr/) directory. Three runnable examples live in
 [`examples/`](examples/README.md).
 
 The [security properties and composition boundaries](security-properties.md)
-separate per-call resource access control from session information flow,
+separate per-call resource access control from classified session scheduling,
 confused-deputy resistance, revocation, and task-intent integrity. Those
 boundaries are part of the security contract, not optional caveats.
 

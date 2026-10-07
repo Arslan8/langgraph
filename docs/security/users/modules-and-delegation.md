@@ -43,12 +43,16 @@ may be invoked concurrently by threads and async tasks.
 ## Narrow arguments
 
 Only `tool_call_prepare` may return `TRANSFORM`. Supply the complete replacement
-arguments in `Decision.new_args`. The framework rejects normalized values that
-become structurally broader and reruns DAC after all transforms.
+arguments in `Decision.new_args`. The current runtime allows changes to
+non-resource arguments only when normalized authority is identical, then reruns
+DAC after all transforms. It rejects structural “narrowing” of paths, sets,
+mappings, or selectors because structure alone is not a semantic authority
+ordering.
 
 Use built-in, framework-owned normalizers for security comparisons. Do not
 execute tool-authored transformation code in a trusted coordinator and treat
-the result as proof of narrowing.
+the result as proof of narrowing. Resource-changing transforms require a typed,
+framework-owned semantic attenuator and are not enabled in the in-process path.
 
 ## Request approval
 
@@ -85,4 +89,3 @@ Scope attenuation does not itself prevent cooperating children from combining
 authority through shared state. Enable [session flow](session-flow.md) for
 cross-call confidentiality and ensure all children inherit the same durable
 flow store.
-

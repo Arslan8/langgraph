@@ -1,9 +1,10 @@
-"""Conservative session-wide information-flow enforcement."""
+"""Operator-classified scheduling and egress controls across a session."""
 
 from __future__ import annotations
 
 import sqlite3
-from collections.abc import Mapping, Sequence
+from collections.abc import Iterator, Mapping, Sequence
+from contextlib import contextmanager
 from dataclasses import dataclass
 from enum import IntEnum
 from pathlib import Path
@@ -25,7 +26,13 @@ class Confidentiality(IntEnum):
 
 @dataclass(frozen=True, slots=True)
 class ToolFlowRule:
-    """Operator-owned possible output label and optional egress ceiling."""
+    """Operator-owned read/output bound and optional outward-effect ceiling.
+
+    `output_label` must conservatively bound every input the operation can read,
+    not merely the value it declares that it will return. `sink_ceiling` must be
+    set when the operation can cause any outward effect during its lifetime.
+    These classifications are policy inputs, not evidence about hostile code.
+    """
 
     output_label: Confidentiality = Confidentiality.PUBLIC
     sink_ceiling: Confidentiality | None = None
@@ -33,7 +40,7 @@ class ToolFlowRule:
 
 @runtime_checkable
 class FlowStateStore(Protocol):
-    """Atomic persistent storage for one session's current flow label."""
+    """Atomic persistent storage for session labels and active sinks."""
 
     def raise_label(
         self, user_id: str, session_id: str, label: Confidentiality
@@ -62,6 +69,16 @@ class FlowStateStore(Protocol):
         sink_ceiling: Confidentiality | None,
     ) -> None:
         """Release a successful reservation after execution finishes."""
+        ...
+
+    def transfer_label(
+        self,
+        source_user_id: str,
+        source_session_id: str,
+        target_user_id: str,
+        target_session_id: str,
+    ) -> str | None:
+        """Propagate a label to a target session or return a conflict reason."""
         ...
 
 
@@ -127,6 +144,26 @@ class MemoryFlowStateStore:
                 del sinks[sink_ceiling]
             if not sinks:
                 del self._active_sinks[key]
+
+    def transfer_label(
+        self,
+        source_user_id: str,
+        source_session_id: str,
+        target_user_id: str,
+        target_session_id: str,
+    ) -> str | None:
+        """Atomically join a source session label into a target session."""
+        with self._lock:
+            source = self._labels.get(
+                (source_user_id, source_session_id), Confidentiality.PUBLIC
+            )
+            target_key = (target_user_id, target_session_id)
+            target = max(self._labels.get(target_key, Confidentiality.PUBLIC), source)
+            active = self._active_sinks.get(target_key, {})
+            if any(target > ceiling and count for ceiling, count in active.items()):
+                return "flow:concurrent_egress"
+            self._labels[target_key] = target
+            return None
 
 
 class SqliteFlowStateStore:
@@ -271,6 +308,61 @@ class SqliteFlowStateStore:
                 (user_id, session_id, int(sink_ceiling)),
             )
 
+    def transfer_label(
+        self,
+        source_user_id: str,
+        source_session_id: str,
+        target_user_id: str,
+        target_session_id: str,
+    ) -> str | None:
+        """Atomically join a source session label into a target session."""
+        with self._lock:
+            self._connection.execute("BEGIN IMMEDIATE")
+            try:
+                source_row = self._connection.execute(
+                    "SELECT label FROM flow_state WHERE user_id = ? AND session_id = ?",
+                    (source_user_id, source_session_id),
+                ).fetchone()
+                target_row = self._connection.execute(
+                    "SELECT label FROM flow_state WHERE user_id = ? AND session_id = ?",
+                    (target_user_id, target_session_id),
+                ).fetchone()
+                source = (
+                    Confidentiality.PUBLIC
+                    if source_row is None
+                    else Confidentiality(int(source_row[0]))
+                )
+                target = max(
+                    Confidentiality.PUBLIC
+                    if target_row is None
+                    else Confidentiality(int(target_row[0])),
+                    source,
+                )
+                active = self._connection.execute(
+                    """
+                    SELECT ceiling FROM flow_active_sinks
+                    WHERE user_id = ? AND session_id = ? AND active_count > 0
+                    """,
+                    (target_user_id, target_session_id),
+                ).fetchall()
+                if any(target > Confidentiality(int(item[0])) for item in active):
+                    self._connection.rollback()
+                    return "flow:concurrent_egress"
+                self._connection.execute(
+                    """
+                    INSERT INTO flow_state (user_id, session_id, label)
+                    VALUES (?, ?, ?)
+                    ON CONFLICT(user_id, session_id) DO UPDATE SET
+                        label = MAX(flow_state.label, excluded.label)
+                    """,
+                    (target_user_id, target_session_id, int(target)),
+                )
+                self._connection.commit()
+                return None
+            except BaseException:
+                self._connection.rollback()
+                raise
+
     def close(self) -> None:
         """Flush and close the database connection."""
         with self._lock:
@@ -278,7 +370,13 @@ class SqliteFlowStateStore:
 
 
 class SessionFlowPolicy:
-    """Coarse but sound session-PC policy for cross-call confidentiality."""
+    """Schedule calls using operator-supplied read and outward-effect bounds.
+
+    This policy enforces its classifications at mediated call boundaries. It is
+    a confidentiality mechanism only when those classifications conservatively
+    bound actual behavior and every relevant effect crosses a mediated boundary
+    or is independently confined.
+    """
 
     def __init__(
         self,
@@ -307,7 +405,9 @@ class SessionFlowPolicy:
 
     def permission(self, principal: Principal, tool_name: str) -> Decision:
         """Deny a sink whose ceiling is below accumulated session sensitivity."""
-        rule = self.rules[tool_name]
+        rule = self.rules.get(tool_name)
+        if rule is None:
+            return Decision(Verdict.DENY, "flow:unclassified")
         current = self.store.get_label(principal.user_id, principal.session_id)
         if rule.sink_ceiling is not None and current > rule.sink_ceiling:
             return Decision(Verdict.DENY, "flow:egress")
@@ -317,7 +417,9 @@ class SessionFlowPolicy:
         self, principal: Principal, tool_name: str
     ) -> tuple[Decision, ToolFlowRule | None]:
         """Atomically reserve a source/sink operation until it completes."""
-        rule = self.rules[tool_name]
+        rule = self.rules.get(tool_name)
+        if rule is None:
+            return Decision(Verdict.DENY, "flow:unclassified"), None
         reason = self.store.reserve(
             principal.user_id,
             principal.session_id,
@@ -335,3 +437,39 @@ class SessionFlowPolicy:
         self.store.release(
             principal.user_id, principal.session_id, reservation.sink_ceiling
         )
+
+    def transfer_session(self, source: Principal, target: Principal) -> Decision:
+        """Propagate taint for a mediated checkpoint, artifact, or session copy."""
+        try:
+            reason = self.store.transfer_label(
+                source.user_id,
+                source.session_id,
+                target.user_id,
+                target.session_id,
+            )
+        except BaseException:
+            return Decision(Verdict.DENY, "flow:store_error")
+        if reason is not None:
+            return Decision(Verdict.DENY, reason)
+        return Decision(Verdict.ALLOW, "flow:transfer")
+
+    @contextmanager
+    def guard_operation(
+        self, principal: Principal, operation_name: str
+    ) -> Iterator[None]:
+        """Guard a non-tool sink such as model inference, tracing, or rendering.
+
+        The named operation must have a configured `ToolFlowRule`. The caller
+        must keep the context open for the complete effect lifetime, including
+        supervised descendants and background work.
+        """
+        try:
+            decision, reservation = self.acquire(principal, operation_name)
+        except BaseException as exc:
+            raise PermissionError("flow:store_error") from exc
+        if decision.verdict is not Verdict.ALLOW:
+            raise PermissionError(decision.reason)
+        try:
+            yield
+        finally:
+            self.release(principal, reservation)

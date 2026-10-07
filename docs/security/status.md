@@ -14,7 +14,7 @@ sequence; accepted documentation is not evidence that its adapters exist.
 | Seven-hook restrictive module stack | Implemented and tested | DAC runs first; modules cannot override denial; failure and timeout deny. |
 | `ToolNode` mediation | Implemented and tested | Every physical callback execution, retry, and rewritten request is checked immediately before invocation. |
 | Direct tool mediation | Implemented and tested | Calls through `guarded_tool` use the same decision stack. Other aliases are outside the boundary. |
-| Session information flow | Implemented and tested when configured | Operator-complete tool classifications raise a durable session label before parallel fan-out; classified mediated sinks deny cross-call and sibling egress. This is coarse whole-session taint, not value provenance, and unmediated framework actions remain outside the claim. |
+| Classified session scheduling | Implemented and tested when configured | Operator-supplied possible-read labels and outward-effect ceilings are joined and reserved atomically; same-call source/sink conflicts, cross-call races, and mediated session transfers are covered. This is not a hostile-code confidentiality claim until confinement validates the bounds and channels. |
 | Scope delegation attenuation | Implemented and tested | Child scopes must be a subset and blobs are independently copied. Typed label ordering, exact-grant attenuation, and shared budgets are not implemented. |
 | Checkpoint-compatible approval flow | Implemented and tested | Escalation requires a checkpointer; resume rechecks policy; approval payloads omit arguments. Current matching binds request, call, and tool identifiers only. |
 | Hash-chained audit | Implemented and tested | In-memory and SQLite sinks detect modification inside the retained chain. They do not detect deletion of a valid suffix without an external head or terminal seal. This is decision evidence only. |
@@ -51,7 +51,7 @@ table prevents target prose from being mistaken for implementation evidence.
 | Host evidence trust and context binding | Implemented and tested as a contract | An explicit verifier checks nonce, freshness, and trust; activation binds boot, worker, namespaces, credentials, cgroup, broker epoch, plan, and obligations. A host probe/attestor is not yet shipped. |
 | Worker activation receipt and lease invalidation | Activation receipt implemented; live invalidation not implemented | A receipt must cover every assigned obligation and exact worker context. The startup barrier and renewable dependency leases remain. |
 | Multi-component enforcement | Implemented and tested as an obligation DAG | Each obligation has one explicit primary enforcer, dependencies are complete and acyclic, and activation evidence must cover all assigned obligations. Semantic obligation compilers and native adapters remain. |
-| Advisory security claim | Implemented and tested in negotiation | Only explicitly waivable obligations may degrade; closed-world complements and required source lines cannot be waived. Runtime propagation remains. |
+| Advisory security claim | Implemented and tested in negotiation | Only explicitly waivable obligations may degrade; closed-world complements and required source lines cannot be waived. A waiver never retains authority while dropping its restriction, and no confinement or confidentiality claim applies to an unknown effective-authority bound. Runtime propagation remains. |
 | Module output to Cedar | Typed forbid-only output implemented and tested | The framework owns module attribution and rejects spoofed or malformed outputs. Cedar translation remains replaceable backend work. |
 | Broad-resource mandatory filtering | Implemented and tested in the reference backend | Filesystem child subtrees become explicit exclusions; unrepresentable conditional differences remove the broad rule and requirements are rechecked. |
 | Cedar diagnostics and aggregate combinations | Backend diagnostics and aggregate combinations implemented; Cedar adapter not implemented | Any backend diagnostic denies; typed combinations can reject cross-domain authority sets. |
@@ -87,12 +87,13 @@ finding.
 
 Without `SessionFlowPolicy`, the claim remains per-execution resource access
 control. With an operator-complete flow policy and shared durable store,
-classified calls crossing `ToolNode` or `guarded_tool` also receive conservative
-session-wide confidentiality: a session that may have observed data above a
-sink's ceiling cannot use that sink. This does not cover unmediated trusted
-result consumers, model final text, rollback after an adapter commit point, or
-whether an allowed action matches the user's purpose. See
-[security properties](security-properties.md) for the exact boundary.
+classified calls crossing `ToolNode` or `guarded_tool` receive atomic
+source/sink scheduling; explicitly wrapped model and framework effects can use
+`guard_operation()`, and mediated copies can use `transfer_session()`. These
+labels prove confidentiality only when actual reads and outward channels are
+bounded by trusted code or active confinement. Background descendants,
+unmediated consumers, and copies that bypass transfer remain outside the claim.
+See [security properties](security-properties.md) for the exact boundary.
 
 For untrusted tool code today, use an external OS sandbox and run
 `langgraph-security-taint` as an explicit CI gate. Do not treat an allow verdict,

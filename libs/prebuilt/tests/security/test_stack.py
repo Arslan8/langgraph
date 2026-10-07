@@ -27,7 +27,11 @@ from langgraph.prebuilt.security import (
     ToolDac,
     Verdict,
 )
-from langgraph.prebuilt.security.stack import _matches_approval, _replace_call_args
+from langgraph.prebuilt.security.stack import (
+    _matches_approval,
+    _normalized_no_broader,
+    _replace_call_args,
+)
 
 
 def _principal(scopes: Sequence[str] = ("fs:read",)) -> Principal:
@@ -149,6 +153,22 @@ def test_transform_is_rechecked_by_dac() -> None:
 
     assert decision == Decision(Verdict.DENY, "prepare:widened:widen")
     assert transformed.normalized["path"] == "/safe"
+
+
+def test_transform_cannot_claim_structural_subset_is_authority_attenuation() -> None:
+    """Collection structure is not treated as a semantic authority ordering."""
+    assert not _normalized_no_broader(
+        {"recipients": frozenset({"alice", "bob"})},
+        {"recipients": frozenset({"alice"})},
+    )
+    assert not _normalized_no_broader(
+        {"path": "/workspace", "mode": "read"},
+        {"path": "/workspace"},
+    )
+    assert _normalized_no_broader(
+        {"path": "/workspace", "mode": "read"},
+        {"path": "/workspace", "mode": "read"},
+    )
 
 
 @pytest.mark.parametrize(

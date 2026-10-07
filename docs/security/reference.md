@@ -93,10 +93,11 @@ transfer. The child principal records `delegated_by`.
 
 ## Session information flow
 
-`SessionFlowPolicy` is an operator-configured, coarse program-counter policy for
-confidentiality across mediated calls. Every statically configured tool must
-have a `ToolFlowRule` describing its maximum possible output label and optional
-sink ceiling. The framework does not infer these classifications.
+`SessionFlowPolicy` is an operator-configured source/sink scheduling policy
+across mediated calls. Every statically configured tool must have a
+`ToolFlowRule` whose `output_label` conservatively bounds everything the tool
+may read and whose optional `sink_ceiling` covers all outward effects. The
+framework does not infer or validate these classifications against hostile code.
 
 Labels are keyed by authenticated user and session outside graph state. They are
 raised before parallel fan-out, persist across calls, and are checked before
@@ -104,8 +105,11 @@ physical execution. Atomic reservations prevent incompatible sources and sinks
 from racing across independent invocations. `MemoryFlowStateStore` is
 process-local; `SqliteFlowStateStore` coordinates durable state across workers.
 
-This covers sinks crossing `ToolNode` or `guarded_tool`. It does not mediate
-model final text or arbitrary Python callbacks. See the
+This automatically covers sinks crossing `ToolNode` or `guarded_tool`.
+`guard_operation()` covers explicitly wrapped model, tracing, telemetry, and
+other framework sinks; `transfer_session()` propagates labels through mediated
+session, checkpoint, and artifact copies. Descendants and background work may
+not outlive a reservation without an external supervisor. See the
 [session-flow user guide](users/session-flow.md) for configuration and the exact
 boundary.
 

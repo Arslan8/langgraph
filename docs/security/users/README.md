@@ -12,8 +12,8 @@ role:
   normalization, author DAC, and operator overrides.
 - [Write restrictive modules](modules-and-delegation.md) for mandatory policy,
   private slots, argument narrowing, approvals, and delegation.
-- [Enforce session information flow](session-flow.md) to stop sensitive results
-  from reaching lower-classified mediated sinks in later or concurrent calls.
+- [Schedule classified sources and sinks](session-flow.md) to block incompatible
+  mediated operations in later or concurrent calls.
 - [Operate and audit deployments](operations.md) for principal binding, durable
   audit, observability, inventory, escape analysis, and troubleshooting.
 - [Understand the security boundary](security-boundary.md) before running
@@ -28,11 +28,10 @@ the principal at a trusted request boundary and reuse the same
 
 Configured calls crossing `ToolNode` or `guarded_tool` receive author DAC,
 restrictive mandatory hooks, fail-closed normalization and hook handling,
-redacted decision audit, durable approval rechecks, and optional session-wide
-flow enforcement. Sync and async paths use the same contracts.
+redacted decision audit, durable approval rechecks, and optional classified
+source/sink scheduling. Sync and async paths use the same contracts.
 
 Native worker confinement is a separate layer. The grant, obligation,
 host-attestation, adapter-plan, and activation-receipt contracts exist, but tool
 execution is not yet routed through a native enforcement adapter. Until that
 wiring lands, use an external sandbox when tool code itself is untrusted.
-

@@ -75,10 +75,10 @@ dangerous APIs, but cannot prove process-wide confinement for dynamic Python.
 | `module_timeout:<name>` | Policy exceeded `policy_timeout_s`. | Repair policy latency or adjust the trusted timeout deliberately. |
 | `flow:egress` | Accumulated session confidentiality exceeds the sink ceiling. | Keep the session confined or start a separately authorized session; do not clear labels silently. |
 | `flow:concurrent_egress` | A sensitive source conflicts with active egress. | Let egress finish, then reconsider the source under policy. |
+| `flow:unclassified` | A guarded non-tool operation has no operator rule. | Add a conservative possible-read and outward-effect rule; do not bypass the guard. |
 | `audit_failure` | Required evidence could not be written before execution. | Restore durable audit availability before retrying. |
 
 ## Shutdown
 
 Close SQLite audit and flow stores during orderly shutdown. Do not delete audit,
 flow, approval, or checkpoint state merely to make a denied operation pass.
-

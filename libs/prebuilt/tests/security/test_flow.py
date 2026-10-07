@@ -13,12 +13,15 @@ from langchain_core.tools import tool
 from langgraph.prebuilt import ToolNode
 from langgraph.prebuilt.security import (
     Confidentiality,
+    Decision,
     MemoryAuditSink,
+    MemoryFlowStateStore,
     Principal,
     SecurityConfig,
     SessionFlowPolicy,
     SqliteFlowStateStore,
     ToolFlowRule,
+    Verdict,
     dac,
     guarded_tool,
     with_principal,
@@ -276,6 +279,107 @@ def test_concurrent_source_cannot_start_while_egress_is_active() -> None:
         assert sink.result(timeout=5) == "sent"
 
     assert executed == ["send"]
+
+
+def test_source_and_sink_rule_joins_reads_before_checking_egress() -> None:
+    """A single operation cannot transmit data it may read above its ceiling."""
+    policy = SessionFlowPolicy(
+        {"read_and_send": ToolFlowRule(Confidentiality.SECRET, Confidentiality.PUBLIC)}
+    )
+    principal = Principal("alice", frozenset(), frozenset(), "session")
+
+    decision, reservation = policy.acquire(principal, "read_and_send")
+
+    assert decision == Decision(Verdict.DENY, "flow:egress")
+    assert reservation is None
+
+
+def test_session_transfer_propagates_label_and_blocks_lower_sink() -> None:
+    """A mediated copy cannot reset taint by choosing a new session ID."""
+    policy = _policy()
+    source = Principal("alice", frozenset(), frozenset(), "source")
+    target = Principal("bob", frozenset(), frozenset(), "target")
+    policy.store.raise_label("alice", "source", Confidentiality.SECRET)
+
+    assert policy.transfer_session(source, target) == Decision(
+        Verdict.ALLOW, "flow:transfer"
+    )
+    decision, reservation = policy.acquire(target, "send_external")
+
+    assert decision == Decision(Verdict.DENY, "flow:egress")
+    assert reservation is None
+
+
+def test_session_transfer_conflicts_with_active_target_sink() -> None:
+    """A sensitive transfer cannot race an already-active target sink."""
+    policy = _policy()
+    source = Principal("alice", frozenset(), frozenset(), "source")
+    target = Principal("bob", frozenset(), frozenset(), "target")
+    policy.store.raise_label("alice", "source", Confidentiality.SECRET)
+    decision, reservation = policy.acquire(target, "send_external")
+    assert decision.verdict is Verdict.ALLOW
+    try:
+        assert policy.transfer_session(source, target) == Decision(
+            Verdict.DENY, "flow:concurrent_egress"
+        )
+    finally:
+        policy.release(target, reservation)
+
+
+def test_sqlite_session_transfer_is_durable(tmp_path) -> None:
+    """Transferred labels survive process-local principal reconstruction."""
+    store = SqliteFlowStateStore(tmp_path / "transfer-flow.db")
+    policy = _policy(store=store)
+    source = Principal("alice", frozenset(), frozenset(), "source")
+    target = Principal("bob", frozenset(), frozenset(), "target")
+    try:
+        store.raise_label("alice", "source", Confidentiality.CONFIDENTIAL)
+        assert policy.transfer_session(source, target).verdict is Verdict.ALLOW
+        assert store.get_label("bob", "target") is Confidentiality.CONFIDENTIAL
+    finally:
+        store.close()
+
+
+def test_guard_operation_covers_non_tool_model_sink() -> None:
+    """Applications can place model and telemetry effects under the same gate."""
+    policy = SessionFlowPolicy(
+        {
+            "read_secret": ToolFlowRule(Confidentiality.SECRET),
+            "model:remote": ToolFlowRule(
+                Confidentiality.PUBLIC, Confidentiality.PUBLIC
+            ),
+        }
+    )
+    principal = Principal("alice", frozenset(), frozenset(), "session")
+    decision, reservation = policy.acquire(principal, "read_secret")
+    assert decision.verdict is Verdict.ALLOW
+    policy.release(principal, reservation)
+
+    with pytest.raises(PermissionError, match="flow:egress"):
+        with policy.guard_operation(principal, "model:remote"):
+            raise AssertionError("denied operation body must not run")
+
+    with pytest.raises(PermissionError, match="flow:unclassified"):
+        with policy.guard_operation(principal, "telemetry:unknown"):
+            raise AssertionError("unclassified operation body must not run")
+
+
+def test_guard_operation_fails_closed_on_store_error() -> None:
+    """A broken non-tool sink reservation never exposes the operation body."""
+
+    class BrokenStore(MemoryFlowStateStore):
+        def reserve(self, *args, **kwargs):
+            raise RuntimeError("storage unavailable")
+
+    policy = SessionFlowPolicy(
+        {"model:remote": ToolFlowRule(sink_ceiling=Confidentiality.PUBLIC)},
+        store=BrokenStore(),
+    )
+    principal = Principal("alice", frozenset(), frozenset(), "session")
+
+    with pytest.raises(PermissionError, match="flow:store_error"):
+        with policy.guard_operation(principal, "model:remote"):
+            raise AssertionError("failed-closed operation body must not run")
 
 
 def test_flow_decisions_are_in_the_required_audit_chain() -> None:
