@@ -22,6 +22,7 @@ sequence; accepted documentation is not evidence that its adapters exist.
 | `ResourceBoundary` reference module | Implemented and tested | Operator filesystem policy is compiled into attributed forbids over requested and runtime-baseline path authority. It is tested in composition and in real Linux workers. Unrepresentable or unlowerable results deny before release. See the [interface assessment](resource-boundary-interface.md). |
 | Tool inventory | Implemented and tested | Static entries are collected; incomplete dynamic inventory is reported honestly. |
 | Escape analysis | Implemented and tested | Source and CLI analysis report known and unresolved bypass paths. It must currently be run explicitly. |
+| Authorization-state analysis | Bounded checker implemented | Eight secured dispatch sites in four sync/async entry points are checked for a successful decision of the required permission class bound to the same principal and request. Helper summaries link to hashed reviewed source bodies. Lifecycle, transfer, and publication limitations are explicit in the [coverage report](mediation-analysis.md). This is not a complete-mediation proof for the framework. |
 | `.slp` grammar and constructive DAC | Implemented and tested | The parser, binding, need/want semantics, provenance, overrides, and monotonicity properties are shipped. |
 
 ## ADR 0007 phase one

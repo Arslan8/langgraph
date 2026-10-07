@@ -392,6 +392,11 @@ crosses calls, subjects, or grant keys.
 
 ## Verified hook placement
 
+This section specifies the target. The current implementation has an explicit
+escape-analysis CLI and a separate [bounded authorization-state checker](../mediation-analysis.md).
+The graph compile gate and whole-framework verification described below are not
+implemented. See [implementation status](../status.md) for shipped guarantees.
+
 Hook placement is verified rather than assumed. The source analyzer is a
 compile gate for graphs built with `security=...`. Compilation fails when
 model-controlled data can reach an unmediated sink, an unresolved call, an

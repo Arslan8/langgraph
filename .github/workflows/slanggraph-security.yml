@@ -6,12 +6,16 @@ on:
     paths:
       - ".github/workflows/slanggraph-security.yml"
       - "libs/prebuilt/**"
+      - "libs/langgraph/**"
+      - "docs/security/**"
   push:
     branches:
       - course/security-modules
     paths:
       - ".github/workflows/slanggraph-security.yml"
       - "libs/prebuilt/**"
+      - "libs/langgraph/**"
+      - "docs/security/**"
 
 permissions:
   contents: read
@@ -40,6 +44,16 @@ jobs:
         run: uv sync --frozen
       - name: Run package lint
         run: make lint
+      - name: Verify bounded host-dispatch claims (not overall completeness)
+        run: >-
+          uv run python -m langgraph.prebuilt.security.mediation
+          --check-claims --output mediation-report.json
+      - name: Upload authorization coverage and unresolved obligations
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: mediation-report-${{ github.sha }}
+          path: libs/prebuilt/mediation-report.json
       - name: Run strict security-package type check
         run: >-
           uv run mypy --strict --explicit-package-bases

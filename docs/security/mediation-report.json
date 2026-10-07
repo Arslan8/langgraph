@@ -1,0 +1,898 @@
+{
+  "analysis": "bounded-authorization-state-v2",
+  "catalog_sha256": "ef966170b0aa05ccc7aeba00c8c3d2d75bb153217d80c4fe84a642519f975b2a",
+  "checker_sha256": "7675851de3b6aa715403657bd7adb3796c54c66a79303d5dd53de6767015b5e4",
+  "checks": [
+    {
+      "assumptions": [
+        "Security is configured and its configuration is controlled by the application.",
+        "Authorizer summaries authenticate the principal and return decisions for exactly the selected request.",
+        "Request/principal identities and their security-relevant contents remain stable across reviewed calls and awaits.",
+        "Reviewed calls preserve authorization inputs; their implementations and hidden effects are not verified here.",
+        "Python builtins, Verdict enum identity, attribute reads and call-target resolution behave as declared; no monkeypatching or hostile descriptors.",
+        "In-process dispatch and its argument/target projection are inventoried separately as unresolved."
+      ],
+      "authorizer_summaries": [
+        {
+          "bindings": [
+            "arg:0",
+            "arg:1"
+          ],
+          "decision": "",
+          "permission": "tool_call",
+          "source_evidence": [
+            "authorization-stack"
+          ],
+          "target": "self.stack.permission"
+        },
+        {
+          "bindings": [
+            "arg:0",
+            "arg:1"
+          ],
+          "decision": "",
+          "permission": "tool_call",
+          "source_evidence": [
+            "guarded-request-binding"
+          ],
+          "target": "self._resume"
+        }
+      ],
+      "function": "_GuardedExecutor.invoke",
+      "issues": [],
+      "max_states": 512,
+      "operation_summaries": [
+        {
+          "bindings": [
+            "arg:0",
+            "arg:1"
+          ],
+          "permission": "tool_call",
+          "target": "self.security.host_executor.invoke"
+        },
+        {
+          "bindings": [
+            "arg:0",
+            "arg:1"
+          ],
+          "permission": "tool_call",
+          "target": "self._invoke_in_process"
+        }
+      ],
+      "operations": [
+        {
+          "column": 30,
+          "line": 135,
+          "status": "verified_under_contract",
+          "target": "self.security.host_executor.invoke"
+        },
+        {
+          "column": 25,
+          "line": 146,
+          "status": "verified_under_contract",
+          "target": "self._invoke_in_process"
+        }
+      ],
+      "path": "security/guarded.py",
+      "source_sha256": "1c21bb62abd1561f956450ef527747358a52d31fa94d8cc4070a27812fe54eee",
+      "status": "verified_under_contract",
+      "trusted_calls": [
+        "Decision",
+        "SecurityDeniedError",
+        "SecurityIndeterminateError",
+        "dict",
+        "str",
+        "exc.receipt.audit_reason",
+        "host_result.receipt.audit_reason",
+        "self._acquire_flow",
+        "self._finalize_flow",
+        "self._prepare",
+        "self._release_flow",
+        "self.stack.post",
+        "self.stack.apost",
+        "self.stack.prepare",
+        "self.stack.aprepare",
+        "self.stack.record_framework_event",
+        "self.target.invoke",
+        "self.target.ainvoke"
+      ]
+    },
+    {
+      "assumptions": [
+        "Security is configured and its configuration is controlled by the application.",
+        "Authorizer summaries authenticate the principal and return decisions for exactly the selected request.",
+        "Request/principal identities and their security-relevant contents remain stable across reviewed calls and awaits.",
+        "Reviewed calls preserve authorization inputs; their implementations and hidden effects are not verified here.",
+        "Python builtins, Verdict enum identity, attribute reads and call-target resolution behave as declared; no monkeypatching or hostile descriptors.",
+        "In-process dispatch and its argument/target projection are inventoried separately as unresolved."
+      ],
+      "authorizer_summaries": [
+        {
+          "bindings": [
+            "result:1.principal",
+            "result:2"
+          ],
+          "decision": "0",
+          "permission": "tool_call",
+          "source_evidence": [
+            "toolnode-request-binding"
+          ],
+          "target": "self._prepare_security_request"
+        },
+        {
+          "bindings": [
+            "arg:0",
+            "arg:1"
+          ],
+          "decision": "",
+          "permission": "tool_call",
+          "source_evidence": [
+            "toolnode-request-binding"
+          ],
+          "target": "self._resume_security"
+        }
+      ],
+      "function": "ToolNode._execute_tool_sync",
+      "issues": [],
+      "max_states": 512,
+      "operation_summaries": [
+        {
+          "bindings": [
+            "arg:0",
+            "arg:1"
+          ],
+          "permission": "tool_call",
+          "target": "self._security_host_executor.invoke"
+        },
+        {
+          "bindings": [
+            "arg:0",
+            "arg:1"
+          ],
+          "permission": "tool_call",
+          "target": "self._invoke_secured_tool_sync"
+        }
+      ],
+      "operations": [
+        {
+          "column": 34,
+          "line": 1469,
+          "status": "verified_under_contract",
+          "target": "self._security_host_executor.invoke"
+        },
+        {
+          "column": 35,
+          "line": 1496,
+          "status": "verified_under_contract",
+          "target": "self._invoke_secured_tool_sync"
+        }
+      ],
+      "path": "tool_node.py",
+      "source_sha256": "1f27e829d0757cddce71c4e018680d8e5468e4860b6434201a2952193e098e51",
+      "status": "verified_under_contract",
+      "trusted_calls": [
+        "Decision",
+        "SecurityIndeterminateError",
+        "ToolInvocationError",
+        "ToolMessage",
+        "TypeError",
+        "_filter_validation_errors",
+        "_handle_tool_error",
+        "_infer_handled_types",
+        "callable",
+        "cast",
+        "exc.receipt.audit_reason",
+        "host_result.receipt.audit_reason",
+        "isinstance",
+        "issubclass",
+        "msg_content_output",
+        "self._acquire_security_flow",
+        "self._audit_security",
+        "self._finalize_security_flow",
+        "self._inject_tool_args",
+        "self._injected_args.get",
+        "self._normalize_tool_response",
+        "self._release_security_flow",
+        "self._security_denial",
+        "self._security_trace_config",
+        "self._validate_tool_call",
+        "stack.post",
+        "stack.apost",
+        "str",
+        "tool.invoke",
+        "tool.ainvoke"
+      ]
+    },
+    {
+      "assumptions": [
+        "Security is configured and its configuration is controlled by the application.",
+        "Authorizer summaries authenticate the principal and return decisions for exactly the selected request.",
+        "Request/principal identities and their security-relevant contents remain stable across reviewed calls and awaits.",
+        "Reviewed calls preserve authorization inputs; their implementations and hidden effects are not verified here.",
+        "Python builtins, Verdict enum identity, attribute reads and call-target resolution behave as declared; no monkeypatching or hostile descriptors.",
+        "In-process dispatch and its argument/target projection are inventoried separately as unresolved."
+      ],
+      "authorizer_summaries": [
+        {
+          "bindings": [
+            "arg:0",
+            "arg:1"
+          ],
+          "decision": "",
+          "permission": "tool_call",
+          "source_evidence": [
+            "authorization-stack"
+          ],
+          "target": "self.stack.apermission"
+        },
+        {
+          "bindings": [
+            "arg:0",
+            "arg:1"
+          ],
+          "decision": "",
+          "permission": "tool_call",
+          "source_evidence": [
+            "guarded-request-binding"
+          ],
+          "target": "self._aresume"
+        }
+      ],
+      "function": "_GuardedExecutor.ainvoke",
+      "issues": [],
+      "max_states": 512,
+      "operation_summaries": [
+        {
+          "bindings": [
+            "arg:0",
+            "arg:1"
+          ],
+          "permission": "tool_call",
+          "target": "self.security.host_executor.ainvoke"
+        },
+        {
+          "bindings": [
+            "arg:0",
+            "arg:1"
+          ],
+          "permission": "tool_call",
+          "target": "self._ainvoke_in_process"
+        }
+      ],
+      "operations": [
+        {
+          "column": 36,
+          "line": 223,
+          "status": "verified_under_contract",
+          "target": "self.security.host_executor.ainvoke"
+        },
+        {
+          "column": 31,
+          "line": 234,
+          "status": "verified_under_contract",
+          "target": "self._ainvoke_in_process"
+        }
+      ],
+      "path": "security/guarded.py",
+      "source_sha256": "1c21bb62abd1561f956450ef527747358a52d31fa94d8cc4070a27812fe54eee",
+      "status": "verified_under_contract",
+      "trusted_calls": [
+        "Decision",
+        "SecurityDeniedError",
+        "SecurityIndeterminateError",
+        "dict",
+        "str",
+        "exc.receipt.audit_reason",
+        "host_result.receipt.audit_reason",
+        "self._acquire_flow",
+        "self._finalize_flow",
+        "self._prepare",
+        "self._release_flow",
+        "self.stack.post",
+        "self.stack.apost",
+        "self.stack.prepare",
+        "self.stack.aprepare",
+        "self.stack.record_framework_event",
+        "self.target.invoke",
+        "self.target.ainvoke"
+      ]
+    },
+    {
+      "assumptions": [
+        "Security is configured and its configuration is controlled by the application.",
+        "Authorizer summaries authenticate the principal and return decisions for exactly the selected request.",
+        "Request/principal identities and their security-relevant contents remain stable across reviewed calls and awaits.",
+        "Reviewed calls preserve authorization inputs; their implementations and hidden effects are not verified here.",
+        "Python builtins, Verdict enum identity, attribute reads and call-target resolution behave as declared; no monkeypatching or hostile descriptors.",
+        "In-process dispatch and its argument/target projection are inventoried separately as unresolved."
+      ],
+      "authorizer_summaries": [
+        {
+          "bindings": [
+            "result:1.principal",
+            "result:2"
+          ],
+          "decision": "0",
+          "permission": "tool_call",
+          "source_evidence": [
+            "toolnode-request-binding"
+          ],
+          "target": "self._prepare_security_request"
+        },
+        {
+          "bindings": [
+            "arg:0",
+            "arg:1"
+          ],
+          "decision": "",
+          "permission": "tool_call",
+          "source_evidence": [
+            "toolnode-request-binding"
+          ],
+          "target": "self._aresume_security"
+        }
+      ],
+      "function": "ToolNode._execute_tool_async",
+      "issues": [],
+      "max_states": 512,
+      "operation_summaries": [
+        {
+          "bindings": [
+            "arg:0",
+            "arg:1"
+          ],
+          "permission": "tool_call",
+          "target": "self._security_host_executor.ainvoke"
+        },
+        {
+          "bindings": [
+            "arg:0",
+            "arg:1"
+          ],
+          "permission": "tool_call",
+          "target": "self._invoke_secured_tool_async"
+        }
+      ],
+      "operations": [
+        {
+          "column": 40,
+          "line": 1780,
+          "status": "verified_under_contract",
+          "target": "self._security_host_executor.ainvoke"
+        },
+        {
+          "column": 41,
+          "line": 1807,
+          "status": "verified_under_contract",
+          "target": "self._invoke_secured_tool_async"
+        }
+      ],
+      "path": "tool_node.py",
+      "source_sha256": "1f27e829d0757cddce71c4e018680d8e5468e4860b6434201a2952193e098e51",
+      "status": "verified_under_contract",
+      "trusted_calls": [
+        "Decision",
+        "SecurityIndeterminateError",
+        "ToolInvocationError",
+        "ToolMessage",
+        "TypeError",
+        "_filter_validation_errors",
+        "_handle_tool_error",
+        "_infer_handled_types",
+        "callable",
+        "cast",
+        "exc.receipt.audit_reason",
+        "host_result.receipt.audit_reason",
+        "isinstance",
+        "issubclass",
+        "msg_content_output",
+        "self._acquire_security_flow",
+        "self._audit_security",
+        "self._finalize_security_flow",
+        "self._inject_tool_args",
+        "self._injected_args.get",
+        "self._normalize_tool_response",
+        "self._release_security_flow",
+        "self._security_denial",
+        "self._security_trace_config",
+        "self._validate_tool_call",
+        "stack.post",
+        "stack.apost",
+        "str",
+        "tool.invoke",
+        "tool.ainvoke"
+      ]
+    }
+  ],
+  "claims_passed": true,
+  "complete": false,
+  "coverage": [
+    {
+      "evidence": "checks",
+      "operation": "secured host and in-process dispatch",
+      "status": "analyzed"
+    },
+    {
+      "operation": "policy and principal helper semantics",
+      "reason": "Summaries link to hashed reviewed function bodies and explicit assumptions.",
+      "status": "source_bound"
+    },
+    {
+      "operation": "grant lowering and worker activation",
+      "reason": "Grant, plan, receipt, and pre-GO activation bindings have source and regression evidence.",
+      "status": "verified_under_contract"
+    },
+    {
+      "operation": "reservation, cancellation and termination lifetime",
+      "reason": "Linux worker recovery is covered; in-process background work is unsupported.",
+      "status": "partially_verified"
+    },
+    {
+      "operation": "delegation, transfers and publication",
+      "reason": "Attenuation and explicit transfer APIs are covered; arbitrary application paths are not intercepted.",
+      "status": "partially_verified"
+    },
+    {
+      "operation": "dynamic Python, dependencies and original tool aliases",
+      "reason": "Use escape analysis and confinement; not covered by this source model.",
+      "status": "unsupported"
+    }
+  ],
+  "obligations": [
+    {
+      "assumptions": [
+        "Configured module implementations correctly implement their declared policy.",
+        "Nested argument values are not mutated concurrently after ToolCall construction."
+      ],
+      "id": "authorization-helper-validation",
+      "property": "Policy summaries bind a decision to the principal and immutable ToolCall returned by the reviewed prepare/resume path.",
+      "regression_tests": [
+        "tests/security/test_stack.py",
+        "tests/security/test_guarded.py",
+        "tests/security/test_tool_node_security.py"
+      ],
+      "source_evidence": [
+        "authorization-stack",
+        "guarded-request-binding",
+        "toolnode-request-binding"
+      ],
+      "status": "source_bound",
+      "supported_scope": "SecurityStack, guarded_tool, and security-enabled ToolNode authorization and approval helpers.",
+      "unresolved": [
+        "This is source-bound review evidence, not an interprocedural proof of arbitrary module code."
+      ]
+    },
+    {
+      "assumptions": [
+        "In-process Python remains trusted not to monkeypatch the stack or mutate shared nested objects."
+      ],
+      "id": "in-process-execution",
+      "property": "A secured in-process dispatch uses the registered executable and the principal, call id, tool name, and full injected argument mapping authorized for that dispatch.",
+      "regression_tests": [
+        "tests/security/test_tool_node_security.py"
+      ],
+      "source_evidence": [
+        "guarded-in-process-dispatch",
+        "in-process-dispatch-binding"
+      ],
+      "status": "verified_under_contract",
+      "supported_scope": "guarded_tool and security-enabled ToolNode sync/async dispatch; wrapper-supplied executable replacement is rejected.",
+      "unresolved": [
+        "Effects performed inside an in-process tool are not mediated per resource access."
+      ]
+    },
+    {
+      "assumptions": [
+        "Kernel, bubblewrap, libseccomp, interpreter, worker shim, and attested host behavior satisfy the adapter contract."
+      ],
+      "id": "confinement-activation",
+      "property": "The filtered grant and mandatory restrictions determine the negotiated plan, whose digest and complete obligation set are revalidated against the activated worker before GO.",
+      "regression_tests": [
+        "tests/security/test_enforcement.py",
+        "tests/security/test_linux_execution.py",
+        "tests/security/test_resource_boundary.py"
+      ],
+      "source_evidence": [
+        "linux-grant-activation",
+        "enforcement-receipt"
+      ],
+      "status": "verified_under_contract",
+      "supported_scope": "LinuxSandboxExecutor authority domains implemented by the Linux adapter.",
+      "unresolved": [
+        "Unsupported authority domains are rejected; this does not establish process-wide MAC."
+      ]
+    },
+    {
+      "assumptions": [
+        "Process identity checks and the durable reservation store remain available."
+      ],
+      "id": "execution-lifetime",
+      "property": "A flow reservation is acquired before dispatch and is released only after ordinary completion or retained with a process recovery identity until termination is confirmed.",
+      "regression_tests": [
+        "tests/security/test_linux_execution.py::test_unconfirmed_termination_retains_durable_flow_reservation",
+        "tests/security/test_linux_execution.py::test_cancellation_waits_for_confirmed_linux_termination"
+      ],
+      "source_evidence": [
+        "flow-lifecycle",
+        "linux-grant-activation"
+      ],
+      "status": "partially_verified",
+      "supported_scope": "Configured SessionFlowPolicy and LinuxSandboxExecutor worker processes.",
+      "unresolved": [
+        "In-process tools can create background work whose termination is not observable by this framework.",
+        "Policy-hook threads that time out may continue until their callable returns."
+      ]
+    },
+    {
+      "assumptions": [
+        "All child entry and cross-session publication paths use these APIs."
+      ],
+      "id": "delegation-and-transfer",
+      "property": "Delegated scopes cannot grow, module slots are copied then restricted, and explicit session transfers propagate flow labels atomically.",
+      "regression_tests": [
+        "tests/security/test_guarded.py",
+        "tests/security/test_flow.py::test_session_transfer_propagates_label_and_blocks_lower_sink"
+      ],
+      "source_evidence": [
+        "delegation-transfer",
+        "publication-boundaries"
+      ],
+      "status": "partially_verified",
+      "supported_scope": "delegate() with one inherited SecurityConfig and explicit SessionFlowPolicy.transfer_session calls.",
+      "unresolved": [
+        "Live reservations and numeric budgets are not transferable between sessions.",
+        "Arbitrary graph Send operations are not automatically treated as authority transfers."
+      ]
+    },
+    {
+      "assumptions": [
+        "Applications identify non-tool sinks and keep guard_operation open for the complete effect lifetime."
+      ],
+      "id": "publication-inventory",
+      "property": "Every named publication boundary is classified as automatic mediation, explicit opt-in mediation, trust assumption, or unsupported.",
+      "regression_tests": [
+        "tests/security/test_flow.py"
+      ],
+      "source_evidence": [
+        "publication-boundaries"
+      ],
+      "status": "partially_verified",
+      "supported_scope": "The documented boundary inventory below; not arbitrary application callbacks or dependencies.",
+      "unresolved": [
+        "There is no framework-wide automatic interception of every model, checkpoint, artifact, callback, or external-effect API."
+      ]
+    }
+  ],
+  "property": "Every modelled secured host or in-process dispatch has a preceding successful decision for the same principal and request, not consumed by an earlier dispatch.",
+  "publication_inventory": [
+    {
+      "boundary": "model requests",
+      "mechanism": "SessionFlowPolicy.guard_operation",
+      "status": "explicit_opt_in"
+    },
+    {
+      "boundary": "returned tool results",
+      "mechanism": "SecurityStack.post/apost before ToolNode publication",
+      "status": "automatic_hook_notification"
+    },
+    {
+      "boundary": "checkpoints and artifacts",
+      "mechanism": "SessionFlowPolicy.transfer_session",
+      "status": "explicit_opt_in"
+    },
+    {
+      "boundary": "callbacks and tracing",
+      "mechanism": "SessionFlowPolicy.guard_operation",
+      "status": "explicit_opt_in"
+    },
+    {
+      "boundary": "Linux worker external effects",
+      "mechanism": "filtered Grant plus activated EnforcementPlan",
+      "status": "grant_confined"
+    },
+    {
+      "boundary": "in-process tool external effects",
+      "mechanism": "no per-access mediation after dispatch",
+      "status": "trusted"
+    }
+  ],
+  "schema_version": 2,
+  "source_evidence": [
+    {
+      "id": "authorization-stack",
+      "items": [
+        {
+          "line": 162,
+          "sha256": "fc65bf2cac18ec767c7b5c4949f3a645585c3fe53a9cbe2d378f74c12844a541",
+          "symbol": "SecurityStack.prepare"
+        },
+        {
+          "line": 104,
+          "sha256": "5a81f17e4550f0a954744a2f54f6b6d263a3737189bbc42cd360d2a0accd52e2",
+          "symbol": "SecurityStack.permission"
+        },
+        {
+          "line": 260,
+          "sha256": "0afa924feba747c8beb2660937e9d9806f4b9f0941552c149c2c2fc34d5c8c86",
+          "symbol": "SecurityStack.resume_permission"
+        },
+        {
+          "line": 133,
+          "sha256": "e92b0f3f662e49e52ad9ae18c8eab6bf6c44c911495772006c3496b5e40ece8f",
+          "symbol": "SecurityStack.apermission"
+        },
+        {
+          "line": 268,
+          "sha256": "ca7d43fe82592f79307d679394e72cfee00cca3d93e98c703fd9c69ecadc0632",
+          "symbol": "SecurityStack.aresume_permission"
+        }
+      ],
+      "observed_digest": "c3bd475aecc2dfcdc23255564fc78dd5e2dcbf9acada811aab7bc369432b495e",
+      "path": "security/stack.py",
+      "reviewed_digest": "c3bd475aecc2dfcdc23255564fc78dd5e2dcbf9acada811aab7bc369432b495e",
+      "status": "source_bound",
+      "symbols": [
+        "SecurityStack.prepare",
+        "SecurityStack.permission",
+        "SecurityStack.resume_permission",
+        "SecurityStack.apermission",
+        "SecurityStack.aresume_permission"
+      ]
+    },
+    {
+      "id": "guarded-request-binding",
+      "items": [
+        {
+          "line": 298,
+          "sha256": "da62e9714aea9b4b5ae256f5583cbb25de19e1176c31b7b53f4430665b3a4181",
+          "symbol": "_GuardedExecutor._prepare"
+        },
+        {
+          "line": 371,
+          "sha256": "6de21bf8f573a22f85808be9c15fa30dfbab60a99104ac328d3bc7ee88f7c45d",
+          "symbol": "_GuardedExecutor._resume"
+        },
+        {
+          "line": 386,
+          "sha256": "b35ff1af2f9e338f303d8b6744b64769c8c60082345084cd674ce23879829119",
+          "symbol": "_GuardedExecutor._aresume"
+        }
+      ],
+      "observed_digest": "618de901277adc73396c1e08ab27562560a8f010e0aa7a2ec6763a7052144717",
+      "path": "security/guarded.py",
+      "reviewed_digest": "618de901277adc73396c1e08ab27562560a8f010e0aa7a2ec6763a7052144717",
+      "status": "source_bound",
+      "symbols": [
+        "_GuardedExecutor._prepare",
+        "_GuardedExecutor._resume",
+        "_GuardedExecutor._aresume"
+      ]
+    },
+    {
+      "id": "toolnode-request-binding",
+      "items": [
+        {
+          "line": 904,
+          "sha256": "de3f16b8360bbee47a04e15dd482353454d62d961c5cbe640476218e245e95ab",
+          "symbol": "ToolNode._prepare_security_request"
+        },
+        {
+          "line": 1165,
+          "sha256": "d7cfd9dc1d95b4d3742eee887e113e5edc871d37782279ba7d3419538452a206",
+          "symbol": "ToolNode._resume_security"
+        },
+        {
+          "line": 1187,
+          "sha256": "34b6c3a9b11739b962a8ce31461a096ad45653a3a07644bc1bffcc1ab6e2420e",
+          "symbol": "ToolNode._aresume_security"
+        }
+      ],
+      "observed_digest": "0451a39d8f757b6a3d2a4f56f0e45c1445896d8834925f3cba0a28e49957e1fc",
+      "path": "tool_node.py",
+      "reviewed_digest": "0451a39d8f757b6a3d2a4f56f0e45c1445896d8834925f3cba0a28e49957e1fc",
+      "status": "source_bound",
+      "symbols": [
+        "ToolNode._prepare_security_request",
+        "ToolNode._resume_security",
+        "ToolNode._aresume_security"
+      ]
+    },
+    {
+      "id": "in-process-dispatch-binding",
+      "items": [
+        {
+          "line": 980,
+          "sha256": "5ab12cc3889794eb78cee79de436e63cca44f83bd03cbd2d71f9d0b084d435fa",
+          "symbol": "ToolNode._invoke_secured_tool_sync"
+        },
+        {
+          "line": 1007,
+          "sha256": "19850dd68409fbbc3c17f0186d318cd9c2b64ff851c5de94f6f3704c4eccde42",
+          "symbol": "ToolNode._invoke_secured_tool_async"
+        }
+      ],
+      "observed_digest": "7148674e645675c2c36857daa536c1d63a96f84190090fa3365297045c84b832",
+      "path": "tool_node.py",
+      "reviewed_digest": "7148674e645675c2c36857daa536c1d63a96f84190090fa3365297045c84b832",
+      "status": "source_bound",
+      "symbols": [
+        "ToolNode._invoke_secured_tool_sync",
+        "ToolNode._invoke_secured_tool_async"
+      ]
+    },
+    {
+      "id": "guarded-in-process-dispatch",
+      "items": [
+        {
+          "line": 278,
+          "sha256": "b3a32fdb045fc86cdda4b1e6d6624e2a8e6ba60a2e651400f7efd915af855b3d",
+          "symbol": "_GuardedExecutor._invoke_in_process"
+        },
+        {
+          "line": 288,
+          "sha256": "638f99278de1777fcd60ac8c5c5779364d388dd1f5f0707b5b3e67de39cad503",
+          "symbol": "_GuardedExecutor._ainvoke_in_process"
+        }
+      ],
+      "observed_digest": "f030eb198581f5f5717c953f2bad304c6816f36aaad148a7befeed89a6c03d0e",
+      "path": "security/guarded.py",
+      "reviewed_digest": "f030eb198581f5f5717c953f2bad304c6816f36aaad148a7befeed89a6c03d0e",
+      "status": "source_bound",
+      "symbols": [
+        "_GuardedExecutor._invoke_in_process",
+        "_GuardedExecutor._ainvoke_in_process"
+      ]
+    },
+    {
+      "id": "linux-grant-activation",
+      "items": [
+        {
+          "line": 319,
+          "sha256": "d67f51bb359fff83e4b6cdd012c4c535273f46c65a0a551c732d96c7b445741f",
+          "symbol": "LinuxSandboxExecutor._invoke"
+        },
+        {
+          "line": 357,
+          "sha256": "2222b729bdbc3c8147a92063c7a8e10efc8c5a2c12b5ab2a81bfaa40db1891bd",
+          "symbol": "LinuxSandboxExecutor._compile_grant"
+        },
+        {
+          "line": 577,
+          "sha256": "dceaa5c25efb6eae9d775d22c6b17d91d035af51ff1fdfecbbb17da1de3121c7",
+          "symbol": "LinuxSandboxExecutor._run_worker"
+        },
+        {
+          "line": 731,
+          "sha256": "0a2c35848b5f003f7ec6a9e29ba241b854b7bab4c61dc4c72d9444427299f2ee",
+          "symbol": "LinuxSandboxExecutor._cleanup_worker"
+        }
+      ],
+      "observed_digest": "26b675be073119ac0c7df4d3698331ae60853b5571163bc7e75dee9cc48cdcd9",
+      "path": "security/linux.py",
+      "reviewed_digest": "26b675be073119ac0c7df4d3698331ae60853b5571163bc7e75dee9cc48cdcd9",
+      "status": "source_bound",
+      "symbols": [
+        "LinuxSandboxExecutor._invoke",
+        "LinuxSandboxExecutor._compile_grant",
+        "LinuxSandboxExecutor._run_worker",
+        "LinuxSandboxExecutor._cleanup_worker"
+      ]
+    },
+    {
+      "id": "enforcement-receipt",
+      "items": [
+        {
+          "line": 788,
+          "sha256": "395a14816e8b3f60b0efe133fefb93caacc1ff475861bca5ac703e41cad37b1c",
+          "symbol": "EnforcementCoordinator.negotiate"
+        },
+        {
+          "line": 845,
+          "sha256": "7e008ba1187036da71122dad135eb56da0a19b5021f1f65ed5fd149c6a9ddcee",
+          "symbol": "EnforcementCoordinator.activate"
+        },
+        {
+          "line": 892,
+          "sha256": "383ff2fae6b003ce9b6e6b4d3661ae288699c38b208f8ec2d79c3e033eeb8440",
+          "symbol": "EnforcementCoordinator.validate_receipt"
+        }
+      ],
+      "observed_digest": "22c1a00c69b5ed659231185b0625e6b07f1c1b54babd5b8162b92a0137560e0f",
+      "path": "security/enforcement.py",
+      "reviewed_digest": "22c1a00c69b5ed659231185b0625e6b07f1c1b54babd5b8162b92a0137560e0f",
+      "status": "source_bound",
+      "symbols": [
+        "EnforcementCoordinator.negotiate",
+        "EnforcementCoordinator.activate",
+        "EnforcementCoordinator.validate_receipt"
+      ]
+    },
+    {
+      "id": "flow-lifecycle",
+      "items": [
+        {
+          "line": 632,
+          "sha256": "54a5c16e37cf0f1c97128bd51d30669568bc71e4d273729829ff5114e3100962",
+          "symbol": "SessionFlowPolicy.acquire"
+        },
+        {
+          "line": 649,
+          "sha256": "3b32d2aa6e5f7e3ca8a80557e4e3dd7a7156d005f91e550a2af1ff49a1194508",
+          "symbol": "SessionFlowPolicy.release"
+        },
+        {
+          "line": 657,
+          "sha256": "3b743cb109d6c58dae32b6396f6de3060ab0457c3a5d1939148ace84d9815601",
+          "symbol": "SessionFlowPolicy.retain"
+        },
+        {
+          "line": 673,
+          "sha256": "42f7c6ae5fd3893f1215fda7d40a540a15566ba58e920edc8165c4cebc3e272d",
+          "symbol": "SessionFlowPolicy.recover_termination"
+        }
+      ],
+      "observed_digest": "455dc915f2de6497930122596f1af5cc72b0a2ec0731fdec9dea3259922ec48f",
+      "path": "security/flow.py",
+      "reviewed_digest": "455dc915f2de6497930122596f1af5cc72b0a2ec0731fdec9dea3259922ec48f",
+      "status": "source_bound",
+      "symbols": [
+        "SessionFlowPolicy.acquire",
+        "SessionFlowPolicy.release",
+        "SessionFlowPolicy.retain",
+        "SessionFlowPolicy.recover_termination"
+      ]
+    },
+    {
+      "id": "delegation-transfer",
+      "items": [
+        {
+          "line": 500,
+          "sha256": "d127777d87787955f15ec4c1df708f591632d6d27d8fe19d9f570c90684ec46a",
+          "symbol": "_DelegatedRunnable._principals"
+        },
+        {
+          "line": 486,
+          "sha256": "45973d1d46bd2dcfb938711cd8de6fa588b1d4ea54a859721795fb1f081a138d",
+          "symbol": "_DelegatedRunnable._child_config"
+        },
+        {
+          "line": 493,
+          "sha256": "4e4506a8834044215b1b1c85bcba22e1fd1f66a6c753103d18bec9e0c12c0678",
+          "symbol": "_DelegatedRunnable._achild_config"
+        }
+      ],
+      "observed_digest": "b275e7e857ae259c20b0b5c07619bda9089c946239ea86f641a9efd94041371f",
+      "path": "security/guarded.py",
+      "reviewed_digest": "b275e7e857ae259c20b0b5c07619bda9089c946239ea86f641a9efd94041371f",
+      "status": "source_bound",
+      "symbols": [
+        "_DelegatedRunnable._principals",
+        "_DelegatedRunnable._child_config",
+        "_DelegatedRunnable._achild_config"
+      ]
+    },
+    {
+      "id": "publication-boundaries",
+      "items": [
+        {
+          "line": 691,
+          "sha256": "bc668abcc731e7b78d3ecda53119a5db2de73656877d7212ddc207faefdc1719",
+          "symbol": "SessionFlowPolicy.transfer_session"
+        },
+        {
+          "line": 707,
+          "sha256": "3fcc2e0c050c7b21ab0e7c73dd11307a7121f9cfb1c75818588d82f70e3e33dc",
+          "symbol": "SessionFlowPolicy.guard_operation"
+        }
+      ],
+      "observed_digest": "db2150a7e8eaba1baba53ee9860fd48e455ec42841dc65ebef8167ac9680539d",
+      "path": "security/flow.py",
+      "reviewed_digest": "db2150a7e8eaba1baba53ee9860fd48e455ec42841dc65ebef8167ac9680539d",
+      "status": "source_bound",
+      "symbols": [
+        "SessionFlowPolicy.transfer_session",
+        "SessionFlowPolicy.guard_operation"
+      ]
+    }
+  ]
+}

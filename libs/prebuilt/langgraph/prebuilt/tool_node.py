@@ -908,6 +908,13 @@ class ToolNode(RunnableCallable):
         if stack is None:
             return Decision(Verdict.ALLOW, "security:disabled"), request, None
         name = request.tool_call["name"]
+        registered_tool = self.tools_by_name.get(name)
+        if registered_tool is None or request.tool is not registered_tool:
+            return (
+                Decision(Verdict.DENY, "security:tool_identity_mismatch"),
+                request,
+                None,
+            )
         security_tool = self._security_tools_by_name.get(name)
         if security_tool is None:
             return Decision(Verdict.DENY, "security:unknown_tool"), request, None
@@ -920,7 +927,11 @@ class ToolNode(RunnableCallable):
             principal = Principal(
                 "__anonymous__", frozenset(), frozenset(), "anonymous"
             )
+        injected_call = self._inject_tool_args(
+            request.tool_call, request.runtime, registered_tool
+        )
         request = request.override(
+            tool_call=injected_call,
             descriptor=self._descriptors_by_name[name],
             dac=self._dacs_by_name[name],
             principal=principal,
@@ -965,6 +976,60 @@ class ToolNode(RunnableCallable):
             security=security_tool.security,
         )
         return permission, secured, security_call
+
+    def _invoke_secured_tool_sync(
+        self,
+        principal: Principal,
+        security_call: SecurityToolCall,
+        request: ToolCallRequest,
+        config: RunnableConfig,
+    ) -> Any:
+        """Dispatch the registered target represented by the authorized request."""
+        call = request.tool_call
+        tool = self.tools_by_name.get(call["name"])
+        call_args = call.get("args", {})
+        args_match = call_args.keys() == security_call.args.keys() and all(
+            call_args[key] is security_call.args[key] for key in call_args
+        )
+        if (
+            request.principal != principal
+            or request.tool is not tool
+            or tool is None
+            or call["name"] != security_call.tool.name
+            or call["id"] != security_call.call_id
+            or not args_match
+        ):
+            raise SecurityIndeterminateError(
+                "authorized in-process dispatch identity changed"
+            )
+        return tool.invoke({**call, "type": "tool_call"}, config)
+
+    async def _invoke_secured_tool_async(
+        self,
+        principal: Principal,
+        security_call: SecurityToolCall,
+        request: ToolCallRequest,
+        config: RunnableConfig,
+    ) -> Any:
+        """Dispatch the registered target represented by the authorized request."""
+        call = request.tool_call
+        tool = self.tools_by_name.get(call["name"])
+        call_args = call.get("args", {})
+        args_match = call_args.keys() == security_call.args.keys() and all(
+            call_args[key] is security_call.args[key] for key in call_args
+        )
+        if (
+            request.principal != principal
+            or request.tool is not tool
+            or tool is None
+            or call["name"] != security_call.tool.name
+            or call["id"] != security_call.call_id
+            or not args_match
+        ):
+            raise SecurityIndeterminateError(
+                "authorized in-process dispatch identity changed"
+            )
+        return await tool.ainvoke({**call, "type": "tool_call"}, config)
 
     def _acquire_security_flow(
         self, principal: Principal, call: SecurityToolCall
@@ -1319,7 +1384,8 @@ class ToolNode(RunnableCallable):
         Raises:
             Exception: If tool fails and handle_tool_errors is False.
         """
-        call = request.tool_call
+        model_call = request.tool_call
+        call = model_call
         tool = request.tool
 
         # Validate tool exists when we actually need to execute it
@@ -1384,10 +1450,10 @@ class ToolNode(RunnableCallable):
         tool = request.tool
         if tool is None:
             raise TypeError("security request lost its registered tool")
-
-        # Inject state, store, and runtime right before invocation
-        injected_call = self._inject_tool_args(call, request.runtime, tool)
-        call_args = {**injected_call, "type": "tool_call"}
+        call_args = None
+        if security_call is None:
+            injected_call = self._inject_tool_args(call, request.runtime, tool)
+            call_args = {**injected_call, "type": "tool_call"}
 
         post_result: Any = None
         outcome = ExecutionOutcome.INDETERMINATE
@@ -1426,7 +1492,13 @@ class ToolNode(RunnableCallable):
                         tool_call_id=call["id"],
                     )
                 else:
-                    response = tool.invoke(call_args, config)
+                    if security_call is not None and request.principal is not None:
+                        response = self._invoke_secured_tool_sync(
+                            request.principal, security_call, request, config
+                        )
+                    else:
+                        assert call_args is not None
+                        response = tool.invoke(call_args, config)
             except HostExecutionError as exc:
                 outcome = exc.outcome
                 if not exc.termination_confirmed:
@@ -1452,7 +1524,7 @@ class ToolNode(RunnableCallable):
                 filtered_errors = _filter_validation_errors(exc, injected)
                 # Use original call["args"] without injected values for error reporting
                 raise ToolInvocationError(
-                    call["name"], exc, call["args"], filtered_errors
+                    call["name"], exc, model_call["args"], filtered_errors
                 ) from exc
 
             # Inside try so validation errors route through _handle_tool_errors
@@ -1621,7 +1693,8 @@ class ToolNode(RunnableCallable):
         Raises:
             Exception: If tool fails and handle_tool_errors is False.
         """
-        call = request.tool_call
+        model_call = request.tool_call
+        call = model_call
         tool = request.tool
 
         # Validate tool exists when we actually need to execute it
@@ -1688,10 +1761,10 @@ class ToolNode(RunnableCallable):
         tool = request.tool
         if tool is None:
             raise TypeError("security request lost its registered tool")
-
-        # Inject state, store, and runtime right before invocation
-        injected_call = self._inject_tool_args(call, request.runtime, tool)
-        call_args = {**injected_call, "type": "tool_call"}
+        call_args = None
+        if security_call is None:
+            injected_call = self._inject_tool_args(call, request.runtime, tool)
+            call_args = {**injected_call, "type": "tool_call"}
 
         post_result: Any = None
         outcome = ExecutionOutcome.INDETERMINATE
@@ -1730,7 +1803,13 @@ class ToolNode(RunnableCallable):
                         tool_call_id=call["id"],
                     )
                 else:
-                    response = await tool.ainvoke(call_args, config)
+                    if security_call is not None and request.principal is not None:
+                        response = await self._invoke_secured_tool_async(
+                            request.principal, security_call, request, config
+                        )
+                    else:
+                        assert call_args is not None
+                        response = await tool.ainvoke(call_args, config)
             except HostExecutionError as exc:
                 outcome = exc.outcome
                 if not exc.termination_confirmed:
@@ -1756,7 +1835,7 @@ class ToolNode(RunnableCallable):
                 filtered_errors = _filter_validation_errors(exc, injected)
                 # Use original call["args"] without injected values for error reporting
                 raise ToolInvocationError(
-                    call["name"], exc, call["args"], filtered_errors
+                    call["name"], exc, model_call["args"], filtered_errors
                 ) from exc
 
             # Inside try so validation errors route through _handle_tool_errors

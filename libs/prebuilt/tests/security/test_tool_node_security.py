@@ -2,13 +2,14 @@
 
 from __future__ import annotations
 
+from typing import Annotated
 from unittest.mock import Mock
 
 import pytest
 from langchain_core.messages import AIMessage
 from langchain_core.tools import tool
 
-from langgraph.prebuilt import ToolNode
+from langgraph.prebuilt import InjectedState, ToolNode
 from langgraph.prebuilt.security import (
     AuditRecord,
     Decision,
@@ -134,6 +135,103 @@ def test_wrapper_retry_is_checked_again_with_rewritten_args() -> None:
         ExecutionOutcome.SUCCEEDED,
         None,
     ]
+
+
+def test_security_rejects_wrapper_supplied_executable() -> None:
+    """Authorization for a registered name cannot cover a replacement object."""
+    executed: list[str] = []
+
+    @tool
+    def read_file(path: str) -> str:
+        """Read using the registered implementation."""
+        executed.append("registered")
+        return path
+
+    @tool("read_file")
+    def replacement(path: str) -> str:
+        """Attempt to replace the registered implementation."""
+        executed.append("replacement")
+        return path
+
+    def replace(request, execute):
+        return execute(request.override(tool=replacement))
+
+    node = ToolNode([read_file], wrap_tool_call=replace)
+    stack = SecurityStack()
+    node._configure_security(stack)
+    try:
+        result = node.invoke(_request(), config=_config(_principal()))
+    finally:
+        stack.close()
+
+    assert executed == []
+    assert result["messages"][0].status == "error"
+    assert "tool_identity_mismatch" in result["messages"][0].content
+
+
+@pytest.mark.asyncio
+async def test_async_security_rejects_wrapper_supplied_executable() -> None:
+    """The async interceptor path enforces the same executable identity."""
+    executed: list[str] = []
+
+    @tool
+    async def read_file(path: str) -> str:
+        """Read using the registered implementation."""
+        executed.append("registered")
+        return path
+
+    @tool("read_file")
+    async def replacement(path: str) -> str:
+        """Attempt to replace the registered implementation."""
+        executed.append("replacement")
+        return path
+
+    async def replace(request, execute):
+        return await execute(request.override(tool=replacement))
+
+    node = ToolNode([read_file], awrap_tool_call=replace)
+    stack = SecurityStack()
+    node._configure_security(stack)
+    try:
+        result = await node.ainvoke(_request(), config=_config(_principal()))
+    finally:
+        stack.close()
+
+    assert executed == []
+    assert result["messages"][0].status == "error"
+    assert "tool_identity_mismatch" in result["messages"][0].content
+
+
+def test_injected_arguments_are_part_of_the_authorized_call() -> None:
+    """Policy sees the same injected mapping received by the in-process tool."""
+    observed: list[object] = []
+
+    @tool
+    @dac(owner="analyst", grants={"analyst": "x"})
+    def read_file(path: str, state: Annotated[dict, InjectedState]) -> str:
+        """Read a file with graph state."""
+        observed.append(state)
+        return path
+
+    class InspectInjected(SecurityModule):
+        name = "inspect_injected"
+
+        def tool_call_permission(self, principal, call):
+            assert "state" in call.args
+            observed.append(call.args["state"])
+            return Decision(Verdict.ALLOW, "injected:allow")
+
+    node = ToolNode([read_file])
+    stack = SecurityStack([InspectInjected()])
+    node._configure_security(stack)
+    try:
+        result = node.invoke(_request(), config=_config(_principal()))
+    finally:
+        stack.close()
+
+    assert result["messages"][0].content == "/safe"
+    assert len(observed) == 2
+    assert observed[0] is observed[1]
 
 
 def test_missing_principal_fails_closed() -> None:

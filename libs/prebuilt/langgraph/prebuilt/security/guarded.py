@@ -143,7 +143,7 @@ class _GuardedExecutor:
                 )
                 result = host_result.value
             else:
-                result = self.target.invoke(dict(call.args), config=config)
+                result = self._invoke_in_process(principal, call, config)
             outcome = ExecutionOutcome.SUCCEEDED
             return result
         except HostExecutionDenied as exc:
@@ -231,7 +231,7 @@ class _GuardedExecutor:
                 )
                 result = host_result.value
             else:
-                result = await self.target.ainvoke(dict(call.args), config=config)
+                result = await self._ainvoke_in_process(principal, call, config)
             outcome = ExecutionOutcome.SUCCEEDED
             return result
         except HostExecutionDenied as exc:
@@ -274,6 +274,26 @@ class _GuardedExecutor:
                     termination_confirmed,
                     flow_recovery,
                 )
+
+    def _invoke_in_process(
+        self, principal: Principal, call: ToolCall, config: RunnableConfig
+    ) -> Any:
+        """Invoke the fixed target with the exact authorized argument mapping."""
+        if call.tool is not self.tool:
+            raise SecurityIndeterminateError("authorized tool identity changed")
+        if principal.user_id == "" or principal.session_id == "":
+            raise SecurityIndeterminateError("authorized principal identity changed")
+        return self.target.invoke(dict(call.args), config=config)
+
+    async def _ainvoke_in_process(
+        self, principal: Principal, call: ToolCall, config: RunnableConfig
+    ) -> Any:
+        """Invoke the fixed target with the exact authorized argument mapping."""
+        if call.tool is not self.tool:
+            raise SecurityIndeterminateError("authorized tool identity changed")
+        if principal.user_id == "" or principal.session_id == "":
+            raise SecurityIndeterminateError("authorized principal identity changed")
+        return await self.target.ainvoke(dict(call.args), config=config)
 
     def _prepare(
         self, args: Mapping[str, Any], config: RunnableConfig

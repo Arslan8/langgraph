@@ -1,5 +1,9 @@
 # Escape analysis
 
+For authorization-state tracking and the explicit hook-coverage inventory, see
+[bounded mediation analysis](mediation-analysis.md). The two analyses answer
+different questions; neither alone proves process-wide complete mediation.
+
 ## Result
 
 The current security hooks do not form a process-wide mandatory access-control
