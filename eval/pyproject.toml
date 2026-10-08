@@ -3,7 +3,10 @@ name = "slanggraph-eval"
 version = "0.1.0"
 description = "Reproducible evaluation artifact for slangGraph security mediation"
 requires-python = ">=3.11"
-dependencies = []
+dependencies = [
+  "langgraph",
+  "langgraph-prebuilt",
+]
 
 [dependency-groups]
 dev = [
@@ -13,6 +16,10 @@ dev = [
 
 [tool.uv]
 package = true
+
+[tool.uv.sources]
+langgraph = { path = "../libs/langgraph", editable = true }
+langgraph-prebuilt = { path = "../libs/prebuilt", editable = true }
 
 [tool.ruff]
 line-length = 100

@@ -4,6 +4,11 @@ from __future__ import annotations
 
 from typing import Any
 
+from langgraph.prebuilt.security.objects import (
+    ModelInvocationRequest,
+    OutputRequest,
+    StateRequest,
+)
 from langgraph.prebuilt.security.types import (
     Approval,
     Decision,
@@ -57,4 +62,26 @@ class SecurityModule:
 
     def resume_permission(self, principal: Principal, approval: Approval) -> Decision:
         """Object after a human approval or rejection resumes execution."""
+        return Decision(Verdict.ALLOW, "default")
+
+    def state_read(self, principal: Principal, request: StateRequest) -> Decision:
+        """Object to a tool, model, or store read."""
+        return Decision(Verdict.ALLOW, "default")
+
+    def state_write(self, principal: Principal, request: StateRequest) -> Decision:
+        """Object to a graph-state or store write."""
+        return Decision(Verdict.ALLOW, "default")
+
+    def state_restore(self, principal: Principal, request: StateRequest) -> Decision:
+        """Object to restoring a verified checkpoint."""
+        return Decision(Verdict.ALLOW, "default")
+
+    def model_invoke(
+        self, principal: Principal, request: ModelInvocationRequest
+    ) -> Decision:
+        """Deny or narrow labeled context before prompt assembly."""
+        return Decision(Verdict.ALLOW, "default")
+
+    def output_emit(self, principal: Principal, request: OutputRequest) -> Decision:
+        """Allow, deny, redact, or escalate one destination emission."""
         return Decision(Verdict.ALLOW, "default")

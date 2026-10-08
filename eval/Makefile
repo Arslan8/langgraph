@@ -1,4 +1,4 @@
-.PHONY: benchmark-census bolt-on-pocs camel-pocs census format lint model-probe pocs progent-pocs seed-transcripts test tables
+.PHONY: benchmark-census bolt-on-pocs camel-pocs census completeness format lint model-probe overhead parity pocs progent-pocs seed-transcripts test tables
 
 benchmark-census:
 	uv run --project . python -m slanggraph_eval.benchmark_census --config configs/benchmark_samples.json --root . --output reports/e1/benchmark-sample.json --audit-db audits/e1.db
@@ -25,6 +25,15 @@ bolt-on-pocs:
 
 camel-pocs:
 	PYTHONPATH=. uv run --isolated --with ./vendor/camel --with-editable . python adapters/camel_pocs.py --transcript transcripts/e2/qwen3-8b.json --output reports/e2/camel-argument-hijack.json --audit-db audits/e2.db
+
+completeness:
+	uv run --project . python -m slanggraph_eval.completeness --root .. --output reports/e4/completeness.json --audit-db audits/e4.db
+
+overhead:
+	uv run --project . python -m slanggraph_eval.overhead --output reports/e5/overhead.json --audit-db audits/e5.db
+
+parity:
+	uv run --project . python -m slanggraph_eval.parity --config configs/models.json --output reports/e3/parity.json --audit-db audits/e3.db
 
 format:
 	uv run --project . ruff format .

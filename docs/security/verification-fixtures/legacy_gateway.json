@@ -1,0 +1,44 @@
+{
+  "sources": {
+    "example": "legacy_gateway.py"
+  },
+  "surfaces": [
+    "example.Tool"
+  ],
+  "authorizers": [
+    {
+      "target": "policy.permission",
+      "bindings": [
+        "arg:0",
+        "arg:1"
+      ]
+    },
+    {
+      "target": "policy.apermission",
+      "bindings": [
+        "arg:0",
+        "arg:1"
+      ]
+    }
+  ],
+  "operations": [
+    {
+      "target": "legacy.dispatch",
+      "bindings": [
+        "arg:0",
+        "arg:1"
+      ]
+    },
+    {
+      "target": "legacy.adispatch",
+      "bindings": [
+        "arg:0",
+        "arg:1"
+      ]
+    }
+  ],
+  "async_terminals": [
+    "policy.apermission",
+    "legacy.adispatch"
+  ]
+}

@@ -7,9 +7,12 @@ from collections.abc import Callable, Mapping, Sequence
 from typing import Any, overload
 
 from langchain_core.runnables import Runnable, RunnableConfig
-from langchain_core.tools import BaseTool, StructuredTool
+from langchain_core.tools.base import BaseTool
+from langchain_core.tools.structured import StructuredTool
 from langgraph.types import interrupt
+from pydantic import BaseModel
 
+from langgraph.prebuilt._tool_adapter import preserve_tool_config
 from langgraph.prebuilt.security.binding import (
     _bind_principal,
     history_for,
@@ -18,7 +21,11 @@ from langgraph.prebuilt.security.binding import (
 )
 from langgraph.prebuilt.security.blobs import copy_blobs
 from langgraph.prebuilt.security.config import SecurityConfig
-from langgraph.prebuilt.security.descriptor import normalize_resource, security_for_tool
+from langgraph.prebuilt.security.descriptor import (
+    _declarations,
+    normalize_resource,
+    security_for_tool,
+)
 from langgraph.prebuilt.security.errors import (
     SecurityAuditError,
     SecurityConfigurationError,
@@ -31,6 +38,10 @@ from langgraph.prebuilt.security.execution import (
     TerminationRecovery,
 )
 from langgraph.prebuilt.security.flow import ToolFlowRule
+from langgraph.prebuilt.security.host_boundary import (
+    AuthorizedHostRouter,
+    make_authorized_host_router,
+)
 from langgraph.prebuilt.security.introspect import (
     ToolInventoryEntry,
     _register_guarded_tool,
@@ -52,6 +63,23 @@ from langgraph.prebuilt.security.types import (
 
 class SecurityDeniedError(PermissionError):
     """Raised when security mediation rejects direct execution or delegation."""
+
+
+class _GuardedStructuredTool(StructuredTool):
+    def as_tool(
+        self,
+        args_schema: type[BaseModel] | None = None,
+        *,
+        name: str | None = None,
+        description: str | None = None,
+        arg_types: dict[str, type] | None = None,
+    ) -> BaseTool:
+        return preserve_tool_config(
+            self,
+            super().as_tool(
+                args_schema, name=name, description=description, arg_types=arg_types
+            ),
+        )
 
 
 class _GuardedExecutor:
@@ -83,6 +111,11 @@ class _GuardedExecutor:
             security.flow_policy.validate_tools((target.name,))
         if security.host_executor is not None:
             security.host_executor.validate_tools((target.name,))
+        self.host_router: AuthorizedHostRouter | None = (
+            make_authorized_host_router(security.host_executor)
+            if security.host_executor is not None
+            else None
+        )
         for module in self.stack.modules:
             slot = self.tool.security.allocate(module.name)
             module.tool_alloc_security(self.tool, slot)
@@ -108,6 +141,7 @@ class _GuardedExecutor:
             decision = self._resume(principal, call, decision)
         if decision.verdict is not Verdict.ALLOW:
             raise SecurityDeniedError(decision.reason)
+        authorization = decision
         policy_constraints = decision.constraints
         if policy_constraints and self.security.host_executor is None:
             # Typed restrictions apply to a host grant; dropping them would
@@ -131,10 +165,8 @@ class _GuardedExecutor:
         termination_confirmed = True
         flow_recovery: TerminationRecovery | None = None
         try:
-            if self.security.host_executor is not None:
-                host_result = self.security.host_executor.invoke(
-                    principal, call, policy_constraints
-                )
+            if self.host_router is not None:
+                host_result = self.host_router.invoke(principal, call, authorization)
                 self.stack.record_framework_event(
                     principal,
                     call,
@@ -196,6 +228,7 @@ class _GuardedExecutor:
             decision = await self._aresume(principal, call, decision)
         if decision.verdict is not Verdict.ALLOW:
             raise SecurityDeniedError(decision.reason)
+        authorization = decision
         policy_constraints = decision.constraints
         if policy_constraints and self.security.host_executor is None:
             # Typed restrictions apply to a host grant; dropping them would
@@ -219,9 +252,9 @@ class _GuardedExecutor:
         termination_confirmed = True
         flow_recovery: TerminationRecovery | None = None
         try:
-            if self.security.host_executor is not None:
-                host_result = await self.security.host_executor.ainvoke(
-                    principal, call, policy_constraints
+            if self.host_router is not None:
+                host_result = await self.host_router.ainvoke(
+                    principal, call, authorization
                 )
                 self.stack.record_framework_event(
                     principal,
@@ -279,6 +312,8 @@ class _GuardedExecutor:
         self, principal: Principal, call: ToolCall, config: RunnableConfig
     ) -> Any:
         """Invoke the fixed target with the exact authorized argument mapping."""
+        if self.security.host_executor is not None:
+            raise HostExecutionDenied("host:in_process_execution_disabled")
         if call.tool is not self.tool:
             raise SecurityIndeterminateError("authorized tool identity changed")
         if principal.user_id == "" or principal.session_id == "":
@@ -289,6 +324,8 @@ class _GuardedExecutor:
         self, principal: Principal, call: ToolCall, config: RunnableConfig
     ) -> Any:
         """Invoke the fixed target with the exact authorized argument mapping."""
+        if self.security.host_executor is not None:
+            raise HostExecutionDenied("host:in_process_execution_disabled")
         if call.tool is not self.tool:
             raise SecurityIndeterminateError("authorized tool identity changed")
         if principal.user_id == "" or principal.session_id == "":
@@ -428,27 +465,42 @@ def guarded_tool(
             )
         executor = _GuardedExecutor(original, security)
 
-        def guarded_sync(config: RunnableConfig, **kwargs: Any) -> Any:
-            return executor.invoke(kwargs, config)
+        def arguments(args: tuple[Any, ...], kwargs: dict[str, Any]) -> dict[str, Any]:
+            # BaseTool passes string inputs positionally, and schema-less legacy
+            # tools accept arbitrary single-key mappings. Preserve both forms
+            # before authorization instead of inferring a schema from **kwargs.
+            if not args:
+                return kwargs
+            if len(args) != 1 or kwargs:
+                raise TypeError("a string tool input must be the only argument")
+            return {next(iter(original.args)): args[0]}
 
-        async def guarded_async(config: RunnableConfig, **kwargs: Any) -> Any:
-            return await executor.ainvoke(kwargs, config)
+        def guarded_sync(*args: Any, config: RunnableConfig, **kwargs: Any) -> Any:
+            return executor.invoke(arguments(args, kwargs), config)
 
-        guarded = StructuredTool.from_function(
+        async def guarded_async(
+            *args: Any, config: RunnableConfig, **kwargs: Any
+        ) -> Any:
+            return await executor.ainvoke(arguments(args, kwargs), config)
+
+        declarations = {
+            "descriptor": security_for_tool(original)[0],
+            "dac": executor.tool.dac,
+        }
+        # Security declarations belong to the callable, not trace metadata.
+        # Tracers deep-copy/serialize metadata; immutable policy mappings are
+        # neither trace payloads nor pickleable objects.
+        _declarations(guarded_sync).update(declarations)
+        _declarations(guarded_async).update(declarations)
+        guarded = _GuardedStructuredTool.from_function(
             func=guarded_sync,
             coroutine=guarded_async,
             name=original.name,
             description=original.description,
             args_schema=original.args_schema,
+            infer_schema=False,
             return_direct=original.return_direct,
         )
-        guarded.metadata = {
-            **(guarded.metadata or {}),
-            "security": {
-                "descriptor": security_for_tool(original)[0],
-                "dac": executor.tool.dac,
-            },
-        }
         return guarded
 
     return decorate(target) if target is not None else decorate

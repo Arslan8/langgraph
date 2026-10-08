@@ -70,7 +70,15 @@ class TypedPolicyBackend:
         try:
             return _filter_grant(grant, ledger, constraints)
         except (TypeError, ValueError) as exc:
-            diagnostic = f"policy_error:{type(exc).__name__}:{exc}"
+            modules = sorted(
+                {
+                    str(getattr(constraint, "module", "unknown")) or "unknown"
+                    for constraint in constraints
+                }
+            )
+            diagnostic = (
+                f"policy_error:{type(exc).__name__}:{exc}:modules={','.join(modules)}"
+            )
             return PolicyFilterResult(
                 None, ledger, "policy_error", diagnostics=(diagnostic,)
             )

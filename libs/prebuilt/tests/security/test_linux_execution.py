@@ -16,6 +16,7 @@ from unittest.mock import Mock
 
 import pytest
 from langchain_core.messages import AIMessage
+from langchain_core.tools import Tool as SimpleTool
 from langchain_core.tools import tool
 
 from langgraph.prebuilt import InjectedState, ToolNode
@@ -39,6 +40,7 @@ from langgraph.prebuilt.security import (
     SqliteFlowStateStore,
     ToolCall,
     ToolFlowRule,
+    TypedPolicyBackend,
     Verdict,
     dac,
     effects,
@@ -57,12 +59,19 @@ from langgraph.prebuilt.security.execution import (
     HostExecutionDenied,
     HostExecutionError,
 )
+from langgraph.prebuilt.security.host_boundary import (
+    HostExecutorBoundary,
+    StackBoundaryPolicy,
+    make_host_router,
+)
 from langgraph.prebuilt.security.linux import (
     _assess_path_obligation,
     _nested_mount_points,
     _read_fd_json,
     _verified_resource_fd,
 )
+from langgraph.prebuilt.security.stack import SecurityStack
+from langgraph.prebuilt.security.types import Tool, ToolDac
 
 _FIXTURES = Path(__file__).with_name("fixtures").resolve()
 
@@ -102,6 +111,7 @@ def _security(
             )
         },
         runtime_roots=(_FIXTURES,),
+        policy_backend=TypedPolicyBackend(),
         default_limits=default_limits,
     )
     return SecurityConfig(
@@ -166,6 +176,85 @@ def test_tool_node_executes_only_inside_activated_linux_worker(tmp_path: Path) -
     payload = json.loads(activation[0].reason.removeprefix("activation_receipt:"))
     assert payload == receipts[0].canonical()
     assert audit.verify() == (True, None)
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("converted", [False, True])
+@pytest.mark.parametrize("api", ["invoke", "ainvoke", "events_v1", "events_v2"])
+async def test_legacy_api_uses_real_host_after_conversion(
+    tmp_path: Path, converted, api
+) -> None:
+    allowed = tmp_path / "allowed.txt"
+    allowed.write_text("linux-legacy-result")
+    local_calls = []
+
+    def local_read(path: str) -> str:
+        local_calls.append(path)
+        raise AssertionError("legacy callback must execute only in the host worker")
+
+    target = SimpleTool(name="read_file", func=local_read, description="Read a file")
+    effects(Effect.READ, resources=[ResourceArg("path", "path", "realpath")])(target)
+    dac(owner="analyst", grants={"analyst": "x", "*": "-"})(target)
+    security = _security(_profile(tmp_path), "linux_tools:read_file")
+    guarded = guarded_tool(target, security=security)
+    secured = guarded.as_tool(arg_types={"path": str}) if converted else guarded
+    principal = Principal(
+        "alice", frozenset({"analyst"}), frozenset(), "legacy-session"
+    )
+    config = _config(principal)
+    args = {"path": str(allowed)}
+    if api == "invoke":
+        result = await asyncio.to_thread(secured.invoke, args, config)
+    elif api == "ainvoke":
+        result = await secured.ainvoke(args, config)
+    else:
+        result = [
+            event
+            async for event in secured.astream_events(
+                args, config, version=api.removeprefix("events_")
+            )
+        ]
+    assert "linux-legacy-result" in str(result)
+    assert not local_calls
+    assert isinstance(security.host_executor, LinuxSandboxExecutor)
+    assert len(security.host_executor.activation_receipts()) == 1
+
+
+@pytest.mark.parametrize("asynchronous", [False, True])
+def test_verified_router_executes_through_real_linux_host(
+    tmp_path: Path, asynchronous: bool
+) -> None:
+    """The certified core uses the existing activation-before-execution host."""
+    allowed = tmp_path / "allowed.txt"
+    allowed.write_text("verified-host-result")
+    security = _security(_profile(tmp_path), "linux_tools:read_file")
+    assert isinstance(security.host_executor, LinuxSandboxExecutor)
+    tool_info = Tool(
+        "read_file",
+        ToolDac("analyst", {"analyst": "x", "*": "-"}),
+        frozenset({Effect.READ}),
+        (ResourceArg("path", "path", "realpath"),),
+    )
+    call = ToolCall(
+        tool_info, {"path": str(allowed)}, {"path": str(allowed)}, "verified", 0
+    )
+    principal = Principal("alice", frozenset({"analyst"}), frozenset(), "session")
+    stack = SecurityStack(())
+    try:
+        router = make_host_router(
+            StackBoundaryPolicy(stack), HostExecutorBoundary(security.host_executor)
+        )
+        result = (
+            asyncio.run(router.ainvoke(principal, call))
+            if asynchronous
+            else router.invoke(principal, call)
+        )
+    finally:
+        stack.close()
+    assert result.value == "verified-host-result"
+    assert result.receipt.grant_digest
+    assert result.receipt.evidence
+    assert security.host_executor.activation_receipts() == (result.receipt,)
 
 
 def test_hostile_tool_cannot_read_undeclared_file(tmp_path: Path) -> None:
@@ -532,6 +621,7 @@ principal alice {{
             )
         },
         runtime_roots=(runtime_root, _FIXTURES),
+        policy_backend=TypedPolicyBackend(),
     )
     security = SecurityConfig(
         dac_overrides=DacOverrides(profiles=profiles.tools),
@@ -795,6 +885,7 @@ def test_linux_executor_rechecks_artifact_at_dispatch(tmp_path: Path) -> None:
         profiles,
         {"read_file": LinuxToolSpec("linux_tools:read_file", artifact, digest)},
         runtime_roots=(tmp_path,),
+        policy_backend=TypedPolicyBackend(),
     )
     security = SecurityConfig(
         dac_overrides=DacOverrides(profiles=profiles.tools),
@@ -844,6 +935,7 @@ def test_linux_executor_loads_pinned_path_not_shadow_module(tmp_path: Path) -> N
             )
         },
         runtime_roots=(shadow_root, _FIXTURES),
+        policy_backend=TypedPolicyBackend(),
     )
     security = SecurityConfig(
         dac_overrides=DacOverrides(profiles=profiles.tools),
@@ -889,6 +981,7 @@ def test_linux_executor_ignores_unchecked_bytecode_cache(tmp_path: Path) -> None
         profiles,
         {"read_file": LinuxToolSpec("pinned_tool:read_file", artifact, digest)},
         runtime_roots=(tmp_path,),
+        policy_backend=TypedPolicyBackend(),
     )
     security = SecurityConfig(
         dac_overrides=DacOverrides(profiles=profiles.tools),
@@ -1022,6 +1115,7 @@ principal alice {
                 )
             },
             runtime_roots=(_FIXTURES,),
+            policy_backend=TypedPolicyBackend(),
         )
 
 
@@ -1365,6 +1459,7 @@ def test_linux_limits_reject_inexact_cpu_and_physical_memory_claims(
                 )
             },
             runtime_roots=(_FIXTURES,),
+            policy_backend=TypedPolicyBackend(),
             default_limits=invalid,
         )
 

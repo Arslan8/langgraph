@@ -832,8 +832,23 @@ class Pregel(
             stream_transformers or ()
         )
         self._serde_allowlist: set[tuple[str, ...]] | None = None
+        self._output_filter: Callable[[Any, RunnableConfig], Any] | None = None
+        self._aoutput_filter: Callable[[Any, RunnableConfig], Awaitable[Any]] | None = (
+            None
+        )
         if auto_validate:
             self.validate()
+
+    def _set_output_filter(
+        self,
+        output_filter: Callable[[Any, RunnableConfig], Any],
+        aoutput_filter: Callable[[Any, RunnableConfig], Awaitable[Any]],
+    ) -> None:
+        """Install a trusted final emission filter before any stream item escapes."""
+        if self._output_filter is not None or self._aoutput_filter is not None:
+            raise ValueError("an output filter is already installed")
+        self._output_filter = output_filter
+        self._aoutput_filter = aoutput_filter
 
     def _apply_checkpointer_allowlist(
         self, checkpointer: BaseCheckpointSaver | None
@@ -2971,16 +2986,21 @@ class Pregel(
                         schedule_task=loop.accept_push,
                     ):
                         # emit output
-                        yield from _output(
+                        for output in _output(
                             stream_mode,
-                            print_mode,
+                            () if self._output_filter is not None else print_mode,
                             subgraphs,
                             stream.get,
                             queue.Empty,
                             version,
                             _output_mapper,
                             _state_mapper,
-                        )
+                        ):
+                            yield (
+                                self._output_filter(output, config)
+                                if self._output_filter is not None
+                                else output
+                            )
                     loop.after_tick()
                     emit_graph_lifecycle_events(loop)
                     # wait for checkpoint
@@ -2988,16 +3008,21 @@ class Pregel(
                         loop._put_checkpoint_fut.result()
             emit_graph_lifecycle_events(loop)
             # emit output
-            yield from _output(
+            for output in _output(
                 stream_mode,
-                print_mode,
+                () if self._output_filter is not None else print_mode,
                 subgraphs,
                 stream.get,
                 queue.Empty,
                 version,
                 _output_mapper,
                 _state_mapper,
-            )
+            ):
+                yield (
+                    self._output_filter(output, config)
+                    if self._output_filter is not None
+                    else output
+                )
             # handle exit
             if loop.status == "out_of_steps":
                 msg = create_error_message(
@@ -3446,7 +3471,7 @@ class Pregel(
                             # emit output
                             for o in _output(
                                 stream_mode,
-                                print_mode,
+                                () if self._aoutput_filter is not None else print_mode,
                                 subgraphs,
                                 stream.get_nowait,
                                 asyncio.QueueEmpty,
@@ -3454,7 +3479,11 @@ class Pregel(
                                 _output_mapper,
                                 _state_mapper,
                             ):
-                                yield o
+                                yield (
+                                    await self._aoutput_filter(o, config)
+                                    if self._aoutput_filter is not None
+                                    else o
+                                )
                         loop.after_tick()
                         await aemit_graph_lifecycle_events(loop)
                         # wait for checkpoint
@@ -3470,7 +3499,7 @@ class Pregel(
             # emit output
             for o in _output(
                 stream_mode,
-                print_mode,
+                () if self._aoutput_filter is not None else print_mode,
                 subgraphs,
                 stream.get_nowait,
                 asyncio.QueueEmpty,
@@ -3478,7 +3507,11 @@ class Pregel(
                 _output_mapper,
                 _state_mapper,
             ):
-                yield o
+                yield (
+                    await self._aoutput_filter(o, config)
+                    if self._aoutput_filter is not None
+                    else o
+                )
             # handle exit
             if loop.status == "out_of_steps":
                 msg = create_error_message(

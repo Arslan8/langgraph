@@ -136,6 +136,7 @@ class Verdict(str, Enum):
     ALLOW = "allow"
     DENY = "deny"
     TRANSFORM = "transform"
+    REDACT = "redact"
     ESCALATE = "escalate"
 
 
@@ -305,6 +306,12 @@ class Decision:
             if self.new_args is None or self.escalation is not None or constraints:
                 raise ValueError(
                     "TRANSFORM requires new_args and forbids escalation or constraints"
+                )
+            object.__setattr__(self, "new_args", MappingProxyType(dict(self.new_args)))
+        elif self.verdict is Verdict.REDACT:
+            if self.new_args is None or self.escalation is not None or constraints:
+                raise ValueError(
+                    "REDACT requires new_args and forbids escalation or constraints"
                 )
             object.__setattr__(self, "new_args", MappingProxyType(dict(self.new_args)))
         elif self.verdict is Verdict.ESCALATE:

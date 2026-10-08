@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import shutil
 import subprocess
 import sys
 from pathlib import Path
@@ -27,6 +28,48 @@ _CONTRACT = Contract(
     trusted_calls=("Denied", "other_request", "other_principal"),
     assumptions=("authorize returns the decision for its two immutable arguments",),
 )
+
+
+@pytest.mark.parametrize(
+    "replacement", ["()", "other_constraints", "first.constraints"]
+)
+def test_host_constraints_must_match_the_current_decision(replacement: str) -> None:
+    contract = Contract(
+        "run",
+        (Authorizer("authorize", ("arg:0", "arg:1", "result:constraints")),),
+        (Operation("execute", ("arg:0", "arg:1", "arg:2")),),
+        trusted_calls=("Denied",),
+    )
+    source = dedent(f"""
+        def run(principal, request, other_constraints):
+            first = authorize(principal, request)
+            if first.verdict is not Verdict.ALLOW:
+                raise Denied()
+            second = authorize(principal, request)
+            if second.verdict is not Verdict.ALLOW:
+                raise Denied()
+            return execute(principal, request, {replacement})
+    """)
+    assert analyze_function(source, contract)["status"] == "unverified"
+    corrected = source.replace(
+        f"execute(principal, request, {replacement})",
+        "execute(principal, request, second.constraints)",
+    )
+    assert analyze_function(corrected, contract)["status"] == "verified_under_contract"
+
+
+def test_framework_host_constraint_checks_are_required(tmp_path: Path) -> None:
+    shutil.copytree(_ROOT, tmp_path / "prebuilt")
+    root = tmp_path / "prebuilt"
+    guarded = root / "security" / "guarded.py"
+    source = guarded.read_text()
+    assert "principal, call, authorization" in source
+    guarded.write_text(
+        source.replace("principal, call, authorization", "principal, call, decision")
+    )
+    report = framework_report(root)
+    assert not report["claims_passed"]
+    assert any(check["status"] == "unverified" for check in report["constraint_checks"])
 
 
 def _check(body: str, **options):
@@ -374,6 +417,9 @@ def test_reviewed_helper_digest_drift_fails_closed(monkeypatch) -> None:
     report = framework_report(_ROOT)
     evidence = {item["id"]: item for item in report["source_evidence"]}
     assert evidence["authorization-stack"]["status"] == "unresolved"
+    assert not report["claims_passed"]
+    assert report["coverage"][0]["status"] == "unresolved"
+    assert report["coverage"][1]["status"] == "unresolved"
     obligation = next(
         item
         for item in report["obligations"]

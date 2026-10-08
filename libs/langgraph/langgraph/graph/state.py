@@ -1239,7 +1239,9 @@ class StateGraph(Generic[StateT, ContextT, InputT, OutputT]):
                 raise TypeError(
                     "security must provide configure_graph(graph, *, checkpointer)"
                 )
-            configure_graph(self, checkpointer=checkpointer)
+            configured_checkpointer = configure_graph(self, checkpointer=checkpointer)
+            if configured_checkpointer is not None:
+                checkpointer = ensure_valid_checkpointer(configured_checkpointer)
 
         serde_allowlist: set[tuple[str, ...]] | None = None
         if _serde.STRICT_MSGPACK_ENABLED:
@@ -1409,7 +1411,14 @@ class StateGraph(Generic[StateT, ContextT, InputT, OutputT]):
             for name, branch in branches.items():
                 compiled.attach_branch(start, name, branch)
 
-        return compiled.validate()
+        compiled = compiled.validate()
+        if security is not None:
+            configure_compiled_graph = getattr(
+                security, "configure_compiled_graph", None
+            )
+            if callable(configure_compiled_graph):
+                configure_compiled_graph(compiled)
+        return compiled
 
 
 class CompiledStateGraph(

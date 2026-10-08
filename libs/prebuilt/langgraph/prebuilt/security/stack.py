@@ -18,6 +18,16 @@ from typing import Any, cast
 from langgraph.prebuilt.security.dac import dac_check
 from langgraph.prebuilt.security.descriptor import normalize_resource
 from langgraph.prebuilt.security.hooks import SecurityModule
+from langgraph.prebuilt.security.objects import (
+    DispatchRequest,
+    FrameworkRequest,
+    ModelInvocationRequest,
+    ObjectAuthorization,
+    OutputRequest,
+    StateOperation,
+    StateRequest,
+    ToolRegistryRequest,
+)
 from langgraph.prebuilt.security.observability import (
     SecurityEvent,
     SecurityObserver,
@@ -247,6 +257,31 @@ class SecurityStack:
             stage="cred_transfer",
         )
 
+    def record_object_decision(
+        self,
+        principal: Principal,
+        request: FrameworkRequest,
+        authorization: ObjectAuthorization,
+    ) -> None:
+        """Persist one redacted aggregate decision for a framework operation."""
+        if self.observer is None:
+            return
+        stage, tool_name, identity = _object_audit_identity(request)
+        self.observer.record(
+            SecurityEvent(
+                stage=stage,
+                module="object_manager",
+                verdict=authorization.decision.verdict,
+                reason=authorization.decision.reason,
+                latency_ms=0.0,
+                user_id=principal.user_id,
+                session_id=principal.session_id,
+                tool_name=tool_name,
+                call_index=0,
+                args_hash=hashlib.sha256(identity).hexdigest(),
+            )
+        )
+
     async def acred_transfer(self, parent: Principal, child: Principal) -> Decision:
         """Asynchronously run restrictive delegation hooks."""
         return await self._restrictive_async(
@@ -256,6 +291,252 @@ class SecurityStack:
             principal=child,
             stage="cred_transfer",
         )
+
+    def object_permission(
+        self, principal: Principal, request: FrameworkRequest
+    ) -> ObjectAuthorization:
+        """Authorize and monotonically narrow one framework-object operation."""
+        if isinstance(request, DispatchRequest):
+            if principal is not request.parent:
+                return ObjectAuthorization(
+                    Decision(Verdict.DENY, "dispatch:parent_identity_mismatch"),
+                    request,
+                )
+            if not _principal_subset(request.parent, request.child):
+                return ObjectAuthorization(
+                    Decision(Verdict.DENY, "dispatch:authority_growth"), request
+                )
+            return ObjectAuthorization(
+                self.cred_transfer(request.parent, request.child), request
+            )
+        if isinstance(request, ToolRegistryRequest):
+            return ObjectAuthorization(self._allocate_tool(request), request)
+        return self._object_modules(principal, request)
+
+    async def aobject_permission(
+        self, principal: Principal, request: FrameworkRequest
+    ) -> ObjectAuthorization:
+        """Asynchronously authorize one framework-object operation."""
+        if isinstance(request, DispatchRequest):
+            if principal is not request.parent:
+                return ObjectAuthorization(
+                    Decision(Verdict.DENY, "dispatch:parent_identity_mismatch"),
+                    request,
+                )
+            if not _principal_subset(request.parent, request.child):
+                return ObjectAuthorization(
+                    Decision(Verdict.DENY, "dispatch:authority_growth"), request
+                )
+            return ObjectAuthorization(
+                await self.acred_transfer(request.parent, request.child), request
+            )
+        if isinstance(request, ToolRegistryRequest):
+            return ObjectAuthorization(await self._aallocate_tool(request), request)
+        return await self._aobject_modules(principal, request)
+
+    def object_resume_permission(
+        self,
+        principal: Principal,
+        request: FrameworkRequest,
+        approval: Approval,
+    ) -> ObjectAuthorization:
+        """Consume one approval and run the complete object hook chain again."""
+        if not record_approval(principal, approval):
+            return ObjectAuthorization(
+                Decision(Verdict.DENY, "approval_replay"), request
+            )
+        resumed = self.resume_permission(principal, approval)
+        if resumed.verdict is not Verdict.ALLOW:
+            return ObjectAuthorization(resumed, request)
+        if isinstance(request, DispatchRequest | ToolRegistryRequest):
+            return self.object_permission(principal, request)
+        return self._object_modules(principal, request, approval=approval)
+
+    async def aobject_resume_permission(
+        self,
+        principal: Principal,
+        request: FrameworkRequest,
+        approval: Approval,
+    ) -> ObjectAuthorization:
+        """Asynchronously consume approval and rerun the object hook chain."""
+        if not record_approval(principal, approval):
+            return ObjectAuthorization(
+                Decision(Verdict.DENY, "approval_replay"), request
+            )
+        resumed = await self.aresume_permission(principal, approval)
+        if resumed.verdict is not Verdict.ALLOW:
+            return ObjectAuthorization(resumed, request)
+        if isinstance(request, DispatchRequest | ToolRegistryRequest):
+            return await self.aobject_permission(principal, request)
+        return await self._aobject_modules(principal, request, approval=approval)
+
+    def _object_modules(
+        self,
+        principal: Principal,
+        request: StateRequest | ModelInvocationRequest | OutputRequest,
+        *,
+        approval: Approval | None = None,
+    ) -> ObjectAuthorization:
+        current: StateRequest | ModelInvocationRequest | OutputRequest = request
+        constraints: list[PolicyConstraint] = []
+        for module in self.modules:
+            started = self._started()
+            decision = self._sync_decision(
+                module, partial(_object_hook, module, principal, current)
+            )
+            decision = self._attribute_constraints(module, decision)
+            if decision.constraints:
+                decision = Decision(
+                    Verdict.DENY, f"object_constraints_unsupported:{module.name}"
+                )
+            decision = self._bind_object_escalation(
+                module, principal, current, decision
+            )
+            if _matches_object_approval(decision, approval):
+                decision = Decision(Verdict.ALLOW, f"approval:{module.name}")
+            self._observe(
+                principal,
+                None,
+                _object_stage(current),
+                module.name,
+                decision,
+                started,
+            )
+            if decision.verdict in (Verdict.TRANSFORM, Verdict.REDACT):
+                narrowed = _narrow_object_request(current, decision)
+                if narrowed is None:
+                    return ObjectAuthorization(
+                        Decision(Verdict.DENY, f"module_widened:{module.name}"),
+                        current,
+                    )
+                current = narrowed
+                continue
+            if decision.verdict is not Verdict.ALLOW:
+                return ObjectAuthorization(decision, current)
+            constraints.extend(decision.constraints)
+        return ObjectAuthorization(
+            Decision(Verdict.ALLOW, "stack:allow", constraints=tuple(constraints)),
+            current,
+        )
+
+    async def _aobject_modules(
+        self,
+        principal: Principal,
+        request: StateRequest | ModelInvocationRequest | OutputRequest,
+        *,
+        approval: Approval | None = None,
+    ) -> ObjectAuthorization:
+        current: StateRequest | ModelInvocationRequest | OutputRequest = request
+        constraints: list[PolicyConstraint] = []
+        for module in self.modules:
+            started = self._started()
+            decision = await self._async_decision(
+                module, partial(_object_hook, module, principal, current)
+            )
+            decision = self._attribute_constraints(module, decision)
+            if decision.constraints:
+                decision = Decision(
+                    Verdict.DENY, f"object_constraints_unsupported:{module.name}"
+                )
+            decision = self._bind_object_escalation(
+                module, principal, current, decision
+            )
+            if _matches_object_approval(decision, approval):
+                decision = Decision(Verdict.ALLOW, f"approval:{module.name}")
+            self._observe(
+                principal,
+                None,
+                _object_stage(current),
+                module.name,
+                decision,
+                started,
+            )
+            if decision.verdict in (Verdict.TRANSFORM, Verdict.REDACT):
+                narrowed = _narrow_object_request(current, decision)
+                if narrowed is None:
+                    return ObjectAuthorization(
+                        Decision(Verdict.DENY, f"module_widened:{module.name}"),
+                        current,
+                    )
+                current = narrowed
+                continue
+            if decision.verdict is not Verdict.ALLOW:
+                return ObjectAuthorization(decision, current)
+            constraints.extend(decision.constraints)
+        return ObjectAuthorization(
+            Decision(Verdict.ALLOW, "stack:allow", constraints=tuple(constraints)),
+            current,
+        )
+
+    def _allocate_tool(self, request: ToolRegistryRequest) -> Decision:
+        for module in self.modules:
+            started = self._started()
+            future = self._executor.submit(
+                module.tool_alloc_security,
+                request.tool,
+                request.tool.security.allocate(module.name),
+            )
+            try:
+                result = future.result(timeout=self.policy_timeout_s)
+            except FutureTimeoutError:
+                future.cancel()
+                decision = Decision(Verdict.DENY, f"module_timeout:{module.name}")
+            except BaseException:
+                decision = Decision(Verdict.DENY, f"module_error:{module.name}")
+            else:
+                decision = (
+                    Decision(Verdict.ALLOW, f"{module.name}:allocated")
+                    if result is None
+                    else Decision(Verdict.DENY, f"module_error:{module.name}")
+                )
+            self._observe(
+                Principal("__registry__", frozenset(), frozenset(), "registry"),
+                None,
+                "tool_registry",
+                module.name,
+                decision,
+                started,
+            )
+            if decision.verdict is not Verdict.ALLOW:
+                return decision
+        return Decision(Verdict.ALLOW, "registry:allocated")
+
+    async def _aallocate_tool(self, request: ToolRegistryRequest) -> Decision:
+        for module in self.modules:
+            started = self._started()
+            loop = asyncio.get_running_loop()
+            hook = partial(
+                module.tool_alloc_security,
+                request.tool,
+                request.tool.security.allocate(module.name),
+            )
+            try:
+                result = await asyncio.wait_for(
+                    loop.run_in_executor(self._executor, hook), self.policy_timeout_s
+                )
+                if inspect.isawaitable(result):
+                    result = await asyncio.wait_for(result, self.policy_timeout_s)
+            except TimeoutError:
+                decision = Decision(Verdict.DENY, f"module_timeout:{module.name}")
+            except BaseException:
+                decision = Decision(Verdict.DENY, f"module_error:{module.name}")
+            else:
+                decision = (
+                    Decision(Verdict.ALLOW, f"{module.name}:allocated")
+                    if result is None
+                    else Decision(Verdict.DENY, f"module_error:{module.name}")
+                )
+            self._observe(
+                Principal("__registry__", frozenset(), frozenset(), "registry"),
+                None,
+                "tool_registry",
+                module.name,
+                decision,
+                started,
+            )
+            if decision.verdict is not Verdict.ALLOW:
+                return decision
+        return Decision(Verdict.ALLOW, "registry:allocated")
 
     def resume_permission(self, principal: Principal, approval: Approval) -> Decision:
         """Run every module after a human approval response."""
@@ -499,6 +780,35 @@ class SecurityStack:
             attributed.append(replace(constraint, module=module.name))
         return replace(decision, constraints=tuple(attributed))
 
+    def _bind_object_escalation(
+        self,
+        module: SecurityModule,
+        principal: Principal,
+        request: StateRequest | ModelInvocationRequest | OutputRequest,
+        decision: Decision,
+    ) -> Decision:
+        escalation = decision.escalation
+        if decision.verdict is not Verdict.ESCALATE or escalation is None:
+            return decision
+        encoded = json.dumps(
+            {
+                "module": module.name,
+                "principal": principal.user_id,
+                "request": repr(request),
+                "session": principal.session_id,
+            },
+            sort_keys=True,
+            separators=(",", ":"),
+        ).encode()
+        return replace(
+            decision,
+            escalation=replace(
+                escalation,
+                subject_digest=hashlib.sha256(encoded).hexdigest(),
+                expires_at=time.time() + self.approval_ttl_s,
+            ),
+        )
+
     async def _async_decision(
         self, module: SecurityModule, hook: Callable[[], Any]
     ) -> Decision:
@@ -530,6 +840,59 @@ def record_approval(principal: Principal, approval: Approval) -> bool:
     """Atomically record one approval and reject reuse of its request ID."""
     slot = principal.security.allocate("cap")
     return slot.put_if_absent(f"approval:{approval.request_id}", approval)
+
+
+def _object_audit_identity(
+    request: FrameworkRequest,
+) -> tuple[str, str, bytes]:
+    """Return a content-free audit identity for one framework request."""
+    if isinstance(request, DispatchRequest):
+        payload = {
+            "child": (request.child.user_id, request.child.session_id),
+            "dispatch_id": request.dispatch_id,
+            "identity_transfer": request.parent is request.child,
+            "kind": request.kind.value,
+            "parent": (request.parent.user_id, request.parent.session_id),
+        }
+        stage = "dispatch"
+        tool_name = "__framework__"
+    elif isinstance(request, ToolRegistryRequest):
+        payload = {
+            "dynamic": request.dynamic,
+            "override": request.override,
+            "tool": request.tool.name,
+        }
+        stage = "tool_registry"
+        tool_name = request.tool.name
+    elif isinstance(request, StateRequest):
+        payload = {
+            "operation": request.operation.value,
+            "owner": request.owner_id,
+            "resource": request.resource,
+            "tool": request.tool_name,
+        }
+        stage = "state"
+        tool_name = request.tool_name or "__framework__"
+    elif isinstance(request, ModelInvocationRequest):
+        payload = {
+            "context": [item.name for item in request.context],
+            "invocation_id": request.invocation_id,
+            "model": request.model,
+        }
+        stage = "model_invoke"
+        tool_name = "__model__"
+    else:
+        payload = {
+            "destination": request.destination,
+            "output_id": request.output_id,
+        }
+        stage = "output_emit"
+        tool_name = "__output__"
+    return (
+        stage,
+        tool_name,
+        json.dumps(payload, sort_keys=True, separators=(",", ":")).encode(),
+    )
 
 
 def _normalized_no_broader(
@@ -621,6 +984,20 @@ def _matches_approval(
     )
 
 
+def _matches_object_approval(decision: Decision, approval: Approval | None) -> bool:
+    escalation = decision.escalation
+    return bool(
+        approval is not None
+        and approval.approved
+        and decision.verdict is Verdict.ESCALATE
+        and escalation is not None
+        and escalation.request_id == approval.request_id
+        and bool(escalation.subject_digest)
+        and approval.subject_digest == escalation.subject_digest
+        and (escalation.expires_at is None or time.time() <= escalation.expires_at)
+    )
+
+
 def _replace_call_args(call: ToolCall, args: Mapping[str, Any]) -> ToolCall:
     normalized: dict[str, Any] = {}
     for resource in call.tool.resources:
@@ -635,3 +1012,71 @@ def _replace_call_args(call: ToolCall, args: Mapping[str, Any]) -> ToolCall:
         elif resource.normalizer == "shell_argv0":
             normalized[f"{resource.arg}_argv0"] = value
     return replace(call, args=args, normalized=normalized)
+
+
+def _principal_subset(parent: Principal, child: Principal) -> bool:
+    return (
+        parent.user_id == child.user_id
+        and parent.session_id == child.session_id
+        and child.roles.issubset(parent.roles)
+        and child.scopes.issubset(parent.scopes)
+        and child.delegated_by in (None, parent.user_id)
+    )
+
+
+def _object_hook(
+    module: SecurityModule,
+    principal: Principal,
+    request: StateRequest | ModelInvocationRequest | OutputRequest,
+) -> Decision:
+    if isinstance(request, StateRequest):
+        if request.operation is StateOperation.RESTORE:
+            return module.state_restore(principal, request)
+        if request.operation in (StateOperation.WRITE, StateOperation.STORE_WRITE):
+            return module.state_write(principal, request)
+        return module.state_read(principal, request)
+    if isinstance(request, ModelInvocationRequest):
+        return module.model_invoke(principal, request)
+    return module.output_emit(principal, request)
+
+
+def _object_stage(
+    request: StateRequest | ModelInvocationRequest | OutputRequest,
+) -> str:
+    if isinstance(request, StateRequest):
+        return f"state_{request.operation.value}"
+    if isinstance(request, ModelInvocationRequest):
+        return "model_invoke"
+    return "output_emit"
+
+
+def _narrow_object_request(
+    request: StateRequest | ModelInvocationRequest | OutputRequest,
+    decision: Decision,
+) -> StateRequest | ModelInvocationRequest | OutputRequest | None:
+    values = decision.new_args
+    if values is None:
+        return None
+    if isinstance(request, StateRequest):
+        if set(values) != {"value"}:
+            return None
+        return request.replace_value(values["value"])
+    if isinstance(request, ModelInvocationRequest):
+        if set(values) != {"context"}:
+            return None
+        proposed = values["context"]
+        if not isinstance(proposed, (tuple, list)) or not all(
+            item in request.context for item in proposed
+        ):
+            return None
+        return replace(request, context=tuple(proposed))
+    if set(values) not in ({"content"}, {"content", "labels"}):
+        return None
+    labels = values.get("labels", request.labels)
+    if (
+        not isinstance(labels, type(request.labels))
+        or not labels.confidentiality.issubset(request.labels.confidentiality)
+        or labels.integrity != request.labels.integrity
+    ):
+        return None
+    return replace(request, content=values["content"], labels=labels)

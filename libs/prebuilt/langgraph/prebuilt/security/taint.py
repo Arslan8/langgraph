@@ -63,9 +63,12 @@ class EscapeFinding:
 
     @property
     def fingerprint(self) -> str:
-        """Return a stable-enough identifier for review baselines."""
+        """Return an exact source-site identifier for narrow review waivers."""
         scope = self.function or "<module>"
-        return f"{self.path}:{scope}:{self.kind.value}:{self.symbol}"
+        return (
+            f"{self.path}:{self.line}:{self.column + 1}:"
+            f"{scope}:{self.kind.value}:{self.symbol}"
+        )
 
 
 @dataclass(frozen=True, slots=True)
@@ -99,6 +102,97 @@ class TaintReport:
             indent=2,
             sort_keys=True,
         )
+
+
+@dataclass(frozen=True, slots=True)
+class WaiverDisposition:
+    """Exact finding-by-finding result after applying reviewed waivers."""
+
+    report: TaintReport
+    waived: tuple[tuple[EscapeFinding, str], ...]
+    unwaived: tuple[EscapeFinding, ...]
+    errors: tuple[str, ...] = ()
+
+    @property
+    def safe(self) -> bool:
+        """Whether every finding is removed or narrowly waived with a reason."""
+        return not self.unwaived and not self.errors and not self.report.parse_errors
+
+    def to_json(self) -> str:
+        """Serialize findings, reasons, and gate failures for review artifacts."""
+
+        def finding_payload(finding: EscapeFinding) -> dict[str, Any]:
+            return {
+                **asdict(finding),
+                "kind": finding.kind.value,
+                "severity": finding.severity.value,
+                "fingerprint": finding.fingerprint,
+            }
+
+        return json.dumps(
+            {
+                "errors": list(self.errors),
+                "parse_errors": list(self.report.parse_errors),
+                "safe": self.safe,
+                "unwaived": [finding_payload(item) for item in self.unwaived],
+                "waived": [
+                    {"finding": finding_payload(item), "reason": reason}
+                    for item, reason in self.waived
+                ],
+            },
+            indent=2,
+            sort_keys=True,
+        )
+
+
+def apply_waivers(report: TaintReport, waiver_path: str | Path) -> WaiverDisposition:
+    """Apply exact reviewed fingerprints; reject stale or malformed entries."""
+    path = Path(waiver_path)
+    try:
+        raw = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as exc:
+        return WaiverDisposition(
+            report, (), report.findings, (f"waiver_manifest:{type(exc).__name__}",)
+        )
+    errors: list[str] = []
+    if not isinstance(raw, dict) or raw.get("version") != 1:
+        return WaiverDisposition(
+            report, (), report.findings, ("waiver_manifest:version",)
+        )
+    entries = raw.get("waivers")
+    if not isinstance(entries, list):
+        return WaiverDisposition(
+            report, (), report.findings, ("waiver_manifest:entries",)
+        )
+    reasons: dict[str, str] = {}
+    for index, entry in enumerate(entries):
+        if not isinstance(entry, dict) or set(entry) != {"fingerprint", "reason"}:
+            errors.append(f"waiver_manifest:entry:{index}")
+            continue
+        fingerprint = entry.get("fingerprint")
+        reason = entry.get("reason")
+        if not isinstance(fingerprint, str) or not fingerprint:
+            errors.append(f"waiver_manifest:fingerprint:{index}")
+            continue
+        if not isinstance(reason, str) or len(reason.strip()) < 20:
+            errors.append(f"waiver_manifest:reason:{fingerprint}")
+            continue
+        if fingerprint in reasons:
+            errors.append(f"waiver_manifest:duplicate:{fingerprint}")
+            continue
+        reasons[fingerprint] = reason.strip()
+    findings = {item.fingerprint: item for item in report.findings}
+    for fingerprint in sorted(reasons.keys() - findings.keys()):
+        errors.append(f"waiver_manifest:stale:{fingerprint}")
+    waived = tuple(
+        (item, reasons[item.fingerprint])
+        for item in report.findings
+        if item.fingerprint in reasons
+    )
+    unwaived = tuple(
+        item for item in report.findings if item.fingerprint not in reasons
+    )
+    return WaiverDisposition(report, waived, unwaived, tuple(errors))
 
 
 @dataclass(frozen=True, slots=True)
@@ -1058,12 +1152,21 @@ def _main(argv: Sequence[str] | None = None) -> int:
         "--exclude", action="append", default=[], help="file or directory to omit"
     )
     parser.add_argument("--json", action="store_true", help="emit JSON")
+    parser.add_argument(
+        "--waivers",
+        type=Path,
+        help="exact-fingerprint JSON waiver manifest; every entry needs a reason",
+    )
     arguments = parser.parse_args(argv)
     report = analyze_source(*arguments.paths, exclude=arguments.exclude)
+    disposition = (
+        apply_waivers(report, arguments.waivers) if arguments.waivers else None
+    )
     if arguments.json:
-        print(report.to_json())
+        print(disposition.to_json() if disposition is not None else report.to_json())
     else:
-        for finding in report.findings:
+        findings = disposition.unwaived if disposition is not None else report.findings
+        for finding in findings:
             print(
                 f"{finding.path}:{finding.line}:{finding.column + 1}: "
                 f"{finding.severity.value} {finding.kind.value} "
@@ -1071,11 +1174,15 @@ def _main(argv: Sequence[str] | None = None) -> int:
             )
         for error in report.parse_errors:
             print(f"error: {error}")
+        if disposition is not None:
+            for error in disposition.errors:
+                print(f"error: {error}")
+            print(f"{len(disposition.waived)} reviewed waiver(s)")
         print(
-            f"{len(report.findings)} escape(s), "
+            f"{len(findings)} unwaived escape(s), "
             f"{len(report.parse_errors)} parse error(s)"
         )
-    return 0 if report.safe else 1
+    return 0 if (disposition.safe if disposition is not None else report.safe) else 1
 
 
 if __name__ == "__main__":

@@ -83,7 +83,14 @@ def test_state_graph_compile_configures_reachable_tool_nodes() -> None:
     """StateGraph exposes a dependency-neutral security configuration hook."""
     node = ToolNode([configured_tool])
     builder = StateGraph(MessagesState)
-    builder.add_node("tools", node)
+    builder.add_node(
+        "tools",
+        node,
+        metadata={
+            "security_trust": "trusted",
+            "security_promotion_reason": "operator reviewed in-process test tool",
+        },
+    )
     builder.add_edge(START, "tools")
 
     builder.compile(security=SecurityConfig())
@@ -99,7 +106,14 @@ def test_escalating_module_requires_checkpointer() -> None:
         can_escalate = True
 
     builder = StateGraph(MessagesState)
-    builder.add_node("tools", ToolNode([configured_tool]))
+    builder.add_node(
+        "tools",
+        ToolNode([configured_tool]),
+        metadata={
+            "security_trust": "trusted",
+            "security_promotion_reason": "operator reviewed in-process test tool",
+        },
+    )
     builder.add_edge(START, "tools")
     security = SecurityConfig(modules=[EscalatingModule()])
 

@@ -37,6 +37,7 @@ from langgraph.prebuilt.security import (
     SecurityConfig,
     SecurityModule,
     SelectorMatch,
+    TypedPolicyBackend,
     Verdict,
     effects,
     parse_profiles,
@@ -179,6 +180,7 @@ principal alice {{
             for name in tool_fs
         },
         runtime_roots=(_FIXTURES, *runtime_roots),
+        policy_backend=TypedPolicyBackend(),
     )
     security = SecurityConfig(
         modules=([ResourceBoundary(_policy(layout))] if modules is None else modules),

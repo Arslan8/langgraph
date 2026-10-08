@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import ast
 import hashlib
+from dataclasses import replace
 from pathlib import Path
 from typing import Any
 
@@ -86,11 +87,11 @@ _NODE_TRUST = (
 _REVIEWED_DIGESTS = {
     "authorization-stack": "c3bd475aecc2dfcdc23255564fc78dd5e2dcbf9acada811aab7bc369432b495e",
     "guarded-request-binding": "618de901277adc73396c1e08ab27562560a8f010e0aa7a2ec6763a7052144717",
-    "toolnode-request-binding": "0451a39d8f757b6a3d2a4f56f0e45c1445896d8834925f3cba0a28e49957e1fc",
-    "in-process-dispatch-binding": "7148674e645675c2c36857daa536c1d63a96f84190090fa3365297045c84b832",
-    "guarded-in-process-dispatch": "f030eb198581f5f5717c953f2bad304c6816f36aaad148a7befeed89a6c03d0e",
-    "linux-grant-activation": "26b675be073119ac0c7df4d3698331ae60853b5571163bc7e75dee9cc48cdcd9",
-    "enforcement-receipt": "22c1a00c69b5ed659231185b0625e6b07f1c1b54babd5b8162b92a0137560e0f",
+    "toolnode-request-binding": "2da3883bd787d5b194dd7303f2247aa5e7d2d46798d2027b61cb1458fb0ef9e2",
+    "in-process-dispatch-binding": "c27f9c3e27353a54504a937127dad4dd487e0ba342a57ae08abaefdca14cbbd3",
+    "guarded-in-process-dispatch": "339aa2be9e47df3bbecde106df41cf3910adbfeffaa9a3e086a31547fb108d2a",
+    "linux-grant-activation": "358bebdeeb2204cc19d6eda83cb64b1f6531a54b25973691464bfddfd5a40083",
+    "enforcement-receipt": "9d102d0cbd58b8234fc59bfae02dbc35cd3458ce91fe82b799a193900dfa6625",
     "flow-lifecycle": "455dc915f2de6497930122596f1af5cc72b0a2ec0731fdec9dea3259922ec48f",
     "delegation-transfer": "b275e7e857ae259c20b0b5c07619bda9089c946239ea86f641a9efd94041371f",
     "publication-boundaries": "db2150a7e8eaba1baba53ee9860fd48e455ec42841dc65ebef8167ac9680539d",
@@ -114,9 +115,7 @@ def contracts() -> tuple[tuple[str, Contract], ...]:
                         Authorizer(f"self.{resume}", ("arg:0", "arg:1")),
                     ),
                     (
-                        Operation(
-                            f"self.security.host_executor.{invoke}", ("arg:0", "arg:1")
-                        ),
+                        Operation(f"self.host_router.{invoke}", ("arg:0", "arg:1")),
                         Operation(
                             f"self._{'a' if asynchronous else ''}invoke_in_process",
                             ("arg:0", "arg:1"),
@@ -144,7 +143,8 @@ def contracts() -> tuple[tuple[str, Contract], ...]:
                     ),
                     (
                         Operation(
-                            f"self._security_host_executor.{invoke}", ("arg:0", "arg:1")
+                            f"self._security_host_router.{invoke}",
+                            ("arg:0", "arg:1"),
                         ),
                         Operation(
                             f"self._invoke_secured_tool_{'async' if asynchronous else 'sync'}",
@@ -316,8 +316,45 @@ def _evidence(source_root: Path) -> list[dict[str, Any]]:
 
 def framework_report(source_root: Path) -> dict[str, Any]:
     """Produce reproducible source-bound evidence, including unresolved coverage."""
-    checks = []
+    checks: list[dict[str, Any]] = []
+    constraint_checks: list[dict[str, Any]] = []
+    constraints = []
     for relative, contract in contracts():
+        host_operations = tuple(
+            replace(item, bindings=(*item.bindings, "arg:2.constraints"))
+            for item in contract.operations
+            if "host_router" in item.target
+        )
+        constraints.append(
+            (
+                relative,
+                replace(
+                    contract,
+                    authorizers=tuple(
+                        replace(
+                            item,
+                            bindings=(
+                                *item.bindings,
+                                "result:0.constraints"
+                                if item.decision == "0"
+                                else "result:constraints",
+                            ),
+                        )
+                        for item in contract.authorizers
+                    ),
+                    operations=host_operations,
+                    trusted_calls=(
+                        *contract.trusted_calls,
+                        *(
+                            item.target
+                            for item in contract.operations
+                            if "host_router" not in item.target
+                        ),
+                    ),
+                ),
+            )
+        )
+    for index, (relative, contract) in enumerate((*contracts(), *constraints)):
         try:
             source = (source_root / relative).read_text(encoding="utf-8")
         except (OSError, UnicodeError) as exc:
@@ -344,9 +381,32 @@ def framework_report(source_root: Path) -> dict[str, Any]:
                 if summary["target"].startswith("self._")
                 else "authorization-stack"
             ]
-        checks.append(check)
+        (checks if index < len(contracts()) else constraint_checks).append(check)
     evidence = _evidence(source_root)
     evidence_ready = {item["id"]: item["status"] for item in evidence}
+    # Reviewed helper drift invalidates the claim gate as well as obligations.
+    for check in (*checks, *constraint_checks):
+        required = {
+            evidence_id
+            for summary in check.get("authorizer_summaries", [])
+            for evidence_id in summary["source_evidence"]
+        }
+        required.add(
+            "in-process-dispatch-binding"
+            if check["path"] == "tool_node.py"
+            else "guarded-in-process-dispatch"
+        )
+        missing = sorted(
+            key for key in required if evidence_ready.get(key) != "source_bound"
+        )
+        if missing:
+            check["status"] = "unresolved"
+            check.setdefault("issues", []).append(
+                {
+                    "line": 0,
+                    "reason": "unresolved source evidence: " + ", ".join(missing),
+                }
+            )
     obligations = [
         {
             "id": "authorization-helper-validation",
@@ -463,6 +523,11 @@ def framework_report(source_root: Path) -> dict[str, Any]:
             for evidence_id in obligation["source_evidence"]
         ):
             obligation["status"] = "unresolved"
+    obligation_status = {item["id"]: item["status"] for item in obligations}
+    claims_passed = all(
+        check["status"] == "verified_under_contract"
+        for check in (*checks, *constraint_checks)
+    )
     return {
         "schema_version": 2,
         "analysis": "bounded-authorization-state-v2",
@@ -471,11 +536,10 @@ def framework_report(source_root: Path) -> dict[str, Any]:
         ).hexdigest(),
         "catalog_sha256": hashlib.sha256(Path(__file__).read_bytes()).hexdigest(),
         "property": "Every modelled secured host or in-process dispatch has a preceding successful decision for the same principal and request, not consumed by an earlier dispatch.",
-        "claims_passed": all(
-            check["status"] == "verified_under_contract" for check in checks
-        ),
+        "claims_passed": claims_passed,
         "complete": False,
         "checks": checks,
+        "constraint_checks": constraint_checks,
         "source_evidence": evidence,
         "obligations": obligations,
         "publication_inventory": [
@@ -513,27 +577,27 @@ def framework_report(source_root: Path) -> dict[str, Any]:
         "coverage": [
             {
                 "operation": "secured host and in-process dispatch",
-                "status": "analyzed",
+                "status": "analyzed" if claims_passed else "unresolved",
                 "evidence": "checks",
             },
             {
                 "operation": "policy and principal helper semantics",
-                "status": "source_bound",
+                "status": obligation_status["authorization-helper-validation"],
                 "reason": "Summaries link to hashed reviewed function bodies and explicit assumptions.",
             },
             {
                 "operation": "grant lowering and worker activation",
-                "status": "verified_under_contract",
+                "status": obligation_status["confinement-activation"],
                 "reason": "Grant, plan, receipt, and pre-GO activation bindings have source and regression evidence.",
             },
             {
                 "operation": "reservation, cancellation and termination lifetime",
-                "status": "partially_verified",
+                "status": obligation_status["execution-lifetime"],
                 "reason": "Linux worker recovery is covered; in-process background work is unsupported.",
             },
             {
                 "operation": "delegation, transfers and publication",
-                "status": "partially_verified",
+                "status": obligation_status["delegation-and-transfer"],
                 "reason": "Attenuation and explicit transfer APIs are covered; arbitrary application paths are not intercepted.",
             },
             {

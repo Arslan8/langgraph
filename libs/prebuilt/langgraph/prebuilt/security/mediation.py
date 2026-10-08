@@ -77,6 +77,7 @@ class _State:
     verdicts: dict[str, frozenset[str]] = field(default_factory=dict)
     predicates: dict[str, bool] = field(default_factory=dict)
     exit: str = "normal"
+    scopes: dict[tuple[str, ...], tuple[str, ...]] = field(default_factory=dict)
 
     def clone(self) -> _State:
         return _State(
@@ -86,10 +87,11 @@ class _State:
             dict(self.verdicts),
             dict(self.predicates),
             self.exit,
+            dict(self.scopes),
         )
 
 
-_VERDICTS = frozenset({"ALLOW", "DENY", "ESCALATE", "TRANSFORM"})
+_VERDICTS = frozenset({"ALLOW", "DENY", "ESCALATE", "TRANSFORM", "REDACT"})
 
 
 class _Analyzer:
@@ -165,12 +167,23 @@ class _Analyzer:
                 )
                 # A new policy decision supersedes older authority for this
                 # operation; retaining an earlier ALLOW would mask a new denial.
-                state.approved.discard(bindings)
+                scope = (summary.permission,) + tuple(
+                    self.select(item, arguments, result, node)
+                    for item in summary.bindings
+                    if item.startswith("arg:")
+                )
+                revoked = {
+                    fact
+                    for fact, old_scope in state.scopes.items()
+                    if old_scope == scope
+                }
+                state.approved.difference_update(revoked)
                 state.pending = {
                     key: value
                     for key, value in state.pending.items()
-                    if value != bindings
+                    if value not in revoked
                 }
+                state.scopes[bindings] = scope
                 state.pending[decision] = bindings
                 state.verdicts[decision] = _VERDICTS
             elif target in self.operations:
@@ -323,6 +336,7 @@ class _Analyzer:
                     tuple(sorted(item.verdicts.items())),
                     tuple(sorted(item.predicates.items())),
                     item.exit,
+                    tuple(sorted(item.scopes.items())),
                 )
                 unique[key] = item
             following = list(unique.values())

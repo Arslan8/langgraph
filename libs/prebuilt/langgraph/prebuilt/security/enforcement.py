@@ -49,7 +49,8 @@ class SupportLevel(str, Enum):
     """Conservative relation between an obligation and its native lowering."""
 
     EXACT = "exact"
-    STRICTER = "stricter"
+    TIGHTENED = "tightened"
+    STRICTER = "tightened"
     UNSUPPORTED = "unsupported"
 
 
@@ -716,6 +717,19 @@ class NegotiationResult:
 
 
 @dataclass(frozen=True, slots=True)
+class RuleEnforcement:
+    """Per-rule lowering relation persisted with activation evidence."""
+
+    rule_id: str
+    support: SupportLevel
+    mechanism: str
+
+    def __post_init__(self) -> None:
+        if not self.rule_id or not self.mechanism:
+            raise ValueError("rule enforcement fields must be non-empty")
+
+
+@dataclass(frozen=True, slots=True)
 class ActivationReceipt:
     """Verified evidence bundle required before releasing one worker."""
 
@@ -728,10 +742,12 @@ class ActivationReceipt:
     evidence: tuple[ActivationEvidence, ...]
     activated_obligations: frozenset[str]
     valid_until: float
+    rule_enforcement: tuple[RuleEnforcement, ...] = ()
 
     def __post_init__(self) -> None:
         if self.valid_until <= 0:
             raise ValueError("activation receipt expiry must be positive")
+        object.__setattr__(self, "rule_enforcement", tuple(self.rule_enforcement))
 
     def canonical(self) -> Mapping[str, Any]:
         """Return complete canonical evidence suitable for durable audit."""
@@ -756,6 +772,16 @@ class ActivationReceipt:
             "mode": self.mode.value,
             "nonce": self.nonce,
             "plan_digest": self.plan_digest,
+            "rule_enforcement": [
+                {
+                    "mechanism": item.mechanism,
+                    "rule_id": item.rule_id,
+                    "support": item.support.value,
+                }
+                for item in sorted(
+                    self.rule_enforcement, key=lambda value: value.rule_id
+                )
+            ],
             "valid_until": self.valid_until,
         }
 
@@ -887,6 +913,18 @@ class EnforcementCoordinator:
             tuple(evidence),
             frozenset(activated),
             min(host.expires_at, *(item.expires_at for item in evidence)),
+            tuple(
+                RuleEnforcement(
+                    assignment.obligation_id.removeprefix("rule:").removesuffix(
+                        ":operate"
+                    ),
+                    assignment.support,
+                    assignment.adapter_id,
+                )
+                for assignment in plan.assignments
+                if assignment.obligation_id.startswith("rule:")
+                and assignment.obligation_id.endswith(":operate")
+            ),
         )
 
     def validate_receipt(
@@ -915,6 +953,18 @@ class EnforcementCoordinator:
             return False
         expected = {assignment.obligation_id for assignment in plan.assignments}
         if receipt.activated_obligations != expected:
+            return False
+        expected_rules = tuple(
+            RuleEnforcement(
+                assignment.obligation_id.removeprefix("rule:").removesuffix(":operate"),
+                assignment.support,
+                assignment.adapter_id,
+            )
+            for assignment in plan.assignments
+            if assignment.obligation_id.startswith("rule:")
+            and assignment.obligation_id.endswith(":operate")
+        )
+        if receipt.rule_enforcement != expected_rules:
             return False
         plans = {item.adapter_id: item for item in plan.adapter_plans}
         try:

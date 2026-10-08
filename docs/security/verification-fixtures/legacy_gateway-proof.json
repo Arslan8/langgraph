@@ -1,0 +1,503 @@
+{
+  "assumptions": [
+    "Authorizer primitives authenticate inputs and return the declared Decision for exactly their bound arguments.",
+    "Operation primitives are the complete terminal effect boundary in the supplied source universe.",
+    "Imports, builtin data operations, standard dataclass construction, native method binding, override metadata, builtin exceptions and Verdict identity have their declared meanings; custom descriptors and monkeypatching are outside the model.",
+    "Standard typing and typing_extensions TYPE_CHECKING is False at runtime; cast returns its val argument unchanged after evaluating and binding all arguments. A cast establishes no runtime type or authorization.",
+    "Supported inert TypedDict declarations use the native typing/typing_extensions metaclass: construction produces an ordinary dict without schema validation and isinstance against the declaration raises TypeError. Annotations grant no runtime types or authority.",
+    "Native ContextVar get/set/reset operates in one current execution context across direct source calls and awaits. Module variables may contain inherited values; local variables start unset. Task creation, context copying/switching, external context mutation, token context managers and arbitrary context introspection require separate models.",
+    "Statically named ordinary source bases follow native C3 method resolution. Bound super proxies use the lexical starting class and the actual receiver's method order; custom metaclasses, dynamic bases, unbound super descriptors and generated dataclass class cells require additional models.",
+    "Lazy export resolution uses ordinary source-module imports with native importlib semantics and inert native import-error diagnostics; custom import hooks and external mutation of module bindings/export tables are outside the model. Every source initializer is still checked.",
+    "Standard reentrant locks use the native _thread.RLock context protocol: enter returns True and exit does not suppress exceptions or invoke user callbacks. This is not a concurrency proof.",
+    "Security inputs change only through modeled writes; external concurrent mutation, including across awaits, is outside the model.",
+    "Terminal return values and exception payloads contain inert data, never executable or receiver capabilities.",
+    "Input truth tests and keyword-key hashing/equality are stable and inert; custom input protocols and concurrent mutation require another model. Python keyword packing alone does not establish inert key protocols.",
+    "Ordinary helper bodies are analyzed, never accepted through opaque reviewed-call exemptions."
+  ],
+  "async_terminals": [
+    "policy.apermission",
+    "legacy.adispatch"
+  ],
+  "budgets": {
+    "call_depth": 32,
+    "paths_per_entry": 512,
+    "steps_per_entry": 100000
+  },
+  "complete": true,
+  "entries": [
+    {
+      "call_graph": [
+        {
+          "callee": "example.execute",
+          "caller": "example.Tool.invoke"
+        },
+        {
+          "callee": "policy.permission",
+          "caller": "example.decision_for"
+        },
+        {
+          "callee": "example.decision_for",
+          "caller": "example.execute"
+        },
+        {
+          "callee": "legacy.dispatch",
+          "caller": "example.execute"
+        }
+      ],
+      "dispatches": [
+        {
+          "authorized": true,
+          "bindings": [
+            "tool_call",
+            "input:principal",
+            "input:request"
+          ],
+          "call_path": [
+            "example.Tool.invoke",
+            "example.execute"
+          ],
+          "function": "example.execute",
+          "line": 13,
+          "requirements": [
+            {
+              "authorized": true,
+              "bindings": [
+                "input:principal",
+                "input:request"
+              ],
+              "permission": "tool_call"
+            }
+          ],
+          "target": "legacy.dispatch"
+        }
+      ],
+      "entry": "example.Child.invoke",
+      "implementation": "example.Tool.invoke",
+      "issues": [],
+      "settled_exceptions": 1,
+      "status": "verified",
+      "steps": 50,
+      "visited_functions": [
+        "example.Tool.invoke",
+        "example.decision_for",
+        "example.execute"
+      ]
+    },
+    {
+      "call_graph": [
+        {
+          "callee": "example.execute",
+          "caller": "example.Tool.invoke"
+        },
+        {
+          "callee": "example.Tool.invoke",
+          "caller": "example.Tool.run"
+        },
+        {
+          "callee": "policy.permission",
+          "caller": "example.decision_for"
+        },
+        {
+          "callee": "example.decision_for",
+          "caller": "example.execute"
+        },
+        {
+          "callee": "legacy.dispatch",
+          "caller": "example.execute"
+        }
+      ],
+      "dispatches": [
+        {
+          "authorized": true,
+          "bindings": [
+            "tool_call",
+            "input:principal",
+            "input:request"
+          ],
+          "call_path": [
+            "example.Tool.run",
+            "example.Tool.invoke",
+            "example.execute"
+          ],
+          "function": "example.execute",
+          "line": 13,
+          "requirements": [
+            {
+              "authorized": true,
+              "bindings": [
+                "input:principal",
+                "input:request"
+              ],
+              "permission": "tool_call"
+            }
+          ],
+          "target": "legacy.dispatch"
+        }
+      ],
+      "entry": "example.Child.run",
+      "implementation": "example.Tool.run",
+      "issues": [],
+      "settled_exceptions": 1,
+      "status": "verified",
+      "steps": 63,
+      "visited_functions": [
+        "example.Tool.invoke",
+        "example.Tool.run",
+        "example.decision_for",
+        "example.execute"
+      ]
+    },
+    {
+      "call_graph": [
+        {
+          "callee": "legacy.adispatch",
+          "caller": "example.Tool.ainvoke"
+        },
+        {
+          "callee": "policy.apermission",
+          "caller": "example.Tool.ainvoke"
+        }
+      ],
+      "dispatches": [
+        {
+          "authorized": true,
+          "bindings": [
+            "tool_call",
+            "input:principal",
+            "input:request"
+          ],
+          "call_path": [
+            "example.Tool.ainvoke"
+          ],
+          "function": "example.Tool.ainvoke",
+          "line": 27,
+          "requirements": [
+            {
+              "authorized": true,
+              "bindings": [
+                "input:principal",
+                "input:request"
+              ],
+              "permission": "tool_call"
+            }
+          ],
+          "target": "legacy.adispatch"
+        }
+      ],
+      "entry": "example.Child.ainvoke",
+      "implementation": "example.Tool.ainvoke",
+      "issues": [],
+      "settled_exceptions": 1,
+      "status": "verified",
+      "steps": 32,
+      "visited_functions": [
+        "example.Tool.ainvoke"
+      ]
+    },
+    {
+      "call_graph": [
+        {
+          "callee": "example.Tool.ainvoke",
+          "caller": "example.Child.arun"
+        },
+        {
+          "callee": "legacy.adispatch",
+          "caller": "example.Tool.ainvoke"
+        },
+        {
+          "callee": "policy.apermission",
+          "caller": "example.Tool.ainvoke"
+        }
+      ],
+      "dispatches": [
+        {
+          "authorized": true,
+          "bindings": [
+            "tool_call",
+            "input:principal",
+            "input:request"
+          ],
+          "call_path": [
+            "example.Child.arun",
+            "example.Tool.ainvoke"
+          ],
+          "function": "example.Tool.ainvoke",
+          "line": 27,
+          "requirements": [
+            {
+              "authorized": true,
+              "bindings": [
+                "input:principal",
+                "input:request"
+              ],
+              "permission": "tool_call"
+            }
+          ],
+          "target": "legacy.adispatch"
+        }
+      ],
+      "entry": "example.Child.arun",
+      "implementation": "example.Child.arun",
+      "issues": [],
+      "settled_exceptions": 1,
+      "status": "verified",
+      "steps": 42,
+      "visited_functions": [
+        "example.Child.arun",
+        "example.Tool.ainvoke"
+      ]
+    },
+    {
+      "call_graph": [
+        {
+          "callee": "example.execute",
+          "caller": "example.Tool.invoke"
+        },
+        {
+          "callee": "policy.permission",
+          "caller": "example.decision_for"
+        },
+        {
+          "callee": "example.decision_for",
+          "caller": "example.execute"
+        },
+        {
+          "callee": "legacy.dispatch",
+          "caller": "example.execute"
+        }
+      ],
+      "dispatches": [
+        {
+          "authorized": true,
+          "bindings": [
+            "tool_call",
+            "input:principal",
+            "input:request"
+          ],
+          "call_path": [
+            "example.Tool.invoke",
+            "example.execute"
+          ],
+          "function": "example.execute",
+          "line": 13,
+          "requirements": [
+            {
+              "authorized": true,
+              "bindings": [
+                "input:principal",
+                "input:request"
+              ],
+              "permission": "tool_call"
+            }
+          ],
+          "target": "legacy.dispatch"
+        }
+      ],
+      "entry": "example.Tool.invoke",
+      "implementation": "example.Tool.invoke",
+      "issues": [],
+      "settled_exceptions": 1,
+      "status": "verified",
+      "steps": 50,
+      "visited_functions": [
+        "example.Tool.invoke",
+        "example.decision_for",
+        "example.execute"
+      ]
+    },
+    {
+      "call_graph": [
+        {
+          "callee": "example.execute",
+          "caller": "example.Tool.invoke"
+        },
+        {
+          "callee": "example.Tool.invoke",
+          "caller": "example.Tool.run"
+        },
+        {
+          "callee": "policy.permission",
+          "caller": "example.decision_for"
+        },
+        {
+          "callee": "example.decision_for",
+          "caller": "example.execute"
+        },
+        {
+          "callee": "legacy.dispatch",
+          "caller": "example.execute"
+        }
+      ],
+      "dispatches": [
+        {
+          "authorized": true,
+          "bindings": [
+            "tool_call",
+            "input:principal",
+            "input:request"
+          ],
+          "call_path": [
+            "example.Tool.run",
+            "example.Tool.invoke",
+            "example.execute"
+          ],
+          "function": "example.execute",
+          "line": 13,
+          "requirements": [
+            {
+              "authorized": true,
+              "bindings": [
+                "input:principal",
+                "input:request"
+              ],
+              "permission": "tool_call"
+            }
+          ],
+          "target": "legacy.dispatch"
+        }
+      ],
+      "entry": "example.Tool.run",
+      "implementation": "example.Tool.run",
+      "issues": [],
+      "settled_exceptions": 1,
+      "status": "verified",
+      "steps": 63,
+      "visited_functions": [
+        "example.Tool.invoke",
+        "example.Tool.run",
+        "example.decision_for",
+        "example.execute"
+      ]
+    },
+    {
+      "call_graph": [
+        {
+          "callee": "legacy.adispatch",
+          "caller": "example.Tool.ainvoke"
+        },
+        {
+          "callee": "policy.apermission",
+          "caller": "example.Tool.ainvoke"
+        }
+      ],
+      "dispatches": [
+        {
+          "authorized": true,
+          "bindings": [
+            "tool_call",
+            "input:principal",
+            "input:request"
+          ],
+          "call_path": [
+            "example.Tool.ainvoke"
+          ],
+          "function": "example.Tool.ainvoke",
+          "line": 27,
+          "requirements": [
+            {
+              "authorized": true,
+              "bindings": [
+                "input:principal",
+                "input:request"
+              ],
+              "permission": "tool_call"
+            }
+          ],
+          "target": "legacy.adispatch"
+        }
+      ],
+      "entry": "example.Tool.ainvoke",
+      "implementation": "example.Tool.ainvoke",
+      "issues": [],
+      "settled_exceptions": 1,
+      "status": "verified",
+      "steps": 32,
+      "visited_functions": [
+        "example.Tool.ainvoke"
+      ]
+    }
+  ],
+  "export_resolutions": [],
+  "issues": [],
+  "method_resolution_order": {
+    "example.Child": [
+      "example.Child",
+      "example.Tool",
+      "object"
+    ],
+    "example.Tool": [
+      "example.Tool",
+      "object"
+    ]
+  },
+  "package_modules": [],
+  "property": "Every reachable terminal dispatch on every modelled path consumes a fresh ALLOW decision for identical principal/request bindings.",
+  "requirements": {},
+  "schema_version": 1,
+  "scope": "Closed-world supported Python subset under explicit terminal and object-model contracts; not arbitrary Python or policy semantics.",
+  "source_hashes": {
+    "example": "ccbf55a716b59de0c03f04b8cb2b6384f4bd990c61f6b20f2c5471412d8ce05b"
+  },
+  "summary": {
+    "dispatch_obligations": 7,
+    "entries": 7,
+    "unresolved": 0,
+    "verified": 7,
+    "violated": 0
+  },
+  "surfaces": {
+    "example.Child": {
+      "ainvoke": "example.Tool.ainvoke",
+      "arun": "example.Child.arun",
+      "invoke": "example.Tool.invoke",
+      "run": "example.Tool.run"
+    },
+    "example.Tool": {
+      "ainvoke": "example.Tool.ainvoke",
+      "invoke": "example.Tool.invoke",
+      "run": "example.Tool.run"
+    }
+  },
+  "terminal_parameters": {},
+  "terminals": {
+    "authorizers": [
+      {
+        "bindings": [
+          "arg:0",
+          "arg:1"
+        ],
+        "decision": "",
+        "permission": "tool_call",
+        "target": "policy.permission"
+      },
+      {
+        "bindings": [
+          "arg:0",
+          "arg:1"
+        ],
+        "decision": "",
+        "permission": "tool_call",
+        "target": "policy.apermission"
+      }
+    ],
+    "operations": [
+      {
+        "bindings": [
+          "arg:0",
+          "arg:1"
+        ],
+        "permission": "tool_call",
+        "target": "legacy.dispatch"
+      },
+      {
+        "bindings": [
+          "arg:0",
+          "arg:1"
+        ],
+        "permission": "tool_call",
+        "target": "legacy.adispatch"
+      }
+    ]
+  },
+  "verifier_sha256": "ac4937b7b85a2a7d42fcdfcdd0cdb82177b5eded8196a5c314f3bf4269b34e0b"
+}

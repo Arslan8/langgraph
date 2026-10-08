@@ -28,6 +28,9 @@ tool read_file {
   grant analyst manager: call
   requires fs:read
   runs inprocess
+  state_read messages account
+  store_read notes/item
+  store_write notes/item
   delegable no
   syscalls @file-read
   fs read ${path} need
@@ -71,6 +74,9 @@ def test_parse_complete_profile_and_freeze_ast() -> None:
 
     assert tool.call_grants == {"analyst", "manager"}
     assert tool.syscall_sets == {"file-read"}
+    assert tool.readable_channels == {"messages", "account"}
+    assert tool.readable_store_keys == {"notes/item"}
+    assert tool.writable_store_keys == {"notes/item"}
     assert tool.limits.cpu_ms == 2_000
     assert tool.limits.memory_bytes == 256 * 1024**2
     assert tool.limits.nofile == 64

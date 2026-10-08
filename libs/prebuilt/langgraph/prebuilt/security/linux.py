@@ -25,6 +25,8 @@ from threading import RLock
 from types import MappingProxyType
 from typing import Any
 
+from langgraph.prebuilt.security.capabilities import probe_linux_capabilities
+from langgraph.prebuilt.security.cedar import CedarPolicyBackend
 from langgraph.prebuilt.security.enforcement import (
     ActivationEvidence,
     ActivationReceipt,
@@ -49,10 +51,7 @@ from langgraph.prebuilt.security.execution import (
     HostExecutionResult,
     TerminationRecovery,
 )
-from langgraph.prebuilt.security.policy import (
-    MandatoryPolicyBackend,
-    TypedPolicyBackend,
-)
+from langgraph.prebuilt.security.policy import MandatoryPolicyBackend
 from langgraph.prebuilt.security.profile import ProfileDocument
 from langgraph.prebuilt.security.types import (
     ExecutionOutcome,
@@ -163,7 +162,7 @@ class LinuxSandboxExecutor:
         bwrap = shutil.which(os.fspath(bubblewrap_path))
         if bwrap is None:
             raise RuntimeError("bubblewrap is required for Linux host execution")
-        python = Path(python_executable or os.sys.executable).resolve()
+        python = Path(python_executable or sys.executable).resolve()
         if not python.is_file():
             raise ValueError("python_executable must resolve to an existing file")
         roots = tuple(_canonical_existing_path(item) for item in runtime_roots)
@@ -222,7 +221,7 @@ class LinuxSandboxExecutor:
                 for name, values in (principal_bindings or {}).items()
             }
         )
-        self.policy_backend = policy_backend or TypedPolicyBackend()
+        self.policy_backend = policy_backend or CedarPolicyBackend()
         self.bubblewrap_path = bwrap
         self.python_executable = python
         self._worker_script = Path(__file__).with_name("_linux_worker.py").resolve()
@@ -323,7 +322,7 @@ class LinuxSandboxExecutor:
         constraints: Sequence[PolicyConstraint],
         *,
         asynchronous: bool,
-    ) -> Any:
+    ) -> HostExecutionResult:
         spec = self.tools.get(call.tool.name)
         if spec is None:
             raise HostExecutionDenied("host:tool_manifest_missing")
@@ -609,6 +608,7 @@ class LinuxSandboxExecutor:
             encoded_request = _encode_worker_request(request)
         except (RecursionError, TypeError, ValueError) as exc:
             raise HostExecutionDenied("host:request_not_serializable") from exc
+        artifact_directory: Path | None
         command, inherited_fds, status_read, status_write, artifact_directory = (
             self._worker_command(adapter_plan, spec)
         )
@@ -966,6 +966,7 @@ class _LinuxBubblewrapAdapter:
         self._worker_script = worker_script
         self._worker_digest = _file_digest(worker_script)
         self._lease_s = lease_s
+        self._capability_probe = probe_linux_capabilities()
 
     @property
     def adapter_id(self) -> str:
@@ -996,12 +997,16 @@ class _LinuxBubblewrapAdapter:
                     "resource-limits",
                     "seccomp:minimal",
                 }
+                | set(self._capability_probe.capabilities)
             ),
             _namespace_links(os.getpid()),
             {
                 "adapter": self.adapter_id,
                 "bubblewrap_digest": self._binary_digest,
+                "capability_probe": dict(self._capability_probe.evidence),
+                "enforcement_mechanism": "bubblewrap+seccomp+rlimit",
                 "kernel": platform.release(),
+                "landlock_abi": self._capability_probe.landlock_abi,
                 "python_digest": self._python_digest,
                 "worker_digest": self._worker_digest,
             },
@@ -1118,9 +1123,9 @@ class _LinuxBubblewrapAdapter:
                 maximum = item.conditions.get("maximum")
                 if not isinstance(maximum, int) or maximum <= 0:
                     raise ValueError(f"invalid_resource_limit:{item.obligation_id}")
-                prior = limits.get(item.selector)
+                prior_limit = limits.get(item.selector)
                 limits[item.selector] = (
-                    maximum if prior is None else min(prior, maximum)
+                    maximum if prior_limit is None else min(prior_limit, maximum)
                 )
         environment = {
             rules[item.rule_id].selector: str(

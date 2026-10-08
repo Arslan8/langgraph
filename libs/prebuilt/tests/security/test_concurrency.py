@@ -58,8 +58,18 @@ def _request(index: int) -> dict:
 
 def _assert_complete_audit(audit: MemoryAuditSink, count: int) -> None:
     records = audit.records()
-    occurrences = Counter(record.call_index for record in records)
+    call_records = [
+        record for record in records if record.tool_name == "concurrent_noop"
+    ]
+    occurrences = Counter(record.call_index for record in call_records)
     assert occurrences == Counter({index: 6 for index in range(count)})
+    dispatch_records = [
+        record
+        for record in records
+        if record.stage == "dispatch" and record.module == "object_manager"
+    ]
+    assert len(dispatch_records) == count
+    assert len({record.args_hash for record in dispatch_records}) == count
     assert audit.verify() == (True, None)
 
 

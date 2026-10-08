@@ -147,3 +147,9 @@ or numeric budgets. The existing [escape analyzer](escape-analysis.md) remains
 useful for discovering operations outside this catalog; confinement remains
 necessary for untrusted code. Neither a clean escape scan nor a passing dispatch
 gate should be presented as proof that the entire MAC interface is complete.
+
+## Installed Tool API conformance
+
+The independent [Tool API verifier](tool-api-verification.md) inventories and
+exercises inherited execution APIs and adapters. Its CI gate supplements this
+bounded source model; neither result alone proves whole-framework MAC completeness.

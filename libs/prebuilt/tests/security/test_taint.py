@@ -1,8 +1,10 @@
 """Tests for conservative graph callback taint analysis."""
 
+import json
 from pathlib import Path
 
 from langgraph.prebuilt.security import EscapeKind, analyze_source
+from langgraph.prebuilt.security.taint import apply_waivers
 
 
 def _scan(tmp_path: Path, source: str):
@@ -282,3 +284,69 @@ def test_excludes_requested_directories(tmp_path: Path) -> None:
     report = analyze_source(tmp_path, exclude=[excluded])
 
     assert report.safe
+
+
+def test_exact_fingerprint_waiver_requires_reason_and_covers_finding(
+    tmp_path: Path,
+) -> None:
+    report = _scan(
+        tmp_path,
+        "def node(state): eval(state['x'])\ngraph.add_node(node)\n",
+    )
+    manifest = tmp_path / "waivers.json"
+    manifest.write_text(
+        json.dumps(
+            {
+                "version": 1,
+                "waivers": [
+                    {
+                        "fingerprint": finding.fingerprint,
+                        "reason": "Reviewed test fixture exercises this exact analyzer path.",
+                    }
+                    for finding in report.findings
+                ],
+            }
+        )
+    )
+
+    disposition = apply_waivers(report, manifest)
+
+    assert disposition.safe
+    assert len(disposition.waived) == len(report.findings)
+    assert disposition.unwaived == ()
+
+
+def test_waiver_gate_rejects_stale_duplicate_and_blanket_entries(
+    tmp_path: Path,
+) -> None:
+    report = _scan(
+        tmp_path,
+        "def node(state): eval(state['x'])\ngraph.add_node(node)\n",
+    )
+    fingerprint = report.findings[0].fingerprint
+    manifest = tmp_path / "waivers.json"
+    manifest.write_text(
+        json.dumps(
+            {
+                "version": 1,
+                "waivers": [
+                    {"fingerprint": fingerprint, "reason": "too short"},
+                    {
+                        "fingerprint": fingerprint,
+                        "reason": "A second entry is forbidden even with a complete reason.",
+                    },
+                    {
+                        "fingerprint": "*",
+                        "reason": "Blanket matches are never accepted by exact fingerprint review.",
+                    },
+                ],
+            }
+        )
+    )
+
+    disposition = apply_waivers(report, manifest)
+
+    assert not disposition.safe
+    assert disposition.unwaived
+    assert any("reason:" in error for error in disposition.errors)
+    assert any("stale:*" in error for error in disposition.errors)

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import fcntl
+import importlib
 import os
 import socket
 import subprocess
@@ -55,6 +56,14 @@ def exec_probe() -> str:
 def environment_probe() -> dict[str, object]:
     """Return the worker environment and cwd for baseline assertions."""
     return {"cwd": os.getcwd(), "environment": dict(os.environ)}
+
+
+def broker_probe(body: str) -> object:
+    """Use only the inherited broker channel for a service operation."""
+    broker_request = importlib.import_module(
+        "langgraph.prebuilt.security.broker"
+    ).broker_request
+    return broker_request("github", "invoke", {"body": body})
 
 
 def fork_probe() -> str:

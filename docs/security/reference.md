@@ -1,157 +1,130 @@
-# Security API and behavior reference
+# Security model and behavior reference
 
-The public API lives in `langgraph.prebuilt.security`. No security dependency is
-added to LangGraph core; `StateGraph.compile(security=...)` uses a small
-configuration protocol implemented by `SecurityConfig`.
+The public API lives in `langgraph.prebuilt.security`. This page describes the
+accepted target model. [Implementation status](status.md) identifies which
+parts are shipped; accepted design is not implementation evidence.
 
-This page explains behavior and invariants. See the [public API reference](api.md)
-for every exported symbol and the [implementation status](status.md) for the
-boundary between shipped and planned enforcement.
+## Layered reference monitor
 
-## Tool declarations
+slangGraph is LangGraph's user-space object manager for framework-owned
+objects. The host kernel mediates OS objects from the compiled grant. The
+composite is the system reference monitor.
 
-Use `@effects(...)` to declare side effects, resource-bearing arguments,
-sensitivity, and reversibility. Effects are `READ`, `WRITE`, `NETWORK`, `EXEC`,
-`DELEGATE`, and `SEND`. A `ResourceArg` may normalize a path, domain, email
-domain, SQL statement kind, or shell executable before policy sees it.
+> An operation is in scope if and only if a hook on the single dispatch path can refuse it.
 
-Use `@dac(...)` to declare the author's owner, execute grants, required scopes,
-and optional grants for normalized argument values. Operator-provided
-`DacOverrides` replace author DAC at configuration time and generate a compile
-audit record. Undeclared tools are inferred as critical, irreversible execution
-and default deny.
+`HostRouter` is that single dispatch path. `ToolNode` and `guarded_tool` are
+callers into it, not peer boundaries. An unplaceable path fails compilation.
 
-## Principals and configuration
+## Object classes
 
-`Principal` carries `user_id`, immutable roles and scopes, a session ID, an
-optional delegator, and private module blobs. Bind it with `with_principal`; the
-reserved value is stored in `RunnableConfig`, never graph state. Pass configured
-modules to `with_principal` so their credential-preparation hooks run.
+| Class | Operations | Hook or enforcement |
+| --- | --- | --- |
+| Principal | `bind`, `transfer`, `attenuate` | `cred_prepare`, session transfer, `cred_transfer` |
+| ToolCall | `prepare`, `invoke`, `post` | `tool_call_prepare`, `tool_call_permission`, `tool_call_post` |
+| Dispatch | `subgraph`, `Send`, `parallel_branch`, `subagent`, `nested_agent` | `cred_transfer` and explicit child-subset check |
+| ToolRegistry | static/dynamic `register`, `override` | `tool_alloc_security`, inference, audited override |
+| State | `write`, `restore`, `tool_read`, `model_read`, `store_read`, `store_write` | `state_write`, `state_restore`, `state_read` |
+| Approval | `resume` | `resume_permission`, then the permission chain again |
+| FrameworkOp | `guard_operation` | existing guarded operation path |
+| ModelInvocation | `invoke` | `model_invoke` before prompt assembly |
+| Output | `emit(destination)` | `output_emit` with content, labels, and destination clearance |
+| HostResource | `file`, `socket`, `exec`, `syscalls`, `limits` | kernel enforcement from the grant |
 
-`SecurityConfig` accepts ordered modules, DAC overrides, an audit sink, an
-observer, a positive policy timeout, `require_principal`, and an optional
-`SessionFlowPolicy`. It can be supplied to `ToolNode(..., security=config)` or
-`StateGraph.compile(security=config)`.
-Modules that can escalate require a real checkpointer.
+The seven existing hook names are frozen. New hook names are additive and
+default to `ALLOW`. Modules cannot distinguish trusted-node dispatch from
+separate-process untrusted-node dispatch.
 
-`security=None` is a compatibility promise: no principal is required, no policy
-stack is allocated, and existing ToolNode behavior remains in place.
+## Policy input and decisions
 
-## Decision order
+The default profile is one `.slp` file with `tool`, `principal`, and `policy`
+blocks. `policy` is forbid-only. Cedar is the default engine and is hidden
+behind `Policy`; an existing OPA deployment may implement the same interface.
 
-For each physical execution, the framework:
+Constructive DAC proposes authority. The evaluator creates one ephemeral Cedar
+`permit` for each surviving DAC line and combines it with operator forbids.
+Forbid wins. A diagnostic or evaluation error denies that line and names an
+attributable module. Modules may return verdicts, forbid policies, and labels;
+they never emit permits or mutate principals, grants, or audit state.
 
-1. reads the principal from config and normalizes declared resources;
-2. runs author/operator DAC before policy modules;
-3. runs ordered prepare hooks and re-normalizes transformed arguments;
-4. reruns DAC on the final arguments;
-5. runs the mandatory capability module and ordered permission hooks;
-6. invokes the tool only after an `ALLOW`; and
-7. invokes post hooks for an attempted execution.
+The stable verdict vocabulary is `ALLOW`, `DENY`, `TRANSFORM`, and `ESCALATE`.
+Preparation and attenuation are non-expansive. Exceptions, timeouts, malformed
+outputs, missing principals, unverifiable checkpoints, unlowerable classes,
+and unplaceable paths deny and are named in the audit.
 
-The four verdicts are `ALLOW`, `DENY`, `TRANSFORM`, and `ESCALATE`. Modules are
-restrictive: they can narrow or object, but cannot turn an earlier denial into
-an allow. Exceptions, malformed results, normalization failures, and timeouts
-deny the call. Raw tool arguments are never placed in approval payloads,
-telemetry, or LangSmith metadata.
+## Calls, approval, and delegation
 
-## Policy modules
+The ToolCall sequence is prepare, normalize, re-run constructive DAC, evaluate
+permission, dispatch only on allow, and run post handling for the attempted
+execution. `ESCALATE` requests operator-owned approval for one call. Resume
+runs `resume_permission` and the complete permission chain again; approval is
+not attached to an individual policy line and cannot bypass changed input.
 
-Subclass `SecurityModule`, give it a unique non-empty `name`, and override only
-the hooks it needs:
+Every subgraph, `Send`, parallel branch, subagent, and nested-agent dispatch
+runs `cred_transfer` and an explicit child-subset check. Every minted credential
+gets the same subset check even when the kernel can also attenuate it.
 
-- `tool_alloc_security` initializes the module's private tool slot.
-- `cred_prepare` initializes its private principal slot.
-- `cred_transfer` restricts child credentials.
-- `tool_call_prepare` may return a non-expansive argument transform.
-- `tool_call_permission` may deny or request approval.
-- `tool_call_post` observes attempted execution.
-- `resume_permission` treats a human response as additional policy input.
+## State and runtime injection
 
-`cap` is framework-owned and always first. Policy hooks run under
-`policy_timeout_s`; timeout, exception, or malformed output fails closed.
+State writes, restores, and reads are explicit router operations. Restore
+verifies the hash chain and binds the checkpoint to the principal. Store keys
+are resources with owners and confidentiality/integrity labels; cross-principal
+access is a policy decision, not ambient store access.
 
-These hooks are an LSM-style programming interface at tool-call granularity,
-not an LSM-equivalent per-resource-access reference monitor. They decide whether
-and under what typed restrictions a call may start. In-process tool behavior
-after dispatch is not mediated by the hooks and shares the Python process with
-them. With `LinuxSandboxExecutor`, supported restrictions are compiled into a
-fixed pre-execution grant and enforced by the worker boundary; modules are not
-called again for each access and cannot revoke that grant mid-call. Dynamic
-per-access decisions or labeled resources require a trusted broker that owns
-the operation path.
+`ToolRuntime` injection is mediated. A profile lists readable state channels and
+store keys. A tool receives its principal ID, not `RunnableConfig`; credentials,
+policy state, approvals, and audit handles are never injected.
 
-## Approval and resume
+## Model invocation and output
 
-An `ESCALATE` decision contains an `EscalationRequest`. ToolNode passes only its
-argument-free payload to `interrupt()`. On `Command(resume=...)`, LangGraph
-restarts the node, so normalization, DAC, and module permission run again before
-`resume_permission`. Approval does not bypass any prior check, and the mandatory
-capability module treats rejection as denial.
+`model_invoke` runs before prompt assembly. Its full verdict may deny or strip
+labeled context. `output_emit` sees the content, confidentiality and integrity
+labels, and destination clearance; it may allow, deny, redact, or escalate.
 
-## Direct tools and delegation
+Both operations are in scope. Their shipped defaults are label-only, while the
+reference non-exfiltration, integrity, and compartmentalization policies are off
+by default. Defaults never redefine scope.
 
-Use `@guarded_tool(security=config)` when a tool can be invoked outside
-ToolNode, including direct executors and alternate agent integrations. Its sync
-and async entry points use the same normalization, DAC, stack, timeout, audit,
-and observability semantics.
+## Registry and undeclared tools
 
-Use `delegate(child_graph, scopes=[...], security=config)` to invoke a child
-with an explicit scope set. Scope growth is denied. Roles are retained, module
-blobs are independently copied, and every module can restrict credential
-transfer. The child principal records `delegated_by`.
+Static registration is checked at compilation. Dynamic registration runs
+`tool_alloc_security` and inference at runtime. A tool without a profile
+receives the undeclared default. Overrides are operator actions and are audited.
 
-## Session information flow
+## Host contract
 
-`SessionFlowPolicy` is an operator-configured source/sink scheduling policy
-across mediated calls. Every statically configured tool must have a
-`ToolFlowRule` whose `output_label` conservatively bounds everything the tool
-may read and whose optional `sink_ceiling` covers all outward effects. The
-framework does not infer or validate these classifications against hostile code.
+Host capability evidence is probed per boot. Landlock ABI is read through
+`LANDLOCK_CREATE_RULESET_VERSION`, not inferred from the kernel version.
+cgroup v2 delegation, `cgroup.kill`, unprivileged user namespaces, BPF LSM,
+Landlock audit, and the per-call confinement mechanism are attested.
 
-Labels are keyed by authenticated user and session outside graph state. They are
-raised before parallel fan-out, persist across calls, and are checked before
-physical execution. Atomic reservations prevent incompatible sources and sinks
-from racing across independent invocations. `MemoryFlowStateStore` is
-process-local; `SqliteFlowStateStore` coordinates durable state across workers.
+Every rule is lowered as `exact`, `tightened`, or `unsupported`. Looser
+lowering denies. Unsupported classes deny unless waived per class with a reason;
+affected calls are always stamped `unenforced`. A class introduced by a module
+is rechecked at grant time and denies the call if unsupported.
 
-This automatically covers sinks crossing `ToolNode` or `guarded_tool`.
-`guard_operation()` covers explicitly wrapped model, tracing, telemetry, and
-other framework sinks; `transfer_session()` propagates labels through mediated
-session, checkpoint, and artifact copies. Descendants and background work may
-not outlive a reservation without an external supervisor. See the
-[session-flow user guide](users/session-flow.md) for configuration and the exact
-boundary.
+Use `slanggraph check --backend X profiles/`; unsupported, unwaived rules produce
+a nonzero exit.
 
-## Audit and observability
+## Audit and trust
 
-`MemoryAuditSink` and `SqliteAuditSink` append SHA-256 hash-chained records.
-SQLite uses WAL and full synchronization. `verify()` returns integrity plus the
-first invalid record index. Records contain an argument hash, never raw values.
+The hash-chained audit identifies every hook verdict, child-subset decision,
+checkpoint verification, registry override, per-rule lowering, waiver, worker
+activation, and denial reason without recording raw secrets.
 
-`MemorySecurityObserver` collects events and counters.
-`LoggingSecurityObserver` emits structured redacted records.
-`OpenTelemetrySecurityObserver` accepts compatible tracer and counter objects
-without adding a hard dependency. `langsmith_metadata(event)` produces safe run
-metadata. Each invoked DAC or module hook records stage, module, verdict,
-reason, latency, user, tool, and call index where applicable.
+Operator-authored nodes are trusted by default. Imported nodes are untrusted by
+default; promotion is an audited operator action. Trusted nodes run in the
+coordinator and honor hooks by assumption, checked by placement analysis.
+Untrusted nodes run separately and reach framework objects over the mediated
+router channel. Placement analysis checks the trust assumption; it is not the
+security boundary.
 
-## Inventory
+The host TCB is the kernel, adapter, launcher, and broker. The framework TCB is
+the coordinator, LangGraph runtime, policy backend, grant compiler, modules,
+and trusted node code.
 
-`introspect(graph)` returns a `ToolInventory` for statically reachable nested
-ToolNodes and registered guarded tools. `complete` is false when middleware or a
-dynamic guarded tool can add tools that static analysis cannot enumerate.
+## Out of scope
 
-`analyze_source(*paths, exclude=...)` traces parameters of registered graph
-callbacks through local assignments and helpers. It reports unrestricted node
-boundaries, unresolved callbacks, graphs compiled without `security`, retained
-tool aliases, direct runnable invocation, dangerous resource APIs, dynamic
-dispatch, and tool behavior missing from `@effects` declarations. The command
-`langgraph-security-taint src --json` exits nonzero for findings or parse
-errors, making it suitable for CI.
-
-Static analysis cannot establish process-wide MAC for dynamic Python. Runtime
-reflection, native extensions, dynamically loaded code, callbacks hidden in
-containers, background work, and dependencies without source may evade source
-resolution. If graph-controlled code is untrusted, enforce filesystem, network,
-process, and credential policy outside the Python process as well.
+Out of scope are trusted-node reads, kernel bugs and side channels, remote
+services without scoping, name-based network policy without a proxy, the
+internal computation of a tool over granted data, the model-provider channel,
+and denial of service. The tool's post result and destination remain in scope.

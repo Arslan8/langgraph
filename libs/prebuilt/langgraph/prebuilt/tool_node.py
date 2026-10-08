@@ -46,6 +46,7 @@ import json
 from collections.abc import Awaitable, Callable, Mapping
 from copy import copy, deepcopy
 from dataclasses import dataclass, field, replace
+from threading import RLock
 from types import UnionType
 from typing import (
     TYPE_CHECKING,
@@ -69,6 +70,7 @@ from langchain_core.messages import (
     ToolMessage,
     convert_to_messages,
 )
+from langchain_core.runnables import RunnableLambda
 from langchain_core.runnables.config import (
     RunnableConfig,
     get_config_list,
@@ -94,6 +96,7 @@ from langgraph.types import Command, Send, StreamWriter, interrupt
 from pydantic import BaseModel, ValidationError
 from typing_extensions import TypeVar, Unpack
 
+from langgraph.prebuilt._tool_adapter import preserve_tool_config
 from langgraph.prebuilt.security.binding import (
     history_for,
     next_call_index,
@@ -120,6 +123,18 @@ from langgraph.prebuilt.security.execution import (
     TerminationRecovery,
 )
 from langgraph.prebuilt.security.flow import SessionFlowPolicy, ToolFlowRule
+from langgraph.prebuilt.security.host_boundary import AuthorizedHostRouter
+from langgraph.prebuilt.security.host_router import HostRouter
+from langgraph.prebuilt.security.object_manager import MediatedStore, ToolObjectDac
+from langgraph.prebuilt.security.objects import (
+    DispatchKind,
+    DispatchRequest,
+    OutputRequest,
+    SecurityLabels,
+    StateOperation,
+    StateRequest,
+    ToolRegistryRequest,
+)
 from langgraph.prebuilt.security.stack import (
     SecurityStack,
     coerce_approval,
@@ -841,6 +856,10 @@ class ToolNode(RunnableCallable):
         self._security_require_principal = True
         self._security_flow_policy: SessionFlowPolicy | None = None
         self._security_host_executor: HostToolExecutor | None = None
+        self._security_host_router: AuthorizedHostRouter | None = None
+        self._security_object_router: HostRouter | None = None
+        self._security_object_dacs: Mapping[str, ToolObjectDac] = {}
+        self._security_registry_lock = RLock()
         self._handle_tool_errors = handle_tool_errors
         self._messages_key = messages_key
         self._wrap_tool_call = wrap_tool_call
@@ -888,6 +907,9 @@ class ToolNode(RunnableCallable):
         require_principal: bool = True,
         flow_policy: SessionFlowPolicy | None = None,
         host_executor: HostToolExecutor | None = None,
+        host_router: AuthorizedHostRouter | None = None,
+        object_router: HostRouter | None = None,
+        object_dacs: Mapping[str, ToolObjectDac] | None = None,
     ) -> None:
         """Configure mediation internally until the public constructor is added."""
         self._security_stack = stack
@@ -895,6 +917,38 @@ class ToolNode(RunnableCallable):
         self._security_require_principal = require_principal
         self._security_flow_policy = flow_policy
         self._security_host_executor = host_executor
+        self._security_host_router = host_router
+        self._security_object_router = object_router
+        self._security_object_dacs = dict(object_dacs or {})
+
+    def as_tool(
+        self,
+        args_schema: type[BaseModel] | None = None,
+        *,
+        name: str | None = None,
+        description: str | None = None,
+        arg_types: dict[str, type] | None = None,
+    ) -> BaseTool:
+        """Convert this node without dropping its explicit runtime configuration."""
+        return preserve_tool_config(
+            self,
+            super().as_tool(
+                args_schema, name=name, description=description, arg_types=arg_types
+            ),
+        )
+
+    def astream_events(
+        self, input: Any, config: RunnableConfig | None = None, **kwargs: Any
+    ) -> Any:
+        """Give event streams a root run even when execution emits no tool events.
+
+        A node itself has tracing disabled to avoid duplicate graph traces.
+        Explicit event streaming needs a root lifecycle so pre-dispatch denials
+        and host-only execution propagate their result or exception correctly.
+        """
+        return RunnableLambda(self.invoke, self.ainvoke, name=self.name).astream_events(
+            input, config, **kwargs
+        )
 
     def _security_check(self, request: ToolCallRequest) -> Decision:
         """Return the innermost security decision for one physical execution."""
@@ -909,15 +963,6 @@ class ToolNode(RunnableCallable):
             return Decision(Verdict.ALLOW, "security:disabled"), request, None
         name = request.tool_call["name"]
         registered_tool = self.tools_by_name.get(name)
-        if registered_tool is None or request.tool is not registered_tool:
-            return (
-                Decision(Verdict.DENY, "security:tool_identity_mismatch"),
-                request,
-                None,
-            )
-        security_tool = self._security_tools_by_name.get(name)
-        if security_tool is None:
-            return Decision(Verdict.DENY, "security:unknown_tool"), request, None
         principal = request.principal
         if principal is None:
             principal = principal_from(request.runtime.config)
@@ -927,9 +972,30 @@ class ToolNode(RunnableCallable):
             principal = Principal(
                 "__anonymous__", frozenset(), frozenset(), "anonymous"
             )
-        injected_call = self._inject_tool_args(
-            request.tool_call, request.runtime, registered_tool
-        )
+        if request.tool is None:
+            return (
+                Decision(Verdict.DENY, "security:tool_identity_mismatch"),
+                request,
+                None,
+            )
+        if registered_tool is not request.tool:
+            registration = self._register_runtime_tool(
+                principal,
+                request.tool,
+                override=registered_tool is not None,
+            )
+            if registration.verdict is not Verdict.ALLOW:
+                return registration, request, None
+            registered_tool = request.tool
+        security_tool = self._security_tools_by_name.get(name)
+        if security_tool is None:
+            return Decision(Verdict.DENY, "security:unknown_tool"), request, None
+        try:
+            injected_call = self._inject_tool_args(
+                request.tool_call, request.runtime, registered_tool
+            )
+        except PermissionError as exc:
+            return Decision(Verdict.DENY, str(exc)), request, None
         request = request.override(
             tool_call=injected_call,
             descriptor=self._descriptors_by_name[name],
@@ -977,6 +1043,48 @@ class ToolNode(RunnableCallable):
         )
         return permission, secured, security_call
 
+    def _register_runtime_tool(
+        self, principal: Principal, tool: BaseTool, *, override: bool
+    ) -> Decision:
+        router = self._security_object_router
+        if router is None:
+            reason = (
+                "security:tool_identity_mismatch"
+                if override
+                else "registry:missing_router"
+            )
+            return Decision(Verdict.DENY, reason)
+        descriptor, tool_dac = security_for_tool(tool)
+        security_tool = SecurityTool(
+            name=tool.name,
+            dac=tool_dac,
+            effects=descriptor.effects,
+            resources=descriptor.resources,
+        )
+        try:
+            if self._security_host_executor is not None:
+                self._security_host_executor.validate_tools((tool.name,))
+            router.register(
+                principal,
+                ToolRegistryRequest(
+                    security_tool,
+                    dynamic=True,
+                    override=override,
+                ),
+            )
+        except Exception:
+            return Decision(Verdict.DENY, "registry:dynamic_registration_denied")
+        with self._security_registry_lock:
+            current = self._tools_by_name.get(tool.name)
+            if current is not None and current is not tool and not override:
+                return Decision(Verdict.DENY, "registry:concurrent_override")
+            self._tools_by_name[tool.name] = tool
+            self._descriptors_by_name[tool.name] = descriptor
+            self._dacs_by_name[tool.name] = tool_dac
+            self._security_tools_by_name[tool.name] = security_tool
+            self._injected_args[tool.name] = _get_all_injected_args(tool)
+        return Decision(Verdict.ALLOW, "registry:dynamic_registered")
+
     def _invoke_secured_tool_sync(
         self,
         principal: Principal,
@@ -985,6 +1093,8 @@ class ToolNode(RunnableCallable):
         config: RunnableConfig,
     ) -> Any:
         """Dispatch the registered target represented by the authorized request."""
+        if self._security_host_executor is not None:
+            raise HostExecutionDenied("host:in_process_execution_disabled")
         call = request.tool_call
         tool = self.tools_by_name.get(call["name"])
         call_args = call.get("args", {})
@@ -1012,6 +1122,8 @@ class ToolNode(RunnableCallable):
         config: RunnableConfig,
     ) -> Any:
         """Dispatch the registered target represented by the authorized request."""
+        if self._security_host_executor is not None:
+            raise HostExecutionDenied("host:in_process_execution_disabled")
         call = request.tool_call
         tool = self.tools_by_name.get(call["name"])
         call_args = call.get("args", {})
@@ -1408,6 +1520,7 @@ class ToolNode(RunnableCallable):
             decision = self._resume_security(request.principal, security_call, decision)
         if decision.verdict is not Verdict.ALLOW:
             return self._security_denial(call, decision)
+        authorization = decision
         policy_constraints = decision.constraints
         if policy_constraints and self._security_host_executor is None:
             # Typed restrictions apply to a host grant; dropping them would
@@ -1451,7 +1564,7 @@ class ToolNode(RunnableCallable):
         if tool is None:
             raise TypeError("security request lost its registered tool")
         call_args = None
-        if security_call is None:
+        if security_call is None and self._security_host_executor is None:
             injected_call = self._inject_tool_args(call, request.runtime, tool)
             call_args = {**injected_call, "type": "tool_call"}
 
@@ -1461,13 +1574,22 @@ class ToolNode(RunnableCallable):
         flow_recovery: TerminationRecovery | None = None
         try:
             try:
-                if (
-                    self._security_host_executor is not None
-                    and security_call is not None
-                    and request.principal is not None
-                ):
-                    host_result = self._security_host_executor.invoke(
-                        request.principal, security_call, policy_constraints
+                if self._security_host_executor is not None:
+                    if security_call is None or request.principal is None:
+                        outcome = ExecutionOutcome.DENIED_BEFORE_DISPATCH
+                        post_result = self._security_denial(
+                            call,
+                            Decision(Verdict.DENY, "host:missing_security_context"),
+                        )
+                        return post_result
+                    if self._security_host_router is None:
+                        outcome = ExecutionOutcome.DENIED_BEFORE_DISPATCH
+                        post_result = self._security_denial(
+                            call, Decision(Verdict.DENY, "host:missing_router")
+                        )
+                        return post_result
+                    host_result = self._security_host_router.invoke(
+                        request.principal, security_call, authorization
                     )
                     try:
                         self._audit_security(
@@ -1630,6 +1752,27 @@ class ToolNode(RunnableCallable):
         # Validation is deferred to _execute_tool_sync to allow interceptors
         # to short-circuit requests for unregistered tools
         tool = self.tools_by_name.get(call["name"])
+        principal = principal_from(tool_runtime.config)
+        dispatch = self._security_object_router
+        if dispatch is not None and principal is not None:
+            try:
+                transferred = dispatch.dispatch(
+                    principal,
+                    DispatchRequest(
+                        DispatchKind.PARALLEL_BRANCH,
+                        principal,
+                        principal,
+                        call["id"],
+                    ),
+                )
+            except PermissionError as exc:
+                return self._security_denial(
+                    call, Decision(Verdict.DENY, str(exc) or "dispatch:denied")
+                )
+            if transferred is not principal:
+                return self._security_denial(
+                    call, Decision(Verdict.DENY, "dispatch:identity_changed")
+                )
 
         # Create the tool request with state and runtime
         tool_request = ToolCallRequest(
@@ -1639,7 +1782,7 @@ class ToolNode(RunnableCallable):
             runtime=tool_runtime,
             descriptor=self._descriptors_by_name.get(call["name"]),
             dac=self._dacs_by_name.get(call["name"]),
-            principal=principal_from(tool_runtime.config),
+            principal=principal,
             security=(
                 self._security_tools_by_name[call["name"]].security
                 if call["name"] in self._security_tools_by_name
@@ -1719,6 +1862,7 @@ class ToolNode(RunnableCallable):
             )
         if decision.verdict is not Verdict.ALLOW:
             return self._security_denial(call, decision)
+        authorization = decision
         policy_constraints = decision.constraints
         if policy_constraints and self._security_host_executor is None:
             # Typed restrictions apply to a host grant; dropping them would
@@ -1762,7 +1906,7 @@ class ToolNode(RunnableCallable):
         if tool is None:
             raise TypeError("security request lost its registered tool")
         call_args = None
-        if security_call is None:
+        if security_call is None and self._security_host_executor is None:
             injected_call = self._inject_tool_args(call, request.runtime, tool)
             call_args = {**injected_call, "type": "tool_call"}
 
@@ -1772,13 +1916,22 @@ class ToolNode(RunnableCallable):
         flow_recovery: TerminationRecovery | None = None
         try:
             try:
-                if (
-                    self._security_host_executor is not None
-                    and security_call is not None
-                    and request.principal is not None
-                ):
-                    host_result = await self._security_host_executor.ainvoke(
-                        request.principal, security_call, policy_constraints
+                if self._security_host_executor is not None:
+                    if security_call is None or request.principal is None:
+                        outcome = ExecutionOutcome.DENIED_BEFORE_DISPATCH
+                        post_result = self._security_denial(
+                            call,
+                            Decision(Verdict.DENY, "host:missing_security_context"),
+                        )
+                        return post_result
+                    if self._security_host_router is None:
+                        outcome = ExecutionOutcome.DENIED_BEFORE_DISPATCH
+                        post_result = self._security_denial(
+                            call, Decision(Verdict.DENY, "host:missing_router")
+                        )
+                        return post_result
+                    host_result = await self._security_host_router.ainvoke(
+                        request.principal, security_call, authorization
                     )
                     try:
                         self._audit_security(
@@ -1941,6 +2094,27 @@ class ToolNode(RunnableCallable):
         # Validation is deferred to _execute_tool_async to allow interceptors
         # to short-circuit requests for unregistered tools
         tool = self.tools_by_name.get(call["name"])
+        principal = principal_from(tool_runtime.config)
+        dispatch = self._security_object_router
+        if dispatch is not None and principal is not None:
+            try:
+                transferred = await dispatch.adispatch(
+                    principal,
+                    DispatchRequest(
+                        DispatchKind.PARALLEL_BRANCH,
+                        principal,
+                        principal,
+                        call["id"],
+                    ),
+                )
+            except PermissionError as exc:
+                return self._security_denial(
+                    call, Decision(Verdict.DENY, str(exc) or "dispatch:denied")
+                )
+            if transferred is not principal:
+                return self._security_denial(
+                    call, Decision(Verdict.DENY, "dispatch:identity_changed")
+                )
 
         # Create the tool request with state and runtime
         tool_request = ToolCallRequest(
@@ -1950,7 +2124,7 @@ class ToolNode(RunnableCallable):
             runtime=tool_runtime,
             descriptor=self._descriptors_by_name.get(call["name"]),
             dac=self._dacs_by_name.get(call["name"]),
-            principal=principal_from(tool_runtime.config),
+            principal=principal,
             security=(
                 self._security_tools_by_name[call["name"]].security
                 if call["name"] in self._security_tools_by_name
@@ -2132,6 +2306,11 @@ class ToolNode(RunnableCallable):
         if not injected:
             return tool_call
 
+        if self._security_stack is not None and injected.all_injected_keys:
+            tool_runtime = self._sanitize_tool_runtime(
+                tool_call["name"], tool_runtime, injected
+            )
+
         tool_call_copy: ToolCall = copy(tool_call)
         injected_args: dict[str, Any] = {}
 
@@ -2200,6 +2379,87 @@ class ToolNode(RunnableCallable):
         }
         tool_call_copy["args"] = {**stripped_args, **injected_args}
         return tool_call_copy
+
+    def _sanitize_tool_runtime(
+        self,
+        tool_name: str,
+        runtime: ToolRuntime,
+        injected: _InjectedArgs,
+    ) -> ToolRuntime:
+        """Expose only profile-declared channels to a secured tool."""
+        principal = principal_from(runtime.config)
+        router = self._security_object_router
+        if principal is None or router is None:
+            raise PermissionError("security:missing_object_context")
+        dac = self._security_object_dacs.get(tool_name, ToolObjectDac())
+        state = runtime.state
+        if isinstance(state, Mapping):
+            state = {
+                key: router.state(
+                    principal,
+                    StateRequest(
+                        StateOperation.TOOL_READ,
+                        key,
+                        principal.user_id,
+                        tool_name=tool_name,
+                        value=value,
+                    ),
+                )
+                for key, value in state.items()
+                if key in dac.readable_channels
+            }
+        elif self._messages_key in dac.readable_channels:
+            state = router.state(
+                principal,
+                StateRequest(
+                    StateOperation.TOOL_READ,
+                    self._messages_key,
+                    principal.user_id,
+                    tool_name=tool_name,
+                    value=state,
+                ),
+            )
+        else:
+            state = {}
+        for field_name in injected.state.values():
+            if field_name is not None and field_name not in dac.readable_channels:
+                raise PermissionError(f"state:channel_not_granted:{field_name}")
+        store = None
+        if runtime.store is not None and (
+            dac.readable_store_keys or dac.writable_store_keys
+        ):
+            store = MediatedStore(
+                runtime.store,
+                router=router,
+                principal=principal,
+                tool_name=tool_name,
+            )
+
+        def stream_writer(delta: Any) -> None:
+            emitted = router.output_emit(
+                principal,
+                OutputRequest(
+                    "stream",
+                    delta,
+                    SecurityLabels(),
+                    frozenset(),
+                    runtime.tool_call_id or f"{tool_name}:stream",
+                ),
+            )
+            runtime.stream_writer(emitted)
+
+        return ToolRuntime(
+            state=state,
+            context=None,
+            config=cast("RunnableConfig", {}),
+            stream_writer=stream_writer,
+            tool_call_id=runtime.tool_call_id,
+            store=store,
+            tools=[],
+            execution_info=None,
+            server_info=None,
+            principal_id=principal.user_id,
+        )
 
     def _normalize_tool_response(
         self,
@@ -2500,6 +2760,7 @@ class ToolRuntime(_DirectlyInjectedToolArg, Generic[ContextT, StateT]):
     tools: list[BaseTool] = field(default_factory=list)
     execution_info: ExecutionInfo | None = None
     server_info: ServerInfo | None = None
+    principal_id: str | None = None
 
     def emit_output_delta(self, delta: Any) -> None:
         """Stream a partial output chunk on the `tools` stream channel.

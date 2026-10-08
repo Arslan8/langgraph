@@ -1,76 +1,85 @@
 # Security boundary
 
-The decisive runtime check sits inside the physical `ToolNode` execute callable,
-after wrappers and immediately before tool invocation. Wrapper retries and
-rewritten requests are checked independently. `guarded_tool` supplies the same
-mediation to supported direct calls.
+slangGraph uses a layered boundary. LangGraph is the user-space object manager
+for framework objects, and the host kernel monitors OS objects. A request is
+protected by the full claim only when both layers are active and attested.
 
-This gives complete mediation for those configured entry points. It is not a
-claim that every Python side effect in a process is mediated.
+> An operation is in scope if and only if a hook on the single dispatch path can refuse it.
 
-## Trusted components
+| Class | Operations |
+| --- | --- |
+| Principal | `bind`, `transfer`, `attenuate` |
+| ToolCall | `prepare`, `invoke`, `post` |
+| Dispatch | `subgraph`, `Send`, `parallel_branch`, `subagent`, `nested_agent` |
+| ToolRegistry | `register`, `override` |
+| State | `write`, `restore`, `tool_read`, `model_read`, `store_read`, `store_write` |
+| Approval | `resume` |
+| FrameworkOp | `guard_operation` |
+| ModelInvocation | `invoke` |
+| Output | `emit(destination)` |
+| HostResource | `file`, `socket`, `exec`, `syscalls`, `limits` |
 
-Treat these as part of the trusted computing base:
+The complete hook mapping is in
+[ADR 0007](../adr/0007-kernel-enforced-confinement.md).
 
-- application authentication and `Principal` construction;
-- `SecurityConfig`, operator DAC overrides, and flow classifications;
-- security modules, built-in normalizers, and audit/flow stores;
-- tool discovery and decorators executed in the coordinator process;
-- graph nodes, callbacks, renderers, checkpoint handlers, and model clients that
-  perform effects outside `ToolNode` or `guarded_tool`; and
-- any external sandbox, broker, host adapter, or attestation verifier used by
-  the deployment.
+## One dispatch path
 
-Tool descriptors are author claims. They help policy and inventory, but do not
-prove that hostile code lacks undeclared effects.
+Every mediated framework operation goes through `HostRouter`. `ToolNode` and
+`guarded_tool` are ordinary router callers and do not create separate security
+boundaries. Retries, rewritten arguments, child dispatch, resume, state access,
+model invocation, and output each receive their own operation decision.
 
-## When tool code is untrusted
+Approval applies to one call. After resume, `resume_permission` and the complete
+permission chain run again.
 
-On Linux, configure `LinuxSandboxExecutor` for supported local Python tools. It
-starts a fresh bubblewrap worker with explicit mounts, a clear environment,
-dropped capabilities, namespace isolation, default resource ceilings, and a
-default-deny seccomp allowlist. The worker blocks before importing the pinned
-tool artifact; the parent verifies a worker-specific activation receipt before
-sending the release signal. See [Linux host execution](linux-host-execution.md).
+## Trusted and untrusted nodes
 
-The current adapter intentionally rejects network, service, credential,
-delegation, and executable grants. Add a scoped broker or another adapter for
-those obligations; do not weaken the Linux worker or treat an unsupported rule
-as advisory. Runtime roots and `/usr` are explicit operator-owned baseline
-authority and must contain no secrets the tool is not permitted to read.
+Operator-authored nodes are trusted by default. Imported components are
+untrusted by default. Promoting imported code is an audited operator action.
 
-The in-process path remains available for trusted implementations and upstream
-compatibility. It provides authorization, not hostile-code confinement.
+Trusted nodes may run in the coordinator. Their hook use is a trust assumption
+checked by placement analysis, not an isolation boundary. Direct reads by such
+code are outside scope.
 
-## Information-flow boundary
+Untrusted nodes and tools run as separate-process units of work. They receive
+only mediated framework access over the router channel. A tool receives its
+principal ID and profile-declared state channels and store keys, never the full
+`RunnableConfig`.
 
-`SessionFlowPolicy` enforces operator-supplied read and outward-effect bounds
-across calls, parallel batches, separate ToolNodes, guarded calls, and workers
-sharing the durable store. A source-and-sink call is checked after joining its
-possible reads. This is a scheduling property, not evidence that an untrusted
-implementation obeyed its classification.
+## What is mediated
 
-The model request and response path, final text, telemetry, tracing, and
-unmediated callbacks remain outside automatic mediation. If they can receive or
-publish data, give each action a rule and wrap its complete effect lifetime with
-`guard_operation()`, or make it an explicitly trusted destination. Background
-work and descendants may not outlive the reservation unless an external
-supervisor carries the reservation and confinement lease until they exit.
+- principal binding, transfer, and attenuation;
+- tool preparation, invocation, and post handling;
+- subgraphs, `Send`, parallel branches, subagents, and nested agents;
+- static and dynamic tool registration and audited override;
+- state writes and restores, tool/model reads, and store reads/writes;
+- approval resume and guarded framework operations;
+- model prompt assembly and labeled-context stripping;
+- output allow, deny, redaction, or escalation by destination; and
+- host files, sockets, execution, syscall classes, and limits from the grant.
 
-Checkpoint imports, shared artifacts, and inter-session copies must call
-`transfer_session()` before exposing the data to the target. Arbitrary copies
-that bypass this API are outside the protected model. Static inventory and
-escape analysis help find bypasses but do not prove their absence in arbitrary
-Python or native dependencies.
+Model invocation and output are in scope even though their shipped defaults are
+label-only. Optional reference policies provide non-exfiltration, integrity,
+and compartmentalization checks.
 
-## Compatibility mode
+## Host enforcement
 
-`security=None` is intentionally a no-op for upstream compatibility. Only
-trusted application code may choose it. Do not expose configuration selection to
-the model, tool arguments, messages, graph state, or a delegated child. A
-secured ToolNode cannot be reconfigured or downgraded, and delegated graphs
-cannot replace inherited security.
+The host implements each grant rule exactly or more tightly and records
+`exact`, `tightened`, or `unsupported`. A looser result denies. Unsupported
+classes deny unless explicitly waived with a reason; every affected audit record
+is stamped `unenforced`.
 
-For the formal property split and limitations, read
-[security properties](../security-properties.md) and
-[implementation status](../status.md).
+Capabilities are probed per boot. Landlock support is detected through its ABI
+query, not the kernel version. The audit records the actual confinement
+mechanism, runtime baseline, attestation, and per-rule lowering.
+
+## Outside the boundary
+
+The claim excludes reads by trusted node code, kernel bugs and side channels,
+remote services that cannot scope authority, name-based network policy without
+a proxy, what a tool computes over data it was granted, the model-provider
+channel, and denial of service. Tool results and their destinations are still
+mediated by post and output hooks.
+
+`security=None` is compatibility mode and supplies none of this claim. For
+shipped versus planned behavior, see [implementation status](../status.md).

@@ -13,6 +13,7 @@ import errno
 import inspect
 import io
 import json
+import os
 import resource
 import sys
 from collections.abc import Mapping
@@ -100,6 +101,12 @@ _ALLOWED_SYSCALLS = (
     "write",
     "writev",
 )
+_KILL_SYSCALLS = (
+    "bpf",
+    "process_vm_readv",
+    "ptrace",
+    "unshare",
+)
 
 
 def main() -> int:
@@ -108,6 +115,17 @@ def main() -> int:
     event_loop: asyncio.AbstractEventLoop | None = None
     try:
         request = _read_request()
+        ruleset_fd = request.get("landlock_ruleset_fd")
+        broker_fd = request.get("broker_fd")
+        if ruleset_fd is not None:
+            if type(ruleset_fd) is not int or ruleset_fd < 3:
+                raise ValueError("invalid Landlock ruleset descriptor")
+            if broker_fd is not None and (type(broker_fd) is not int or broker_fd < 3):
+                raise ValueError("invalid broker descriptor")
+            _apply_landlock(
+                ruleset_fd,
+                frozenset({broker_fd}) if isinstance(broker_fd, int) else frozenset(),
+            )
         _apply_limits(request.get("limits"))
         if bool(request.get("asynchronous")):
             event_loop = asyncio.new_event_loop()
@@ -183,6 +201,33 @@ def _apply_limits(raw: object) -> None:
         resource.setrlimit(resource.RLIMIT_NPROC, (pids, pids))
 
 
+def _apply_landlock(
+    ruleset_fd: int, preserve_fds: frozenset[int] = frozenset()
+) -> None:
+    """Enter the parent-built ruleset with no ambient resource descriptors."""
+    descriptors: list[int] = []
+    try:
+        descriptors = [int(name) for name in os.listdir("/proc/self/fd")]
+    except (OSError, ValueError):
+        soft_limit = resource.getrlimit(resource.RLIMIT_NOFILE)[0]
+        maximum = 65_536 if soft_limit == resource.RLIM_INFINITY else int(soft_limit)
+        descriptors = list(range(3, maximum))
+    for descriptor in descriptors:
+        if descriptor <= 2 or descriptor == ruleset_fd or descriptor in preserve_fds:
+            continue
+        try:
+            os.close(descriptor)
+        except OSError:
+            pass
+    libc = ctypes.CDLL(None, use_errno=True)
+    if libc.prctl(38, 1, 0, 0, 0) != 0:
+        raise OSError(ctypes.get_errno(), "PR_SET_NO_NEW_PRIVS failed")
+    ctypes.set_errno(0)
+    if libc.syscall(446, ruleset_fd, 0) != 0:
+        raise OSError(ctypes.get_errno(), "landlock_restrict_self failed")
+    os.close(ruleset_fd)
+
+
 def _apply_seccomp() -> None:
     library = ctypes.CDLL("libseccomp.so.2", use_errno=True)
     library.seccomp_init.argtypes = [ctypes.c_uint32]
@@ -201,10 +246,17 @@ def _apply_seccomp() -> None:
     library.seccomp_release.argtypes = [ctypes.c_void_p]
     allow = ctypes.c_uint32(0x7FFF0000)
     deny = ctypes.c_uint32(0x00050000 | errno.EPERM)
+    kill = ctypes.c_uint32(0x80000000)
     context = library.seccomp_init(deny)
     if not context:
         raise OSError("seccomp initialization failed")
     try:
+        for name in _KILL_SYSCALLS:
+            number = library.seccomp_syscall_resolve_name(name.encode())
+            if number < 0:
+                continue
+            if library.seccomp_rule_add(context, kill, number, 0) != 0:
+                raise OSError(f"seccomp kill rule failed:{name}")
         for name in _ALLOWED_SYSCALLS:
             number = library.seccomp_syscall_resolve_name(name.encode())
             if number < 0:

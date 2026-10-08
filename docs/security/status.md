@@ -1,136 +1,194 @@
 # Implementation and freeze status
 
-This page is the authoritative distinction between code that exists on the
-branch and architecture accepted for later implementation. ADR 0007 describes
-the target design, and [grant lowering](lowering.md) specifies its negotiation
-sequence; accepted documentation is not evidence that its adapters exist.
+This page is the authoritative distinction between code that exists and the
+target accepted by [ADR 0007](adr/0007-kernel-enforced-confinement.md). A row
+marked planned or partial cannot support a complete-mediation or layered
+reference-monitor claim.
 
-## Shipped decision layer
+## Model
 
-| Capability | Status | Current guarantee |
-| --- | --- | --- |
-| Tool effects and author DAC declarations | Implemented and tested | Metadata is preserved through tool conversion; undeclared tools default deny. |
-| Authenticated principal binding | Implemented and tested | Identity is stored outside graph state and module blobs are private. |
-| Seven-hook restrictive module stack | Implemented and tested | DAC runs first; modules cannot override denial; failure and timeout deny. |
-| `ToolNode` mediation | Implemented and tested | Every physical callback execution, retry, and rewritten request is checked immediately before invocation. |
-| Direct tool mediation | Implemented and tested | Calls through `guarded_tool` use the same decision stack. Other aliases are outside the boundary. |
-| Classified session scheduling | Implemented and tested when configured | Operator-supplied possible-read labels and outward-effect ceilings are joined and reserved atomically; same-call source/sink conflicts, cross-call races, and mediated session transfers are covered. This is not a hostile-code confidentiality claim until confinement validates the bounds and channels. |
-| Scope delegation attenuation | Implemented and tested | Child scopes must be a subset and blobs are independently copied. Typed label ordering, exact-grant attenuation, and shared budgets are not implemented. |
-| Checkpoint-compatible approval flow | Implemented and tested | Escalation requires a checkpointer; resume rechecks policy; approval payloads omit arguments. Matching binds the principal, roles, scopes, delegation, tool, call, raw and normalized arguments, expiry, and one-time use. Artifact, final-grant, policy, ledger, and activation nonce binding require the strict execution path. |
-| Hash-chained audit | Implemented and tested | In-memory and SQLite sinks detect modification inside the retained chain. They do not detect deletion of a valid suffix without an external head or terminal seal. This is decision evidence only. |
-| Redacted observability | Implemented and tested | Memory, logging, OpenTelemetry-compatible, and LangSmith adapters expose no raw tool arguments. |
-| `ResourceBoundary` reference module | Implemented and tested | Operator filesystem policy is compiled into attributed forbids over requested and runtime-baseline path authority. It is tested in composition and in real Linux workers. Unrepresentable or unlowerable results deny before release. See the [interface assessment](resource-boundary-interface.md). |
-| Tool inventory | Implemented and tested | Static entries are collected; incomplete dynamic inventory is reported honestly. |
-| Escape analysis | Implemented and tested | Source and CLI analysis report known and unresolved bypass paths. It must currently be run explicitly. |
-| Authorization-state analysis | Bounded checker implemented | Eight secured dispatch sites in four sync/async entry points are checked for a successful decision of the required permission class bound to the same principal and request. Helper summaries link to hashed reviewed source bodies. Lifecycle, transfer, and publication limitations are explicit in the [coverage report](mediation-analysis.md). This is not a complete-mediation proof for the framework. |
-| `.slp` grammar and constructive DAC | Implemented and tested | The parser, binding, need/want semantics, provenance, overrides, and monotonicity properties are shipped. |
+The target is a layered reference monitor: LangGraph is a user-space object
+manager for ten framework object classes, the host kernel monitors OS objects,
+and the two compose into the system reference monitor.
 
-## ADR 0007 phase one
+> An operation is in scope if and only if a hook on the single dispatch path can refuse it.
 
-| Step | Status | Freeze consequence |
-| --- | --- | --- |
-| 1. Profile grammar and monotonic DAC evaluator | Complete | The `.slp` grammar is frozen. |
-| 2. Attributed platform-neutral `Grant` IR and resource selectors | Implemented and tested | `compile_grant` preserves source identity and `need`/`want`, marks runtime baselines, and emits a requirement ledger. |
-| 3. Cedar integration and reference forbid policies | Partially implemented and tested | Modules emit attributed bounded `ForbidConstraint` and `ForbidCombination` values. The replaceable reference backend filters exact grants, subtracts filesystem subtrees, rejects unrepresentable broad differences, rechecks requirements, and fails on diagnostics. A Cedar backend is not yet shipped. |
-| 4. `HostAttestation`, exact obligations, enforcement-adapter interface, activation receipts, transactional audit, and explicit degradation | Implemented and tested | Exact rule assessment, ownership, local host evidence, worker-context binding, activation evidence, dispatch/outcome audit, and external chain seals exist. `ToolNode` and `guarded_tool` route through a configured `HostToolExecutor`. |
-| 5. Dedicated spawner and Linux reference adapter | Implemented and tested for the documented Linux subset | `LinuxSandboxExecutor` creates one bubblewrap worker per call, applies a default-deny seccomp allowlist and resource ceilings before import, verifies a worker-specific activation receipt, then releases the worker. Filesystem and resource-limit grants are supported; network, service, credential, delegation, and executable grants deny as unsupported. |
+Shipped policy defaults never narrow this scope. `HostRouter` is the target
+single dispatch path; `ToolNode` and `guarded_tool` are callers into it, not
+independent completeness boundaries.
 
-The seven hook names and invocation structure are frozen. The detailed
-`tool_call_permission` return contract remains open for the planned forbid-only
-constraint emission. The course-facing promise is a verdict with optional typed,
-forbid-only constraints once Cedar integration lands.
+## Per-operation coverage
 
-## Architecture-review disposition
+`Implemented` means the operation has current code and focused tests. `Partial`
+means related enforcement exists but does not yet meet ADR 0007. `Planned`
+means the new refusing hook or route is not shipped.
 
-The accepted target is specified in [grant lowering](lowering.md). The following
-table prevents target prose from being mistaken for implementation evidence.
+| Class | Operation | Target hook/enforcer | Current coverage | Evidence or gap |
+| --- | --- | --- | --- | --- |
+| Principal | `bind` | `cred_prepare` | Implemented | Authenticated principal binding and private module blobs are tested. |
+| Principal | `transfer`, `attenuate` | session transfer, `cred_transfer`, subset check | Partial | Every explicit router dispatch checks the child subset and runs `cred_transfer`, including identity transfers; automatically discovering every framework dispatch and every minted credential remains open. |
+| ToolCall | `prepare`, `invoke`, `post` | three existing tool-call hooks through `HostRouter` | Partial | Host-confined `ToolNode` and `guarded_tool` execution enters the verified router; their trusted in-process compatibility paths still execute outside it. |
+| Dispatch | subgraph, `Send`, parallel branch, subagent, nested agent | `cred_transfer` plus child-subset check | Partial | All five sync/async router forms and completeness tests exist. Tool-call parallel branches use the identity-transfer route; general subgraph, `Send`, subagent, and nested-agent placement is not automatic. |
+| ToolRegistry | static `register`, `override` | `tool_alloc_security`, inference, audit | Implemented | The object manager routes static registration and audited overrides through allocation and inference. |
+| ToolRegistry | dynamic `register` | `tool_alloc_security`, runtime inference | Partial | Runtime allocation and undeclared default-deny exist; arbitrary application mutation of registries is not intercepted. |
+| State | `write` | `state_write` | Partial | The refusing router entry and object-manager effect exist; general graph state writes are not yet rewritten through it. |
+| State | `restore` | `state_restore`, hash chain, principal binding | Implemented | Object-manager restore verifies the keyed hash chain, predecessor, monotone sequence, and principal binding and rejects replay. Core checkpointer adapters are not yet routed automatically. |
+| State | `tool_read`, `model_read` | `state_read` | Partial | Tool reads use profile-declared channel sets and receive a sanitized runtime with only principal ID and declared resources. General model prompt assembly is not yet routed automatically. |
+| State | `store_read`, `store_write` | `state_read`, `state_write` on owned/labeled keys | Partial | Store keys have owners and labels and ToolRuntime access uses the mediated wrapper; other direct Store references remain outside placement. |
+| Approval | `resume` | `resume_permission`, then full permission chain | Implemented | Sync/async router resume consumes one call-bound approval and reruns the complete authorization chain before dispatch. |
+| FrameworkOp | `guard_operation` | existing guarded operation path | Implemented | Explicitly wrapped operations are mediated; placement is not automatic. |
+| ModelInvocation | `invoke` | `model_invoke` | Partial | Sync/async deny-or-strip routing exists and strips before host prompt assembly; normal LangGraph model nodes are not yet automatically placed on it. |
+| Output | `emit(destination)` | `output_emit` | Partial | Sync/async allow, deny, redact, and escalate routing exists with labels and destination clearance; ToolRuntime stream output uses it, but every framework publication API is not yet placed. |
+| HostResource | `file` | grant lowered to kernel | Implemented | The namespace-free Landlock executor builds descriptor-based rules in the parent; granted/second-file, raw `open(2)`, grandchild, and `openat2` magic-link tests pass. |
+| HostResource | `socket` | grant lowered to kernel/proxy | Partial | ABI 4+ port rules lower to Landlock, while phase one tightens them with seccomp to no network. Endpoint/name enforcement remains phase two. |
+| HostResource | `exec` | Landlock `EXECUTE` plus syscall policy | Partial | Target-specific `EXECUTE` lowering exists; phase one tightens execution to no new exec in the worker. |
+| HostResource | `syscalls` | seccomp class filter | Implemented | Socket/connect fail with `EPERM`; ptrace, process-vm read, BPF, and unshare kill the worker. The default filter is installed after fd cleanup and Landlock restriction. |
+| HostResource | `limits` | cgroup v2, rlimits, supervisor | Implemented | A fresh cgroup is configured and the worker's membership is verified before `GO` when CPU, memory, and PID controllers are delegated. `cgroup.kill` owns descendant teardown. Rlimits and pidfd are the recorded tighter fallback when delegation is unavailable. |
 
-| Review area | Current status | Target disposition |
-| --- | --- | --- |
-| Rule-specific negotiation | Implemented and tested, including Linux dispatch | Resource classes are hints; exact operation, selector, conditions, dependencies, and complements are negotiated per obligation. Unsupported Linux rules deny before worker release. |
-| Closed-world default deny | Implemented and tested for the Linux subset | A new user, mount, PID, IPC, UTS, cgroup, and network namespace; clear environment; dropped capabilities; explicit mounts; no host network; and default-deny seccomp establish the local baseline. Semantic service restrictions still require a broker and therefore deny. |
-| `need`/`want` revalidation | Implemented and tested through policy filtering and lowering | Source lineage survives DAC intersection, rule splitting, policy subtraction, waivers, and adapter selection. Activation-time reductions remain to be wired. |
-| Host evidence trust and context binding | Implemented and tested for the local Linux executor | A process-local authenticated attestor checks nonce, freshness, boot, adapter binary, worker identity, namespaces, credentials, cgroup, plan, and obligations. This is local activation evidence, not TPM or remote-host attestation. |
-| Worker activation receipt and lease invalidation | Startup receipt, bounded authority lease, barrier, and durable evidence implemented | The immutable per-call grant is leased only through the configured startup and wall deadline. The trusted shim echoes a challenge after installing limits and seccomp; the parent verifies actual namespace, capability, no-new-privileges, seccomp, thread, mount-table, credential, and process state before `GO`. Every obligation is covered and the complete receipt enters the hash chain before a result is accepted. Boot/PID/start-time termination is confirmed before reservations are released; uncertain workers retain a durable flow reservation and recovery identity. The supported adapter does not promise early policy revocation; filesystem effects already committed are irreversible and uncertain completion is `INDETERMINATE`. |
-| Multi-component enforcement | Implemented and tested as an obligation DAG | Each obligation has one explicit primary enforcer, dependencies are complete and acyclic, and activation evidence must cover all assigned obligations. Semantic obligation compilers and native adapters remain. |
-| Advisory security claim | Implemented and tested in negotiation | Only explicitly waivable obligations may degrade; closed-world complements and required source lines cannot be waived. A waiver never retains authority while dropping its restriction, and no confinement or confidentiality claim applies to an unknown effective-authority bound. Runtime propagation remains. |
-| Module output to Cedar | Typed forbid-only output implemented and tested | The framework owns module attribution and rejects spoofed or malformed outputs. Cedar translation remains replaceable backend work. |
-| Broad-resource mandatory filtering | Implemented and tested in the reference backend | Filesystem child subtrees become explicit exclusions; unrepresentable conditional differences remove the broad rule and requirements are rechecked. |
-| Cedar diagnostics and aggregate combinations | Backend diagnostics and aggregate combinations implemented; Cedar adapter not implemented | Any backend diagnostic denies; typed combinations can reject cross-domain authority sets. |
-| Pre-confinement execution | Linux entry-point loading is deferred; schema stubs, decorators, normalizers, and hooks remain trusted | `LinuxToolSpec` pins an artifact path and digest; verified source bytes are copied privately and compiled directly after the activation barrier, so shadow modules and unchecked bytecode caches cannot replace them. Custom tool-authored preflight transforms are not supported by this executor. |
-| Ambient authority and runtime baseline | Implemented and tested for the Linux worker | The worker receives a clear explicit environment, read-only runtime roots added only after isolated `-I -S` startup and seccomp activation, size-bounded ephemeral `/tmp`, only documented parent protocol descriptors, no host network namespace, no descendants, and default CPU, address-space, per-file-size, aggregate private-tmpfs, process, descriptor, and wall-time limits. Profile physical-memory requests are unsupported. Both protocol directions are capped at 1 MiB and responses are depth/node limited. Mounts, environment, protocol channels, and ceilings are baseline grant lines. |
-| Delegated labels and budgets | Scope subset and blob copying implemented and tested; richer semantics not addressed in code | Typed label partial orders and a shared atomic escrow ledger govern children. |
-| Approval subject binding | Principal, roles, scopes, delegation, tool, call, raw and normalized arguments, expiry, and one-time use are implemented and tested | Artifact, final-grant, policy, ledger, and activation nonce binding require the strict execution path. |
-| Atomic history, retries, audit outcomes, truncation | Dispatch/outcome states, pre-dispatch audit failure, post-dispatch `INDETERMINATE`, hash chains, and external seals are implemented and tested | Durable quota reservation, side-effect idempotency, outbox delivery, and automatic external witnessing remain. |
-| Security disable/downgrade control | Reconfiguration and delegation downgrade are rejected and tested | A secured `ToolNode` cannot be replaced with another config and delegation must inherit or explicitly receive security. A signed immutable context for arbitrary dynamic descendants remains. |
+No completeness claim is made for `ToolNode` or `guarded_tool` separately.
+Their target tests establish only that they call `HostRouter`; completeness is
+tested once per router entry point.
 
-## Phase two
+## Per-authority coverage
 
-The following accepted components are intentionally deferred until phase one
-lands and is measured:
+| Authority | Intended primary enforcer | Current state | Required before claim |
+| --- | --- | --- | --- |
+| Framework principals and delegation | coordinator and policy evaluator | Partial | Explicit router dispatches have one subset check; placement for every implicit dispatch and minted credential remains. |
+| Tool arguments and invocation | `HostRouter` hook stack | Partial | Host-confined execution routes through it; trusted in-process compatibility remains outside the certificate. |
+| State channels | coordinator object manager | Partial | Refusing hooks, routes, profile-declared reads, and ToolRuntime mediation exist; core state channels are not automatically rewritten. |
+| Store keys | coordinator object manager | Partial | Owner/labels and same-/cross-principal tests exist; direct references need placement. |
+| Checkpoints | coordinator object manager | Partial | Hash-chain verification, replay defense, and principal binding exist in `ObjectManagerHost`; checkpointer integration remains. |
+| Model context | coordinator object manager | Partial | Pre-assembly stripping and audit events exist at the router; model-node placement remains. |
+| Output destinations | coordinator object manager | Partial | Full verdict and clearance handling exists at the router; publication placement remains. |
+| Filesystem reads/writes | Landlock | Implemented | ABI-probed descriptor lowering and the required denial tests pass. |
+| Network ports | Landlock where available | Partial | Port semantics only, tightened to no network in phase one; no endpoint claim. |
+| Network endpoints/names | trusted proxy or broker | Phase two | Broker custody and destination scoping. |
+| Executable targets | Landlock `EXECUTE` | Partial | Target-specific lowering and clean-fd activation exist; current phase-one syscall policy tightens it to no new exec. |
+| Syscall classes | seccomp | Implemented | Required errno/kill actions are active; receipts record their relation. |
+| CPU, memory, PIDs | cgroup v2 | Implemented | Delegated controllers are attested; each call gets a fresh configured leaf and verified worker assignment before release. The absence of delegation selects the recorded rlimit fallback. |
+| File descriptors | `RLIMIT_NOFILE` and clean fd table | Implemented | Worker closes every non-protocol descriptor before `restrict_self`; no `O_PATH` descriptor enters it. |
+| Wall clock | supervisor timer plus `cgroup.kill` or pidfd kill | Implemented | The supervisor owns the timer; delegated hosts kill the complete call cgroup, while other hosts use the recorded pidfd fallback. |
+| Service credentials | phase-two broker and resource issuer | Phase two | No token in worker environment/fd table; scope equals the service rule. |
 
-- service-adapter credential custody and authenticated spawn records;
-- AWS STS session policies and GitHub App installation token issuers;
-- MCP per-call proxying;
-- the native `slanggraph-exec` launcher;
-- a second host adapter such as Windows isolation, WASI, or a microVM;
-- AgentDojo, InjecAgent, and ASB evaluation harnesses; and
-- the vulnerable-tool comparison used by the paper.
+## Shipped foundation
 
-None of these names is a shipped public API.
+The current branch contains the following foundations, each narrower than the
+target operation table:
 
-## Present security claim
+- author DAC declarations, default deny for undeclared tools, principal binding,
+  and the seven existing restrictive hooks;
+- ToolNode and direct guarded-tool checks, approval/resume, scope attenuation,
+  hash-chained audit, and redacted observability;
+- session-flow scheduling for configured tool rules and explicit
+  `guard_operation`/session-transfer calls;
+- static inventory, source escape analysis, API conformance, bounded
+  authorization-state analysis, and a 21-entry `HostRouter` certificate now
+  used by host-confined `ToolNode` and `guarded_tool` dispatch;
+- `.slp` profile parsing, constructive DAC, an attributed grant IR, forbid-only
+  constraint values, Cedar forbid-wins evaluation with one ephemeral permit per
+  surviving DAC line, obligation negotiation, attestation types, activation
+  receipts, and explicit degradation; and
+- object-manager entry points for dispatch, registry, state/store, checkpoint,
+  model invocation, output, and call-bound approval; and
+- a namespace-free Landlock-primary executor with descriptor-based rules,
+  seccomp, per-call cgroup v2 assignment where delegated, rlimit fallback,
+  supervisor timeout, cgroup/pidfd kill, and per-rule receipts.
 
-The module hooks provide LSM-style policy programmability at tool-call
-granularity; they are a policy decision point, not an LSM-equivalent reference
-monitor. Modules authorize and restrict a call before dispatch. They are not
-consulted on each file open or other resource access, resources do not carry
-framework labels, and an in-process tool shares the interpreter and address
-space with the policy stack. Only a configured host executor can turn supported
-typed restrictions into an independently enforced boundary.
+These features do not yet establish the ten-class object-manager claim. The
+remaining gap is placement: general graph state/checkpoint APIs, model nodes,
+publication APIs, and four non-parallel dispatch forms are not automatically
+routed. Trusted in-process tool compatibility also remains outside the router.
+Zero-or-waived disposition of the escape findings is not shipped. The Cedar
+backend is the default and fails closed if its CLI, validation, evaluation, or
+output is unavailable or malformed.
 
-`LinuxSandboxExecutor` compiles the module decisions into one grant before the
-worker is released, after which the kernel mediates the supported filesystem
-and process operations against that fixed boundary. It does not call modules on
-each access and does not provide mid-call policy revocation. Per-access dynamic
-authorization or labeled-object policy requires a trusted broker, such as a
-FUSE service or seccomp user-notification supervisor, that reauthorizes every
-operation. No such broker is currently shipped.
+## Path-cover status
 
-The branch claims complete mediation for calls crossing a configured `ToolNode`
-or returned `guarded_tool` wrapper. When `LinuxSandboxExecutor` is configured,
-an allowed supported call executes in a fresh Linux worker only after exact
-grant filtering, obligation negotiation, kernel isolation, and a verified
-worker-specific activation receipt. Tests demonstrate denial of undeclared file
-reads, ambient network sockets, process execution, changed artifacts, and
-unrepresentable writable grants. The original in-process callback is not run.
+| Required path | Status |
+| --- | --- |
+| Model proposes a tool call | Partial: configured host-confined calls use the verified router; trusted in-process compatibility remains outside it. |
+| Proposal arrives via subgraph, `Send`, or subagent | Partial: the refusing forms exist, but automatic framework placement is pending. |
+| Injected content changes an argument | Implemented for secured Tool APIs: prepare transforms are normalized and the effective request is rebound before dispatch. |
+| Injected content is written to state and read later | Partial: labeled object-manager storage is mediated; core state placement is pending. |
+| Tool result carries a secret into model context | Partial: `model_invoke` strips labeled values; automatic model-node placement is pending. |
+| Another thread's data arrives via store | Implemented through `MediatedStore`; direct Store references remain a placement finding. |
+| Tampered or replayed checkpoint | Implemented in object-manager restore; checkpointer integration remains a placement finding. |
+| Runtime tool lacks a profile | Implemented on the object-manager registration path: inference runs and undeclared DAC is empty/default-deny. |
+| Human approval | Implemented: call-bound resume runs the complete chain again. |
+| Tool touches the OS | Implemented for the Landlock filesystem subset; all other unsupported classes deny or require an explicit linter waiver. |
+| Output goes to a lower-clearance destination | Implemented at `output_emit`; automatic publication placement is pending. |
+| Child output returns to parent | Partial: labels can be attached and emitted, but child-return placement is pending. |
 
-This is not process-wide MAC. Ordinary graph nodes, callbacks, model clients,
-and an unwrapped tool alias remain outside the boundary. The current Linux
-adapter supports filesystem and resource-limit authority only. It fails closed
-for network, service, credential, delegation, and executable grants rather than
-pretending a capability-class match is enforcement. Its host evidence is rooted
-in a process-local key, not hardware or remote attestation.
+The compile gate is not complete. Findings must reach zero or be individually
+waived with reasons before the target coverage claim is enabled.
 
-Without `SessionFlowPolicy`, the claim remains per-execution resource access
-control. With an operator-complete flow policy and shared durable store,
-classified calls crossing `ToolNode` or `guarded_tool` receive atomic
-source/sink scheduling; explicitly wrapped model and framework effects can use
-`guard_operation()`, and mediated copies can use `transfer_session()`. These
-labels prove confidentiality only when actual reads and outward channels are
-bounded by trusted code or active confinement. Background descendants,
-unmediated consumers, and copies that bypass transfer remain outside the claim.
-See [security properties](security-properties.md) for the exact boundary.
+## Host capability and lowering status
 
-For untrusted local Python tools on Linux, use the documented
-`LinuxSandboxExecutor` path and run `langgraph-security-taint` as an explicit CI
-gate. An allow verdict, effect declaration, profile grant, or accepted ADR alone
-is never evidence of kernel enforcement; the activation receipt is.
+The shipped attestation probes Landlock ABI by calling
+`landlock_create_ruleset(NULL, 0, LANDLOCK_CREATE_RULESET_VERSION)`, cgroup v2 delegation and `cgroup.kill`,
+unprivileged user namespaces, BPF LSM, Landlock audit, and the mechanism used
+per call. Kernel-version inference is not acceptable.
 
-## Target security claim
+Each grant rule must be reported as `exact`, `tightened`, or `unsupported`.
+Looser lowering denies. Unsupported classes deny unless explicitly waived per
+class with a reason; all affected call records say `unenforced`. A
+module-introduced class is rechecked at grant time and denies if unsupported.
+`slanggraph check --backend X profiles/` uses the same probes and returns
+nonzero for an unsupported unwaived class. Class waivers require a reason and
+are stamped `unenforced`; grant-time rechecking denies module-introduced
+unsupported authority. On a delegated host, the execution backend creates and
+configures a fresh cgroup, assigns and verifies the worker before release, and
+uses `cgroup.kill` for descendants. Without delegation it records the rlimit and
+pidfd fallback. Combined cgroup/rlimit rules remain `tightened`, never silently
+looser than the grant.
 
-Additional adapters extend the same grant without changing policy vocabulary.
-A waived obligation produces an explicitly `DEGRADED` result for which the
-complete grant-subset claim is not made. The final claim still excludes model
-final text, kernel or trusted-adapter bugs, and remote APIs that cannot scope
-credentials; missing domain-level egress mediation prevents an enforced result.
+## Freeze schedule
+
+Frozen now:
+
+- the seven existing hook names; and
+- their invocation structure.
+
+Not frozen:
+
+- the `tool_call_permission` return contract;
+- `Grant` and Cedar request construction;
+- the backend contract and audit schema; and
+- signatures for `state_write`, `state_restore`, `state_read`, `model_invoke`,
+  and `output_emit`.
+
+The `.slp` profile grammar freezes after PR 1. `Grant` and Cedar request
+construction freeze after PR 3. Backend and audit contracts freeze after PR 4.
+The course contract promises only the hook names and "return a verdict,
+optionally emit forbid policies."
+
+## Ordered delivery
+
+The phase-one order is:
+
+1. single-path `HostRouter`, with `ToolNode` and `guarded_tool` as callers;
+2. router entry points and hooks for Dispatch, ToolRegistry, State,
+   ModelInvocation, and Output;
+3. mediated `ToolRuntime` injection without `RunnableConfig`;
+4. verified, principal-bound restore and owned/labeled store keys;
+5. dynamic registration with allocation and undeclared inference;
+6. compile gate, rejection of in-process untrusted code, and disposition of all
+   56 findings; and
+7. PRs 1–5 for grammar/DAC, Grant, Cedar, backend contract, and the
+   Landlock/seccomp/cgroup/spawner implementation.
+
+The estimate is approximately five weeks for phase one. It should be revised at
+the next check-in if implementation evidence shows that is no longer credible.
+
+Phase two contains broker credential custody, scoped tokens, MCP stdio proxying,
+`slanggraph-exec`, a second `wasi` or `microvm` backend, and the evaluation
+harness.
+
+## Claim gate
+
+No guarantee is printed until the ADR 0007 kernel, contract, object-model,
+read/output, and Cedar tests pass under both `invoke` and `ainvoke`. In
+particular, an accepted ADR, allow verdict, declared effect, profile, grant, or
+adapter capability name is not evidence of enforcement. The audit must carry
+the verified hook decision, lowering result, attestation, and activation
+evidence for the operation.

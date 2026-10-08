@@ -1,0 +1,4276 @@
+{
+  "api": {
+    "background_error_count": 0,
+    "complete": true,
+    "summary": {
+      "cases": 15744,
+      "failed": 0,
+      "passed": 15744,
+      "surfaces": 72
+    },
+    "versions": {
+      "langchain-core": "1.6.1",
+      "langgraph-prebuilt": "1.1.0",
+      "python": "3.12.3"
+    }
+  },
+  "command": "cd libs/prebuilt && uv run python -m langgraph.prebuilt.security.verification --installed --output tool-verification-report.json",
+  "complete": false,
+  "full_report_sha256": "aad2bea5f058e7238ba423fa8e92c49722d4a00a85616b9f6b018a68817ada0a",
+  "property": "Every reachable terminal dispatch on every modelled path consumes a fresh ALLOW decision for identical principal/request bindings.",
+  "source": {
+    "assumptions": [
+      "Authorizer primitives authenticate inputs and return the declared Decision for exactly their bound arguments.",
+      "Operation primitives are the complete terminal effect boundary in the supplied source universe.",
+      "Imports, builtin data operations, standard dataclass construction, native method binding, override metadata, builtin exceptions and Verdict identity have their declared meanings; custom descriptors and monkeypatching are outside the model.",
+      "Standard typing and typing_extensions TYPE_CHECKING is False at runtime; cast returns its val argument unchanged after evaluating and binding all arguments. A cast establishes no runtime type or authorization.",
+      "Supported inert TypedDict declarations use the native typing/typing_extensions metaclass: construction produces an ordinary dict without schema validation and isinstance against the declaration raises TypeError. Annotations grant no runtime types or authority.",
+      "Native ContextVar get/set/reset operates in one current execution context across direct source calls and awaits. Module variables may contain inherited values; local variables start unset. Task creation, context copying/switching, external context mutation, token context managers and arbitrary context introspection require separate models.",
+      "Statically named ordinary source bases follow native C3 method resolution. Bound super proxies use the lexical starting class and the actual receiver's method order; custom metaclasses, dynamic bases, unbound super descriptors and generated dataclass class cells require additional models.",
+      "Lazy export resolution uses ordinary source-module imports with native importlib semantics and inert native import-error diagnostics; custom import hooks and external mutation of module bindings/export tables are outside the model. Every source initializer is still checked.",
+      "Standard reentrant locks use the native _thread.RLock context protocol: enter returns True and exit does not suppress exceptions or invoke user callbacks. This is not a concurrency proof.",
+      "Security inputs change only through modeled writes; external concurrent mutation, including across awaits, is outside the model.",
+      "Terminal return values and exception payloads contain inert data, never executable or receiver capabilities.",
+      "Input truth tests and keyword-key hashing/equality are stable and inert; custom input protocols and concurrent mutation require another model. Python keyword packing alone does not establish inert key protocols.",
+      "Ordinary helper bodies are analyzed, never accepted through opaque reviewed-call exemptions."
+    ],
+    "complete": false,
+    "export_resolutions": [
+      {
+        "cache_writes": 1,
+        "module": "langchain_core._api",
+        "name": "surface_langchain_beta_warnings",
+        "steps": 57,
+        "target": "langchain_core._api.beta_decorator.surface_langchain_beta_warnings",
+        "visited_functions": [
+          "langchain_core._api.__getattr__",
+          "langchain_core._import_utils.import_attr"
+        ]
+      },
+      {
+        "cache_writes": 1,
+        "module": "langchain_core._api",
+        "name": "surface_langchain_deprecation_warnings",
+        "steps": 57,
+        "target": "langchain_core._api.deprecation.surface_langchain_deprecation_warnings",
+        "visited_functions": [
+          "langchain_core._api.__getattr__",
+          "langchain_core._import_utils.import_attr"
+        ]
+      },
+      {
+        "cache_writes": 1,
+        "module": "langchain_core.outputs",
+        "name": "Generation",
+        "steps": 55,
+        "target": "langchain_core.outputs.generation.Generation",
+        "visited_functions": [
+          "langchain_core._import_utils.import_attr",
+          "langchain_core.outputs.__getattr__"
+        ]
+      },
+      {
+        "cache_writes": 1,
+        "module": "langchain_core.runnables",
+        "name": "run_in_executor",
+        "steps": 55,
+        "target": "langchain_core.runnables.config.run_in_executor",
+        "visited_functions": [
+          "langchain_core._import_utils.import_attr",
+          "langchain_core.runnables.__getattr__"
+        ]
+      },
+      {
+        "cache_writes": 1,
+        "module": "langchain_core.messages",
+        "name": "BaseMessage",
+        "steps": 55,
+        "target": "langchain_core.messages.base.BaseMessage",
+        "visited_functions": [
+          "langchain_core._import_utils.import_attr",
+          "langchain_core.messages.__getattr__"
+        ]
+      },
+      {
+        "cache_writes": 1,
+        "module": "langchain_core.messages",
+        "name": "get_buffer_string",
+        "steps": 55,
+        "target": "langchain_core.messages.utils.get_buffer_string",
+        "visited_functions": [
+          "langchain_core._import_utils.import_attr",
+          "langchain_core.messages.__getattr__"
+        ]
+      },
+      {
+        "cache_writes": 1,
+        "module": "langchain_core.utils",
+        "name": "print_text",
+        "steps": 55,
+        "target": "langchain_core.utils.input.print_text",
+        "visited_functions": [
+          "langchain_core._import_utils.import_attr",
+          "langchain_core.utils.__getattr__"
+        ]
+      },
+      {
+        "cache_writes": 1,
+        "module": "langchain_core.messages",
+        "name": "AIMessageChunk",
+        "steps": 55,
+        "target": "langchain_core.messages.ai.AIMessageChunk",
+        "visited_functions": [
+          "langchain_core._import_utils.import_attr",
+          "langchain_core.messages.__getattr__"
+        ]
+      },
+      {
+        "cache_writes": 1,
+        "module": "langchain_core.messages",
+        "name": "AIMessage",
+        "steps": 55,
+        "target": "langchain_core.messages.ai.AIMessage",
+        "visited_functions": [
+          "langchain_core._import_utils.import_attr",
+          "langchain_core.messages.__getattr__"
+        ]
+      },
+      {
+        "cache_writes": 1,
+        "module": "langchain_core.runnables",
+        "name": "Runnable",
+        "steps": 55,
+        "target": "langchain_core.runnables.base.Runnable",
+        "visited_functions": [
+          "langchain_core._import_utils.import_attr",
+          "langchain_core.runnables.__getattr__"
+        ]
+      },
+      {
+        "cache_writes": 1,
+        "module": "langchain_core.runnables",
+        "name": "RunnableSerializable",
+        "steps": 55,
+        "target": "langchain_core.runnables.base.RunnableSerializable",
+        "visited_functions": [
+          "langchain_core._import_utils.import_attr",
+          "langchain_core.runnables.__getattr__"
+        ]
+      },
+      {
+        "cache_writes": 1,
+        "module": "langchain_core._api",
+        "name": "beta",
+        "steps": 57,
+        "target": "langchain_core._api.beta_decorator.beta",
+        "visited_functions": [
+          "langchain_core._api.__getattr__",
+          "langchain_core._import_utils.import_attr"
+        ]
+      },
+      {
+        "cache_writes": 1,
+        "module": "langchain_core._api",
+        "name": "deprecated",
+        "steps": 57,
+        "target": "langchain_core._api.deprecation.deprecated",
+        "visited_functions": [
+          "langchain_core._api.__getattr__",
+          "langchain_core._import_utils.import_attr"
+        ]
+      },
+      {
+        "cache_writes": 1,
+        "module": "langchain_core._api",
+        "name": "suppress_langchain_deprecation_warning",
+        "steps": 57,
+        "target": "langchain_core._api.deprecation.suppress_langchain_deprecation_warning",
+        "visited_functions": [
+          "langchain_core._api.__getattr__",
+          "langchain_core._import_utils.import_attr"
+        ]
+      },
+      {
+        "cache_writes": 1,
+        "module": "langchain_core.callbacks",
+        "name": "AsyncCallbackManager",
+        "steps": 55,
+        "target": "langchain_core.callbacks.manager.AsyncCallbackManager",
+        "visited_functions": [
+          "langchain_core._import_utils.import_attr",
+          "langchain_core.callbacks.__getattr__"
+        ]
+      },
+      {
+        "cache_writes": 1,
+        "module": "langchain_core.callbacks",
+        "name": "AsyncCallbackManagerForLLMRun",
+        "steps": 55,
+        "target": "langchain_core.callbacks.manager.AsyncCallbackManagerForLLMRun",
+        "visited_functions": [
+          "langchain_core._import_utils.import_attr",
+          "langchain_core.callbacks.__getattr__"
+        ]
+      },
+      {
+        "cache_writes": 1,
+        "module": "langchain_core.callbacks",
+        "name": "CallbackManager",
+        "steps": 55,
+        "target": "langchain_core.callbacks.manager.CallbackManager",
+        "visited_functions": [
+          "langchain_core._import_utils.import_attr",
+          "langchain_core.callbacks.__getattr__"
+        ]
+      },
+      {
+        "cache_writes": 1,
+        "module": "langchain_core.callbacks",
+        "name": "CallbackManagerForLLMRun",
+        "steps": 55,
+        "target": "langchain_core.callbacks.manager.CallbackManagerForLLMRun",
+        "visited_functions": [
+          "langchain_core._import_utils.import_attr",
+          "langchain_core.callbacks.__getattr__"
+        ]
+      },
+      {
+        "cache_writes": 1,
+        "module": "langchain_core.load",
+        "name": "dumpd",
+        "steps": 55,
+        "target": "langchain_core.load.dump.dumpd",
+        "visited_functions": [
+          "langchain_core._import_utils.import_attr",
+          "langchain_core.load.__getattr__"
+        ]
+      },
+      {
+        "cache_writes": 1,
+        "module": "langchain_core.load",
+        "name": "dumps",
+        "steps": 55,
+        "target": "langchain_core.load.dump.dumps",
+        "visited_functions": [
+          "langchain_core._import_utils.import_attr",
+          "langchain_core.load.__getattr__"
+        ]
+      },
+      {
+        "cache_writes": 1,
+        "module": "langchain_core.messages",
+        "name": "convert_to_messages",
+        "steps": 55,
+        "target": "langchain_core.messages.utils.convert_to_messages",
+        "visited_functions": [
+          "langchain_core._import_utils.import_attr",
+          "langchain_core.messages.__getattr__"
+        ]
+      },
+      {
+        "cache_writes": 1,
+        "module": "langchain_core.messages",
+        "name": "is_data_content_block",
+        "steps": 55,
+        "target": "langchain_core.messages.content.is_data_content_block",
+        "visited_functions": [
+          "langchain_core._import_utils.import_attr",
+          "langchain_core.messages.__getattr__"
+        ]
+      },
+      {
+        "cache_writes": 1,
+        "module": "langchain_core.messages",
+        "name": "message_chunk_to_message",
+        "steps": 55,
+        "target": "langchain_core.messages.utils.message_chunk_to_message",
+        "visited_functions": [
+          "langchain_core._import_utils.import_attr",
+          "langchain_core.messages.__getattr__"
+        ]
+      },
+      {
+        "cache_writes": 1,
+        "module": "langchain_core.messages",
+        "name": "content",
+        "steps": 49,
+        "target": "langchain_core.messages.content",
+        "visited_functions": [
+          "langchain_core._import_utils.import_attr",
+          "langchain_core.messages.__getattr__"
+        ]
+      },
+      {
+        "cache_writes": 1,
+        "module": "langchain_core.outputs",
+        "name": "ChatGeneration",
+        "steps": 55,
+        "target": "langchain_core.outputs.chat_generation.ChatGeneration",
+        "visited_functions": [
+          "langchain_core._import_utils.import_attr",
+          "langchain_core.outputs.__getattr__"
+        ]
+      },
+      {
+        "cache_writes": 1,
+        "module": "langchain_core.outputs",
+        "name": "ChatGenerationChunk",
+        "steps": 55,
+        "target": "langchain_core.outputs.chat_generation.ChatGenerationChunk",
+        "visited_functions": [
+          "langchain_core._import_utils.import_attr",
+          "langchain_core.outputs.__getattr__"
+        ]
+      },
+      {
+        "cache_writes": 1,
+        "module": "langchain_core.outputs",
+        "name": "ChatResult",
+        "steps": 55,
+        "target": "langchain_core.outputs.chat_result.ChatResult",
+        "visited_functions": [
+          "langchain_core._import_utils.import_attr",
+          "langchain_core.outputs.__getattr__"
+        ]
+      },
+      {
+        "cache_writes": 1,
+        "module": "langchain_core.outputs",
+        "name": "LLMResult",
+        "steps": 55,
+        "target": "langchain_core.outputs.llm_result.LLMResult",
+        "visited_functions": [
+          "langchain_core._import_utils.import_attr",
+          "langchain_core.outputs.__getattr__"
+        ]
+      },
+      {
+        "cache_writes": 1,
+        "module": "langchain_core.outputs",
+        "name": "RunInfo",
+        "steps": 55,
+        "target": "langchain_core.outputs.run_info.RunInfo",
+        "visited_functions": [
+          "langchain_core._import_utils.import_attr",
+          "langchain_core.outputs.__getattr__"
+        ]
+      },
+      {
+        "cache_writes": 1,
+        "module": "langchain_core.runnables",
+        "name": "RunnableBinding",
+        "steps": 55,
+        "target": "langchain_core.runnables.base.RunnableBinding",
+        "visited_functions": [
+          "langchain_core._import_utils.import_attr",
+          "langchain_core.runnables.__getattr__"
+        ]
+      },
+      {
+        "cache_writes": 1,
+        "module": "langchain_core.runnables",
+        "name": "RunnablePassthrough",
+        "steps": 55,
+        "target": "langchain_core.runnables.passthrough.RunnablePassthrough",
+        "visited_functions": [
+          "langchain_core._import_utils.import_attr",
+          "langchain_core.runnables.__getattr__"
+        ]
+      },
+      {
+        "cache_writes": 1,
+        "module": "langchain_core.utils",
+        "name": "get_bolded_text",
+        "steps": 55,
+        "target": "langchain_core.utils.input.get_bolded_text",
+        "visited_functions": [
+          "langchain_core._import_utils.import_attr",
+          "langchain_core.utils.__getattr__"
+        ]
+      },
+      {
+        "cache_writes": 1,
+        "module": "langchain_core.runnables",
+        "name": "RunnableConfig",
+        "steps": 55,
+        "target": "langchain_core.runnables.config.RunnableConfig",
+        "visited_functions": [
+          "langchain_core._import_utils.import_attr",
+          "langchain_core.runnables.__getattr__"
+        ]
+      },
+      {
+        "cache_writes": 1,
+        "module": "langchain_core.messages",
+        "name": "InvalidToolCall",
+        "steps": 55,
+        "target": "langchain_core.messages.content.InvalidToolCall",
+        "visited_functions": [
+          "langchain_core._import_utils.import_attr",
+          "langchain_core.messages.__getattr__"
+        ]
+      },
+      {
+        "cache_writes": 1,
+        "module": "langchain_core.messages",
+        "name": "BaseMessageChunk",
+        "steps": 55,
+        "target": "langchain_core.messages.base.BaseMessageChunk",
+        "visited_functions": [
+          "langchain_core._import_utils.import_attr",
+          "langchain_core.messages.__getattr__"
+        ]
+      },
+      {
+        "cache_writes": 1,
+        "module": "langchain_core.outputs",
+        "name": "GenerationChunk",
+        "steps": 55,
+        "target": "langchain_core.outputs.generation.GenerationChunk",
+        "visited_functions": [
+          "langchain_core._import_utils.import_attr",
+          "langchain_core.outputs.__getattr__"
+        ]
+      },
+      {
+        "cache_writes": 1,
+        "module": "langchain_core.load",
+        "name": "Serializable",
+        "steps": 55,
+        "target": "langchain_core.load.serializable.Serializable",
+        "visited_functions": [
+          "langchain_core._import_utils.import_attr",
+          "langchain_core.load.__getattr__"
+        ]
+      },
+      {
+        "cache_writes": 1,
+        "module": "langchain_core.messages",
+        "name": "HumanMessage",
+        "steps": 55,
+        "target": "langchain_core.messages.human.HumanMessage",
+        "visited_functions": [
+          "langchain_core._import_utils.import_attr",
+          "langchain_core.messages.__getattr__"
+        ]
+      },
+      {
+        "cache_writes": 1,
+        "module": "langchain_core._api",
+        "name": "beta_decorator",
+        "steps": 51,
+        "target": "langchain_core._api.beta_decorator",
+        "visited_functions": [
+          "langchain_core._api.__getattr__",
+          "langchain_core._import_utils.import_attr"
+        ]
+      },
+      {
+        "cache_writes": 1,
+        "module": "langchain_core.runnables",
+        "name": "ensure_config",
+        "steps": 55,
+        "target": "langchain_core.runnables.config.ensure_config",
+        "visited_functions": [
+          "langchain_core._import_utils.import_attr",
+          "langchain_core.runnables.__getattr__"
+        ]
+      },
+      {
+        "cache_writes": 1,
+        "module": "langchain_core.runnables",
+        "name": "patch_config",
+        "steps": 55,
+        "target": "langchain_core.runnables.config.patch_config",
+        "visited_functions": [
+          "langchain_core._import_utils.import_attr",
+          "langchain_core.runnables.__getattr__"
+        ]
+      },
+      {
+        "cache_writes": 1,
+        "module": "langchain_core.callbacks",
+        "name": "AsyncCallbackManagerForToolRun",
+        "steps": 55,
+        "target": "langchain_core.callbacks.manager.AsyncCallbackManagerForToolRun",
+        "visited_functions": [
+          "langchain_core._import_utils.import_attr",
+          "langchain_core.callbacks.__getattr__"
+        ]
+      },
+      {
+        "cache_writes": 1,
+        "module": "langchain_core.callbacks",
+        "name": "CallbackManagerForToolRun",
+        "steps": 55,
+        "target": "langchain_core.callbacks.manager.CallbackManagerForToolRun",
+        "visited_functions": [
+          "langchain_core._import_utils.import_attr",
+          "langchain_core.callbacks.__getattr__"
+        ]
+      },
+      {
+        "cache_writes": 1,
+        "module": "langchain_core.messages",
+        "name": "ToolMessage",
+        "steps": 55,
+        "target": "langchain_core.messages.tool.ToolMessage",
+        "visited_functions": [
+          "langchain_core._import_utils.import_attr",
+          "langchain_core.messages.__getattr__"
+        ]
+      },
+      {
+        "cache_writes": 1,
+        "module": "langchain_core.callbacks",
+        "name": "BaseCallbackManager",
+        "steps": 55,
+        "target": "langchain_core.callbacks.base.BaseCallbackManager",
+        "visited_functions": [
+          "langchain_core._import_utils.import_attr",
+          "langchain_core.callbacks.__getattr__"
+        ]
+      },
+      {
+        "cache_writes": 1,
+        "module": "langchain_core.callbacks",
+        "name": "BaseCallbackHandler",
+        "steps": 55,
+        "target": "langchain_core.callbacks.base.BaseCallbackHandler",
+        "visited_functions": [
+          "langchain_core._import_utils.import_attr",
+          "langchain_core.callbacks.__getattr__"
+        ]
+      },
+      {
+        "cache_writes": 1,
+        "module": "langchain_core.runnables",
+        "name": "RunnableLambda",
+        "steps": 55,
+        "target": "langchain_core.runnables.base.RunnableLambda",
+        "visited_functions": [
+          "langchain_core._import_utils.import_attr",
+          "langchain_core.runnables.__getattr__"
+        ]
+      },
+      {
+        "cache_writes": 1,
+        "module": "langchain_core.messages",
+        "name": "RemoveMessage",
+        "steps": 55,
+        "target": "langchain_core.messages.modifier.RemoveMessage",
+        "visited_functions": [
+          "langchain_core._import_utils.import_attr",
+          "langchain_core.messages.__getattr__"
+        ]
+      },
+      {
+        "cache_writes": 1,
+        "module": "langchain_core.tools",
+        "name": "BaseTool",
+        "steps": 55,
+        "target": "langchain_core.tools.base.BaseTool",
+        "visited_functions": [
+          "langchain_core._import_utils.import_attr",
+          "langchain_core.tools.__getattr__"
+        ]
+      },
+      {
+        "cache_writes": 1,
+        "module": "langchain_core.tools",
+        "name": "StructuredTool",
+        "steps": 55,
+        "target": "langchain_core.tools.structured.StructuredTool",
+        "visited_functions": [
+          "langchain_core._import_utils.import_attr",
+          "langchain_core.tools.__getattr__"
+        ]
+      },
+      {
+        "cache_writes": 1,
+        "module": "langchain_core.language_models",
+        "name": "BaseChatModel",
+        "steps": 55,
+        "target": "langchain_core.language_models.chat_models.BaseChatModel",
+        "visited_functions": [
+          "langchain_core._import_utils.import_attr",
+          "langchain_core.language_models.__getattr__"
+        ]
+      },
+      {
+        "cache_writes": 1,
+        "module": "langchain_core.messages",
+        "name": "SystemMessage",
+        "steps": 55,
+        "target": "langchain_core.messages.system.SystemMessage",
+        "visited_functions": [
+          "langchain_core._import_utils.import_attr",
+          "langchain_core.messages.__getattr__"
+        ]
+      },
+      {
+        "cache_writes": 1,
+        "module": "langchain_core.runnables",
+        "name": "RunnableSequence",
+        "steps": 55,
+        "target": "langchain_core.runnables.base.RunnableSequence",
+        "visited_functions": [
+          "langchain_core._import_utils.import_attr",
+          "langchain_core.runnables.__getattr__"
+        ]
+      },
+      {
+        "cache_writes": 1,
+        "module": "langchain_core.tools",
+        "name": "Tool",
+        "steps": 55,
+        "target": "langchain_core.tools.simple.Tool",
+        "visited_functions": [
+          "langchain_core._import_utils.import_attr",
+          "langchain_core.tools.__getattr__"
+        ]
+      },
+      {
+        "cache_writes": 1,
+        "module": "langchain_core.messages",
+        "name": "ToolCall",
+        "steps": 55,
+        "target": "langchain_core.messages.tool.ToolCall",
+        "visited_functions": [
+          "langchain_core._import_utils.import_attr",
+          "langchain_core.messages.__getattr__"
+        ]
+      },
+      {
+        "cache_writes": 1,
+        "module": "langchain_core.tools",
+        "name": "InjectedToolArg",
+        "steps": 55,
+        "target": "langchain_core.tools.base.InjectedToolArg",
+        "visited_functions": [
+          "langchain_core._import_utils.import_attr",
+          "langchain_core.tools.__getattr__"
+        ]
+      },
+      {
+        "cache_writes": 1,
+        "module": "langchain_core.tools",
+        "name": "tool",
+        "steps": 55,
+        "target": "langchain_core.tools.convert.tool",
+        "visited_functions": [
+          "langchain_core._import_utils.import_attr",
+          "langchain_core.tools.__getattr__"
+        ]
+      },
+      {
+        "cache_writes": 1,
+        "module": "langchain_core.tools",
+        "name": "create_schema_from_function",
+        "steps": 55,
+        "target": "langchain_core.tools.base.create_schema_from_function",
+        "visited_functions": [
+          "langchain_core._import_utils.import_attr",
+          "langchain_core.tools.__getattr__"
+        ]
+      },
+      {
+        "cache_writes": 1,
+        "module": "langchain_core.callbacks",
+        "name": "AsyncParentRunManager",
+        "steps": 55,
+        "target": "langchain_core.callbacks.manager.AsyncParentRunManager",
+        "visited_functions": [
+          "langchain_core._import_utils.import_attr",
+          "langchain_core.callbacks.__getattr__"
+        ]
+      },
+      {
+        "cache_writes": 1,
+        "module": "langchain_core.callbacks",
+        "name": "ParentRunManager",
+        "steps": 55,
+        "target": "langchain_core.callbacks.manager.ParentRunManager",
+        "visited_functions": [
+          "langchain_core._import_utils.import_attr",
+          "langchain_core.callbacks.__getattr__"
+        ]
+      },
+      {
+        "cache_writes": 1,
+        "module": "langchain_core.runnables",
+        "name": "RunnableParallel",
+        "steps": 55,
+        "target": "langchain_core.runnables.base.RunnableParallel",
+        "visited_functions": [
+          "langchain_core._import_utils.import_attr",
+          "langchain_core.runnables.__getattr__"
+        ]
+      },
+      {
+        "cache_writes": 1,
+        "module": "langchain_core.embeddings",
+        "name": "Embeddings",
+        "steps": 55,
+        "target": "langchain_core.embeddings.embeddings.Embeddings",
+        "visited_functions": [
+          "langchain_core._import_utils.import_attr",
+          "langchain_core.embeddings.__getattr__"
+        ]
+      }
+    ],
+    "issue_categories": {
+      "aggregate attribute requires an object projection model": 54,
+      "ambiguous symbol: Field": 6,
+      "ambiguous symbol: PrivateAttr": 3,
+      "ambiguous symbol: _astream_log_implementation": 2,
+      "ambiguous symbol: _get_channel": 2,
+      "ambiguous symbol: _is_base_model_class_defined": 1,
+      "ambiguous symbol: _registered": 2,
+      "ambiguous symbol: chain": 4,
+      "ambiguous symbol: coerce_to_runnable": 2,
+      "ambiguous symbol: collections": 1,
+      "ambiguous symbol: computed_field": 2,
+      "ambiguous symbol: concurrent": 1,
+      "ambiguous symbol: convert_to_openai_messages": 2,
+      "ambiguous symbol: create_model": 4,
+      "ambiguous symbol: field_serializer": 2,
+      "ambiguous symbol: field_validator": 3,
+      "ambiguous symbol: from_env": 7,
+      "ambiguous symbol: get_fields": 6,
+      "ambiguous symbol: guarded_tool": 2,
+      "ambiguous symbol: interrupt": 2,
+      "ambiguous symbol: model_serializer": 3,
+      "ambiguous symbol: model_validator": 3,
+      "ambiguous symbol: prepare_next_tasks": 2,
+      "ambiguous symbol: root_validator": 5,
+      "ambiguous symbol: secret_from_env": 4,
+      "ambiguous symbol: tool": 4,
+      "ambiguous symbol: validate_arguments": 2,
+      "ambiguous symbol: with_config": 3,
+      "analysis budget exhausted": 26,
+      "argument expansion requires a known tuple": 156,
+      "base-class order, metaclasses or class decorators require a model": 643,
+      "builtin data operation requires an argument model": 1133,
+      "call not covered by transfer analysis": 2485,
+      "class-body binding/effect requires a model": 1146,
+      "collection conversion requires a known inert iterable": 1711,
+      "constructor arguments require a source initializer": 347,
+      "context manager requires a protocol model": 1013,
+      "coroutine creation/scheduling requires an explicit await model": 2,
+      "custom Python object protocol requires a model": 88,
+      "cyclic import alias or alias resolution budget exceeded": 9,
+      "decorated function requires a model": 275,
+      "definition-time decorators/defaults/annotations require a model": 1519,
+      "dict construction requires a known mapping": 184,
+      "duplicate method: langchain_core.language_models.chat_models.BaseChatModel.astream_events": 2,
+      "duplicate method: langchain_core.language_models.chat_models.BaseChatModel.stream_events": 2,
+      "duplicate method: langchain_core.language_models.chat_models._ChatModelBinding.astream_events": 2,
+      "duplicate method: langchain_core.language_models.chat_models._ChatModelBinding.stream_events": 2,
+      "duplicate method: langchain_core.messages.ai.AIMessage.__init__": 2,
+      "duplicate method: langchain_core.messages.ai.AIMessageChunk.__add__": 3,
+      "duplicate method: langchain_core.messages.base.BaseMessage.__init__": 2,
+      "duplicate method: langchain_core.messages.human.HumanMessage.__init__": 2,
+      "duplicate method: langchain_core.messages.system.SystemMessage.__init__": 2,
+      "duplicate method: langchain_core.messages.tool.ToolMessage.__init__": 2,
+      "duplicate method: langchain_core.messages.utils._RunnableSupportCallable.__call__": 2,
+      "duplicate method: langchain_core.runnables.base.Runnable.__or__": 3,
+      "duplicate method: langchain_core.runnables.base.Runnable.__ror__": 3,
+      "duplicate method: langchain_core.runnables.base.Runnable.abatch_as_completed": 2,
+      "duplicate method: langchain_core.runnables.base.Runnable.astream_events": 2,
+      "duplicate method: langchain_core.runnables.base.Runnable.astream_log": 2,
+      "duplicate method: langchain_core.runnables.base.Runnable.batch_as_completed": 2,
+      "duplicate method: langchain_core.runnables.base.Runnable.stream_events": 2,
+      "duplicate method: langchain_core.runnables.base.RunnableBindingBase.abatch_as_completed": 2,
+      "duplicate method: langchain_core.runnables.base.RunnableBindingBase.astream_events": 2,
+      "duplicate method: langchain_core.runnables.base.RunnableBindingBase.batch_as_completed": 2,
+      "duplicate method: langchain_core.runnables.base.RunnableBindingBase.stream_events": 2,
+      "duplicate method: langchain_core.runnables.base.RunnableLambda.__init__": 11,
+      "duplicate method: langchain_core.runnables.base.RunnableSequence.__or__": 3,
+      "duplicate method: langchain_core.runnables.base.RunnableSequence.__ror__": 3,
+      "duplicate method: langchain_core.runnables.graph.Graph.draw_png": 2,
+      "duplicate method: langchain_core.utils.aiter.Tee.__getitem__": 2,
+      "duplicate method: langchain_core.utils.iter.Tee.__getitem__": 2,
+      "duplicate method: langgraph.graph.state.StateGraph.add_node": 4,
+      "duplicate method: langgraph.pregel.main.Pregel.ainvoke": 3,
+      "duplicate method: langgraph.pregel.main.Pregel.astream": 2,
+      "duplicate method: langgraph.pregel.main.Pregel.astream_events": 2,
+      "duplicate method: langgraph.pregel.main.Pregel.invoke": 3,
+      "duplicate method: langgraph.pregel.main.Pregel.stream": 2,
+      "duplicate method: langgraph.pregel.main.Pregel.stream_events": 2,
+      "duplicate method: langgraph.pregel.protocol.PregelProtocol.ainvoke": 2,
+      "duplicate method: langgraph.pregel.protocol.PregelProtocol.astream": 2,
+      "duplicate method: langgraph.pregel.protocol.PregelProtocol.invoke": 2,
+      "duplicate method: langgraph.pregel.protocol.PregelProtocol.stream": 2,
+      "duplicate method: pydantic._internal._generate_schema.GenerateSchema._get_args_resolving_forward_refs": 2,
+      "duplicate method: pydantic._internal._utils.deprecated_instance_property.__get__": 2,
+      "duplicate method: pydantic.fields.FieldInfo.get_default": 2,
+      "duplicate method: pydantic.fields.ModelPrivateAttr.get_default": 2,
+      "duplicate method: pydantic.json_schema.Examples.__init__": 2,
+      "duplicate method: pydantic.type_adapter.TypeAdapter.__init__": 2,
+      "exception type requires a builtin exception model": 45,
+      "exceptional keyword expansion is unresolved": 312,
+      "exceptional list iteration is unresolved": 5,
+      "exceptional list method is unresolved": 43,
+      "exceptional list projection is unresolved": 117,
+      "exceptional mapping contents require an alias model": 604,
+      "exceptional mapping iteration is unresolved": 114,
+      "exceptional mapping method is unresolved": 604,
+      "exceptional mapping mutation is unresolved": 10,
+      "exceptional object fields require an alias model": 2928,
+      "exceptional object mutation is unresolved": 39,
+      "executable, receiver or unresolved capability escapes through API exit": 263,
+      "executable, receiver or unresolved capability escapes through uncaught exception": 223,
+      "isinstance class information requires a static type model": 4915,
+      "isinstance type has an unresolved metaclass or ancestry": 426,
+      "isinstance value has an unresolved type ancestry": 66,
+      "iteration requires a known tuple or mapping": 6732,
+      "keyword expansion requires known mapping keys": 136,
+      "lazy export AnyMessage is unresolved: source binding unavailable: langchain_core.messages.utils.AnyMessage": 1,
+      "lazy export BaseModel is unresolved: source binding unavailable: _deprecated_dynamic_imports": 1,
+      "lazy export Callbacks is unresolved: source binding unavailable: langchain_core.callbacks.base.Callbacks": 1,
+      "lazy export ConfigDict is unresolved: source binding unavailable: _deprecated_dynamic_imports": 1,
+      "lazy export Discriminator is unresolved: source binding unavailable: _deprecated_dynamic_imports": 1,
+      "lazy export END is unresolved: unsupported import expression: List": 1,
+      "lazy export Field is unresolved: source binding unavailable: _deprecated_dynamic_imports": 1,
+      "lazy export LanguageModelInput is unresolved: source binding unavailable: langchain_core.language_models.base.LanguageModelInput": 1,
+      "lazy export LanguageModelLike is unresolved: source binding unavailable: langchain_core.language_models.base.LanguageModelLike": 1,
+      "lazy export LanguageModelOutput is unresolved: source binding unavailable: langchain_core.language_models.base.LanguageModelOutput": 1,
+      "lazy export MessageLikeRepresentation is unresolved: source binding unavailable: langchain_core.messages.utils.MessageLikeRepresentation": 1,
+      "lazy export PlainSerializer is unresolved: source binding unavailable: _deprecated_dynamic_imports": 1,
+      "lazy export PrivateAttr is unresolved: source binding unavailable: _deprecated_dynamic_imports": 1,
+      "lazy export PydanticDeprecatedSince20 is unresolved: source binding unavailable: _deprecated_dynamic_imports": 1,
+      "lazy export PydanticDeprecatedSince211 is unresolved: source binding unavailable: _deprecated_dynamic_imports": 1,
+      "lazy export PydanticDeprecationWarning is unresolved: source binding unavailable: _deprecated_dynamic_imports": 1,
+      "lazy export PydanticUndefinedAnnotation is unresolved: source binding unavailable: _deprecated_dynamic_imports": 1,
+      "lazy export PydanticUserError is unresolved: source binding unavailable: _deprecated_dynamic_imports": 1,
+      "lazy export RootModel is unresolved: source binding unavailable: _deprecated_dynamic_imports": 1,
+      "lazy export RunnableMap is unresolved: source binding unavailable: langchain_core.runnables.base.RunnableMap": 1,
+      "lazy export START is unresolved: unsupported import expression: List": 1,
+      "lazy export SecretStr is unresolved: source binding unavailable: _deprecated_dynamic_imports": 1,
+      "lazy export SkipValidation is unresolved: source binding unavailable: _deprecated_dynamic_imports": 1,
+      "lazy export TAG_HIDDEN is unresolved: unsupported import expression: List": 1,
+      "lazy export TAG_NOSTREAM is unresolved: unsupported import expression: List": 1,
+      "lazy export Tag is unresolved: source binding unavailable: _deprecated_dynamic_imports": 1,
+      "lazy export TypeAdapter is unresolved: source binding unavailable: _deprecated_dynamic_imports": 1,
+      "lazy export ValidationError is unresolved: source binding unavailable: _deprecated_dynamic_imports": 1,
+      "lazy export create_model is unresolved: source binding unavailable: _deprecated_dynamic_imports": 1,
+      "lazy export field_validator is unresolved: source binding unavailable: _deprecated_dynamic_imports": 1,
+      "lazy export model_validator is unresolved: source binding unavailable: _deprecated_dynamic_imports": 1,
+      "lazy export root_validator is unresolved: source binding unavailable: _deprecated_dynamic_imports": 1,
+      "lazy export types is unresolved: source binding unavailable: _deprecated_dynamic_imports": 1,
+      "lazy export validate_arguments is unresolved: source binding unavailable: _deprecated_dynamic_imports": 1,
+      "length requires a known inert collection": 1378,
+      "mapping changed during active iteration": 210,
+      "mapping expansion requires known keys": 1690,
+      "mapping get requires a known string": 38,
+      "mapping keys must be known strings": 94,
+      "mapping mutation requires known receiver and string key": 2079,
+      "mapping proxy requires a known mapping": 42,
+      "mapping update requires a known finite mapping": 8,
+      "membership requires known inert values": 13629,
+      "missing or dynamic default argument: default_": 80,
+      "module initialization/binding requires a model": 726,
+      "object mutation requires a known receiver": 1010,
+      "object protocol attribute requires a model": 140,
+      "open keyword expansion requires a source callable signature": 320,
+      "open mapping merge requires a remainder model": 16,
+      "ordered/equality comparison requires known inert values": 2235,
+      "recursive call or call-depth budget exhausted": 26,
+      "source unavailable for call: langchain_core.runnables.base.Runnable.InputType.model_json_schema": 1,
+      "source unavailable for call: langchain_core.runnables.base.Runnable.OutputType.model_json_schema": 1,
+      "source unavailable for call: langchain_core.tools.base.BaseTool.tool_call_schema.model_json_schema": 3,
+      "source unavailable for call: langgraph.prebuilt.tool_node.ToolNode.tools_by_name.get": 10,
+      "source unavailable for call: langgraph.prebuilt.tool_node.ToolNode.tools_by_name.keys": 9,
+      "subscript requires a known tuple and constant index": 5478,
+      "super receiver has unresolved method resolution order": 247,
+      "tuple expansion requires an iterator model": 56,
+      "unpacking requires a known immutable tuple": 49,
+      "unresolved call target: ' '.join": 324,
+      "unresolved call target: ' '.join(descriptors).strip": 324,
+      "unresolved call target: ', '.join": 23,
+      "unresolved call target: ChainMap": 2,
+      "unresolved call target: ConfigDict": 160,
+      "unresolved call target: ConsoleCallbackHandler": 128,
+      "unresolved call target: Field": 128,
+      "unresolved call target: Graph": 2,
+      "unresolved call target: GraphInterrupt": 44,
+      "unresolved call target: INVALID_TOOL_NAME_ERROR_TEMPLATE.format": 9,
+      "unresolved call target: Lock": 9,
+      "unresolved call target: RunnableRetry": 1,
+      "unresolved call target: RunnableWithFallbacks": 1,
+      "unresolved call target: ThreadPoolExecutor": 448,
+      "unresolved call target: _MemoryStream[RunLogPatch]": 2,
+      "unresolved call target: _TOOL_CALL_SCHEMA_FIELDS.isdisjoint": 12,
+      "unresolved call target: _create_model_base": 356,
+      "unresolved call target: _get_tracer_project": 200,
+      "unresolved call target: _logger.debug": 192,
+      "unresolved call target: _merge_metadata_dicts": 492,
+      "unresolved call target: _tracing_v2_is_enabled": 224,
+      "unresolved call target: all": 4,
+      "unresolved call target: anext": 2,
+      "unresolved call target: annotations.items": 840,
+      "unresolved call target: any": 4686,
+      "unresolved call target: asyncio.Semaphore": 2,
+      "unresolved call target: asyncio.as_completed": 7,
+      "unresolved call target: asyncio.gather": 101,
+      "unresolved call target: asyncio.get_event_loop": 1,
+      "unresolved call target: asyncio.get_running_loop": 13,
+      "unresolved call target: asyncio.get_running_loop().run_in_executor": 13,
+      "unresolved call target: asyncio.new_event_loop": 1,
+      "unresolved call target: atee": 2,
+      "unresolved call target: call.get": 2,
+      "unresolved call target: call_args.keys": 4,
+      "unresolved call target: callable": 74,
+      "unresolved call target: cast('ToolCall', value)['args'].copy": 30,
+      "unresolved call target: classmethod": 320,
+      "unresolved call target: cls.__annotations__.get": 4,
+      "unresolved call target: conf[CONFIG_KEY_SEND]": 66,
+      "unresolved call target: config.get": 814,
+      "unresolved call target: config.get(CONF, {}).get": 30,
+      "unresolved call target: config.items": 82,
+      "unresolved call target: configs[0].get": 2,
+      "unresolved call target: configurable.get": 26,
+      "unresolved call target: configurable.setdefault": 9,
+      "unresolved call target: context.get": 5,
+      "unresolved call target: copy_context": 10,
+      "unresolved call target: counter.next": 21,
+      "unresolved call target: create_model_v1": 1002,
+      "unresolved call target: deepcopy": 4,
+      "unresolved call target: defaultdict": 2,
+      "unresolved call target: docstring.split": 108,
+      "unresolved call target: enumerate": 7,
+      "unresolved call target: escalation.to_payload": 22,
+      "unresolved call target: executor.map": 110,
+      "unresolved call target: fields.items": 12,
+      "unresolved call target: filtered_keys.update": 4,
+      "unresolved call target: full_schema.model_rebuild": 100,
+      "unresolved call target: func": 70,
+      "unresolved call target: get_config": 22,
+      "unresolved call target: get_fields(input_args).keys": 11,
+      "unresolved call target: get_origin": 22,
+      "unresolved call target: get_tracing_context": 19,
+      "unresolved call target: get_type_hints": 320,
+      "unresolved call target: get_type_hints(RunnableConfig).items": 20,
+      "unresolved call target: getattr": 155,
+      "unresolved call target: graph.add_node": 2046,
+      "unresolved call target: handler._external_run_ids.setdefault": 512,
+      "unresolved call target: hasattr": 372,
+      "unresolved call target: hashlib.sha256": 113,
+      "unresolved call target: hashlib.sha256(encoded).hexdigest": 113,
+      "unresolved call target: inheritable_callbacks.handlers.copy": 96,
+      "unresolved call target: inheritable_callbacks.inheritable_handlers.copy": 96,
+      "unresolved call target: inheritable_callbacks.inheritable_metadata.copy": 96,
+      "unresolved call target: inheritable_callbacks.inheritable_tags.copy": 96,
+      "unresolved call target: inheritable_callbacks.metadata.copy": 96,
+      "unresolved call target: inheritable_callbacks.tags.copy": 96,
+      "unresolved call target: inheritable_callbacks_.copy": 64,
+      "unresolved call target: input.get": 21,
+      "unresolved call target: input[-1].get": 15,
+      "unresolved call target: input_args.model_validate": 11,
+      "unresolved call target: inspect.getdoc": 312,
+      "unresolved call target: inspect.isasyncgenfunction": 173,
+      "unresolved call target: inspect.isclass": 78,
+      "unresolved call target: inspect.iscoroutinefunction": 6,
+      "unresolved call target: inspect.isgeneratorfunction": 105,
+      "unresolved call target: inspect.ismethod": 4,
+      "unresolved call target: inspect.signature": 54,
+      "unresolved call target: inspect.signature(cls).parameters.items": 12,
+      "unresolved call target: inspect.unwrap": 4,
+      "unresolved call target: invoke": 1,
+      "unresolved call target: issubclass": 11336,
+      "unresolved call target: iter": 11,
+      "unresolved call target: json.dumps": 113,
+      "unresolved call target: json.dumps(dict(call.args), sort_keys=True, default=repr, separators=(',', ':')).encode": 113,
+      "unresolved call target: key.lstrip": 128,
+      "unresolved call target: key.lstrip('_').replace": 128,
+      "unresolved call target: key.lstrip('_').replace('_', ' ').title": 128,
+      "unresolved call target: key.startswith": 192,
+      "unresolved call target: kwargs['run_manager'].get_sync": 1,
+      "unresolved call target: map": 23,
+      "unresolved call target: max": 448,
+      "unresolved call target: memory_stream.get_receive_stream": 2,
+      "unresolved call target: memory_stream.get_send_stream": 2,
+      "unresolved call target: messages.to_messages": 6,
+      "unresolved call target: metadata.get": 4,
+      "unresolved call target: model.model_json_schema": 500,
+      "unresolved call target: name_[0].isupper": 232,
+      "unresolved call target: next": 25,
+      "unresolved call target: ns.encode": 44,
+      "unresolved call target: nullcontext": 114,
+      "unresolved call target: overrides.get": 28,
+      "unresolved call target: partial": 10,
+      "unresolved call target: policy.acquire": 2,
+      "unresolved call target: policy.release": 8,
+      "unresolved call target: policy.retain": 2,
+      "unresolved call target: principal.security.allocate": 216,
+      "unresolved call target: private.get": 12,
+      "unresolved call target: range": 66,
+      "unresolved call target: read": 2,
+      "unresolved call target: replace": 67,
+      "unresolved call target: repr": 96,
+      "unresolved call target: response.get": 536,
+      "unresolved call target: run_manager.get_child": 6,
+      "unresolved call target: scratchpad.get_null_resume": 44,
+      "unresolved call target: scratchpad.interrupt_counter": 22,
+      "unresolved call target: scratchpad.resume.append": 44,
+      "unresolved call target: security.configure_tool_node": 1,
+      "unresolved call target: security.flow_policy.validate_tools": 448,
+      "unresolved call target: security_call.args.keys": 4,
+      "unresolved call target: self.__class__.mro": 2,
+      "unresolved call target: self.__dict__.items": 1,
+      "unresolved call target: self._dacs_by_name.get": 2,
+      "unresolved call target: self._descriptors_by_name.get": 2,
+      "unresolved call target: self._injected_args.get": 7,
+      "unresolved call target: self._security_audit_sink.write": 113,
+      "unresolved call target: self._security_tools_by_name.get": 6,
+      "unresolved call target: self.config_schema(include=include).model_json_schema": 124,
+      "unresolved call target: self.coroutine": 66,
+      "unresolved call target: self.func": 66,
+      "unresolved call target: self.func_accepts.items": 28,
+      "unresolved call target: self.stack.aprepare": 14,
+      "unresolved call target: self.stack.aresume_permission": 243,
+      "unresolved call target: self.stack.prepare": 14,
+      "unresolved call target: self.stack.record_framework_event": 2,
+      "unresolved call target: self.stack.resume_permission": 243,
+      "unresolved call target: self.target.ainvoke": 1,
+      "unresolved call target: self.target.invoke": 1,
+      "unresolved call target: set": 296,
+      "unresolved call target: set(overrides).difference": 14,
+      "unresolved call target: set[str]": 4,
+      "unresolved call target: sig.parameters.keys": 78,
+      "unresolved call target: sig.parameters.values": 78,
+      "unresolved call target: signature": 169,
+      "unresolved call target: signature(callable).parameters.get": 144,
+      "unresolved call target: signature(self._run).parameters.get": 3,
+      "unresolved call target: signature(self.coroutine).parameters.get": 9,
+      "unresolved call target: signature(self.func).parameters.get": 9,
+      "unresolved call target: slot.put_if_absent": 216,
+      "unresolved call target: sorted": 14,
+      "unresolved call target: stack.aresume_permission": 27,
+      "unresolved call target: stack.resume_permission": 27,
+      "unresolved call target: state.get": 4,
+      "unresolved call target: state_update.get": 2,
+      "unresolved call target: super().__getstate__": 4,
+      "unresolved call target: super().__init__": 217,
+      "unresolved call target: super().__init_subclass__": 4,
+      "unresolved call target: super().__setattr__": 4,
+      "unresolved call target: super()._arun": 3,
+      "unresolved call target: super()._to_args_and_kwargs": 1,
+      "unresolved call target: super().ainvoke": 3,
+      "unresolved call target: super().as_tool": 2,
+      "unresolved call target: super().get_input_schema": 4,
+      "unresolved call target: super().model_copy": 4,
+      "unresolved call target: tee": 2,
+      "unresolved call target: textwrap.dedent": 1002,
+      "unresolved call target: threading.Lock": 2,
+      "unresolved call target: tool.ainvoke": 1,
+      "unresolved call target: tool.get_input_schema": 7,
+      "unresolved call target: tool.invoke": 1,
+      "unresolved call target: tracing_tags.copy": 376,
+      "unresolved call target: tracing_v2_callback_var.get": 224,
+      "unresolved call target: type": 3407,
+      "unresolved call target: type_hints.items": 72,
+      "unresolved call target: validate_arguments": 26,
+      "unresolved call target: var_config.items": 13,
+      "unresolved call target: warnings.catch_warnings": 666,
+      "unresolved call target: warnings.filterwarnings": 640,
+      "unresolved call target: warnings.simplefilter": 26,
+      "unresolved call target: warnings.warn": 18,
+      "unresolved call target: weakref.finalize": 1,
+      "unresolved call target: x.get": 120,
+      "unresolved call target: xxh3_128_hexdigest": 44,
+      "unresolved call target: zip": 253,
+      "unresolved global: AttributeError": 33,
+      "unresolved global: ConsoleCallbackHandler": 128,
+      "unresolved global: DEFAULT_RECURSION_LIMIT": 2,
+      "unresolved global: Graph": 2,
+      "unresolved global: GraphInterrupt": 44,
+      "unresolved global: LangChainTracer": 1024,
+      "unresolved global: NO_DEFAULT": 640,
+      "unresolved global: PromptValue": 12,
+      "unresolved global: RESUME": 66,
+      "unresolved global: RunnableRetry": 1,
+      "unresolved global: RunnableWithFallbacks": 1,
+      "unresolved global: RuntimeWarning": 16,
+      "unresolved global: StopIteration": 12,
+      "unresolved global: _COUNTER_INIT_LOCK": 9,
+      "unresolved global: _RESERVED_NAMES": 192,
+      "unresolved global: _SchemaConfig": 228,
+      "unresolved global: _TOOL_CALL_SCHEMA_FIELDS": 24,
+      "unresolved global: _configure_hooks": 1920,
+      "unresolved global: _debug": 200,
+      "unresolved global: _get_tracer_project": 200,
+      "unresolved global: _kwargs": 14,
+      "unresolved global: _logger": 96,
+      "unresolved global: _merge_metadata_dicts": 492,
+      "unresolved global: _tracing_v2_is_enabled": 224,
+      "unresolved global: ainvoke": 7,
+      "unresolved global: all": 4,
+      "unresolved global: anext": 2,
+      "unresolved global: any": 4686,
+      "unresolved global: callable": 74,
+      "unresolved global: classmethod": 320,
+      "unresolved global: decision": 85,
+      "unresolved global: enumerate": 7,
+      "unresolved global: get_config": 22,
+      "unresolved global: get_tracing_context": 19,
+      "unresolved global: getattr": 155,
+      "unresolved global: hasattr": 372,
+      "unresolved global: input_for_tracing": 4,
+      "unresolved global: invoke": 9,
+      "unresolved global: issubclass": 11336,
+      "unresolved global: iter": 7,
+      "unresolved global: map": 23,
+      "unresolved global: max": 448,
+      "unresolved global: next": 21,
+      "unresolved global: range": 66,
+      "unresolved global: repr": 209,
+      "unresolved global: reservation": 5,
+      "unresolved global: schema": 160,
+      "unresolved global: set": 300,
+      "unresolved global: sorted": 14,
+      "unresolved global: tracing_v2_callback_var": 224,
+      "unresolved global: type": 7112,
+      "unresolved global: wrapper": 13,
+      "unresolved global: zip": 253,
+      "unresolved or cyclic base class": 402,
+      "unsupported expression: BinOp": 174,
+      "unsupported expression: GeneratorExp": 4902,
+      "unsupported expression: JoinedStr": 2831,
+      "unsupported expression: Lambda": 6,
+      "unsupported expression: Set": 4628,
+      "unsupported expression: SetComp": 114,
+      "unsupported expression: Yield": 119,
+      "unsupported statement: Assert": 44,
+      "unsupported statement: AsyncFor": 3,
+      "unsupported statement: AsyncFunctionDef": 14,
+      "unsupported statement: AsyncWith": 2,
+      "unsupported statement: FunctionDef": 339,
+      "unsupported statement: ImportFrom": 525,
+      "unsupported statement: While": 2,
+      "wildcard import leaves symbols unresolved": 5
+    },
+    "method_resolution_order": {
+      "langchain_core.tools.base.BaseTool": null,
+      "langchain_core.tools.simple.Tool": null,
+      "langchain_core.tools.structured.StructuredTool": null,
+      "langgraph.prebuilt.security.guarded._GuardedExecutor": [
+        "langgraph.prebuilt.security.guarded._GuardedExecutor",
+        "object"
+      ],
+      "langgraph.prebuilt.security.guarded._GuardedStructuredTool": null,
+      "langgraph.prebuilt.tool_node.ToolNode": null
+    },
+    "package_modules": [
+      "langchain_core",
+      "langchain_core._api",
+      "langchain_core.callbacks",
+      "langchain_core.embeddings",
+      "langchain_core.language_models",
+      "langchain_core.load",
+      "langchain_core.messages",
+      "langchain_core.messages.block_translators",
+      "langchain_core.output_parsers",
+      "langchain_core.outputs",
+      "langchain_core.runnables",
+      "langchain_core.tools",
+      "langchain_core.tracers",
+      "langchain_core.utils",
+      "langgraph._internal",
+      "langgraph.cache.base",
+      "langgraph.channels",
+      "langgraph.checkpoint.base",
+      "langgraph.checkpoint.serde",
+      "langgraph.graph",
+      "langgraph.managed",
+      "langgraph.prebuilt",
+      "langgraph.prebuilt.security",
+      "langgraph.pregel",
+      "langgraph.store.base",
+      "langgraph.stream",
+      "pydantic",
+      "pydantic._internal",
+      "pydantic.deprecated",
+      "pydantic.plugin",
+      "pydantic.v1"
+    ],
+    "settled_exceptions": 4697,
+    "source_count": 287,
+    "source_hashes": {
+      "langchain_core": "fa4e54cbdf24eb2cfc4fd24776115853a9bc7977447b4d072a470f6765d2a781",
+      "langchain_core._api": "5d7525859c2acc9c29fbc229071c0b4180d0728d179840b8aa6dfa0bbabbff7a",
+      "langchain_core._api.beta_decorator": "e1b7a665bfaf7980b94cac292ae53314beb8ef2fa8c69a3dac6a5bfe5647f0e9",
+      "langchain_core._api.deprecation": "af46bcbb81ec9961841c100ff5e48b823b24e8e92840f37a56e941cd1ba118f8",
+      "langchain_core._api.internal": "b0da229a7a6676097532290c8bf4cc08f5d6b55b6cdfcc528299ac8f8fbfa467",
+      "langchain_core._import_utils": "d9c455cf8a37c29ecdf2e5244bb8177912c091e0539bcdedba0445863bb7d380",
+      "langchain_core.caches": "ef38ab793ad7439cf412170b0b683ef0eb10c9ff3617a78194a6a814474d94b1",
+      "langchain_core.callbacks": "79cb9a4b8511da9536ce64fd2d7e11e05c19154f9b144159f6eea38fd752d8c9",
+      "langchain_core.callbacks.base": "10d692bbd4cfccd82ad514649682f79306b9cd730235c3838bc3d1a96a455dea",
+      "langchain_core.callbacks.manager": "1f934c3718231ac3bd4213224886d00bad2c2295a8da1095cdfa400365f45a58",
+      "langchain_core.callbacks.stdout": "7ddafa97f73297a0e5168a2db6e01871d08783649a0f343701cd57c75124d578",
+      "langchain_core.embeddings": "d127dc764552497993157ce7532799abf6f56a3a702060ee7860007f0c8ca546",
+      "langchain_core.embeddings.embeddings": "bb9d13d95c4b2f27c604229c56d59f4a266bb4ab9af2c3921f04921d12ad727a",
+      "langchain_core.env": "0d0c7012a86b2359cdfa282d03a710a509762ceb9d9482ec2a1966d6977238da",
+      "langchain_core.exceptions": "4e1fa1da2c11d3229894908cee30b0d15187c52c4399c49c5996587f43ad4452",
+      "langchain_core.globals": "8cedbb16cb462b5732ccd4f4f7a183f6516ad9880dc58d4367a36d03fc8a751f",
+      "langchain_core.language_models": "ff4872a17c801f7b2fc5585aca25de6759b4ccb9ed50d2231b7d8ef43d7987fd",
+      "langchain_core.language_models._compat_bridge": "67092690313a5248328fcf760425066933b869dac269234c8dbf3b33a8bbb37d",
+      "langchain_core.language_models._utils": "20923d6d226d88dfb525245e2794437f2806fa6dfde942c64ec539c69bef858b",
+      "langchain_core.language_models.base": "5f22ea327693c2aad32391d9004791d55481ac020b8bbd5f79e04bb51e99a692",
+      "langchain_core.language_models.chat_model_stream": "89f999aac034009b7fd49c5fdd493dd1e50f7112861191dc07dfe49e83cea0a7",
+      "langchain_core.language_models.chat_models": "a2c769b852868ee63985025e519a25bb988b8c987f5958033c7c97d832a70d11",
+      "langchain_core.language_models.model_profile": "e7a3f6ba86f915b5a4db84397360d425baae8858d63bb42f840b6415d710136c",
+      "langchain_core.load": "88de2070606a21e8f01254050f008a9cf65b23fab47321f8698a5d4508f98146",
+      "langchain_core.load._validation": "0bbd6b48d5641dcd1054d5a423a6231bcd5fba8274e5447f16a3f55147f9a4f1",
+      "langchain_core.load.dump": "a928ca73ad5e5848ab8273393ae257b23625549bbb571ddcff5e15f4f55ce65d",
+      "langchain_core.load.load": "8f705da359b1b09bfa0678cfd55ebb83ea9d0030ca2adbd2a9d737f7ca0207f4",
+      "langchain_core.load.mapping": "66980a4e0eaf7a538a587b116dd54d06b232f6d896871ff4e983740f590b3f5a",
+      "langchain_core.load.serializable": "29f10ac925a72c1380bbe7d41b91a8b211eb190eb0351c4d4426830c59c54d3c",
+      "langchain_core.messages": "86bb3118ed302c422bf35829bb670bf3d915e8f7a25b5c98f86d2b86a6185e6b",
+      "langchain_core.messages.ai": "ac2c00a1826ee8d7e5fa84e3b1ef5354d2aa960460b3eca72c829e866c62e774",
+      "langchain_core.messages.base": "7398bb4db990af959df71dd81243e04b1a5f665602155a6f808271d910c4a62d",
+      "langchain_core.messages.block_translators": "a30ffde00a2a75c01989e165a633bbe65f997270705f39d3321aeaaee5eff20c",
+      "langchain_core.messages.block_translators.anthropic": "562bd394909de8fb88493b292e86c8b8eda7dfdcf8dfa56da7c1da1ed87732c1",
+      "langchain_core.messages.block_translators.bedrock": "ccefd9e5a7bc97c11ec1b5c14f67f1e2e098520259ba33c0c4874c38de378d68",
+      "langchain_core.messages.block_translators.bedrock_converse": "e1e1737adbb7b11e3ad27dab02f31c18d041ecb15b1e3574c03d1cbf555eccc2",
+      "langchain_core.messages.block_translators.google_genai": "1b10feeebc47e09d625ff32ae237a3afd78911a1ec3d38ec22979949f551ed3c",
+      "langchain_core.messages.block_translators.google_vertexai": "d91ce92852a2d7df7569618af28b1d90aabc6ca69d9b2f2af3a911debd1fe8ae",
+      "langchain_core.messages.block_translators.groq": "2c793b825305b92b15403326d3f4420d6314d059e1f6dc20bbafddb4b6bf3812",
+      "langchain_core.messages.block_translators.openai": "ef1516d8869aad5023421865d97531c0a00e096f6fcfc6370143de2511be9b4a",
+      "langchain_core.messages.chat": "b7d6b3f91d437b61dd884861a46c881689c2a98d3750092a31dbedb71d75ae13",
+      "langchain_core.messages.content": "b1455233513c4823399830b062dcef83e48350b3518cac3d553cc5d9ab2e3013",
+      "langchain_core.messages.function": "46591c1511161a00259c3d29b0e3967369106bbc1567e909065fa68be50871dc",
+      "langchain_core.messages.human": "5c2abfb7b9b2deab88dd0390e5c423f4ebf45be007db950286faad983ee7cee6",
+      "langchain_core.messages.modifier": "f1dde68479ca30353d5e4c3f337fae7f9581b6a0387598fcd6d0fb03a660a3fa",
+      "langchain_core.messages.system": "bc744e0c6503c11aa20737787faee14e740d143756f6c4879defd83da108d8c5",
+      "langchain_core.messages.tool": "0b451ed4c6ab8b69393bcc475562bc879b497faa08c1cfba41bc8bc5cb547fcb",
+      "langchain_core.messages.utils": "470c9c605ee9e6d14d34ecd4ddd58d5a210afa2c13341ad01455fc230fe712a9",
+      "langchain_core.output_parsers": "83930fac3f2c24af23799442202bd6469f9db40ab58eacbe7c5fb04b97a0af94",
+      "langchain_core.output_parsers.base": "932303008784b26218b2ad91fa6a6c4fcc7b142bec7a2d8b83b0dcd60da8e50b",
+      "langchain_core.output_parsers.openai_tools": "4388b85529c0e0df6a2cb537b5f0420c6bfd32a84232dfa570a0ce54f76b3fcf",
+      "langchain_core.output_parsers.transform": "f6a9ccc423103fec55f966a257345c0beba97c756ecd2875cac5a03dd889c724",
+      "langchain_core.outputs": "367d9b6e4034c6dea880c1efbd212092dd9d2c6cd96b36d71827695ab4fea7af",
+      "langchain_core.outputs.chat_generation": "2666673a72b24f566922590de141e66cc7d9f5c6467bc1b7a23091768743020d",
+      "langchain_core.outputs.chat_result": "42094550d8eee8332185972684ff0c6062cd0e1536db45f7f22cb777ad6e8904",
+      "langchain_core.outputs.generation": "59dd6a9daac545dc3dd35ab51ed6d017c05e2197cb9242de8bb19f1b6378fda6",
+      "langchain_core.outputs.llm_result": "b0db3ef4df335043deafa44c48db165952fd671eb4cd50df3a537ad50aedd529",
+      "langchain_core.outputs.run_info": "25ac654401054e81c68f68bcdc9811e762f2ee37aee57653671fac5848f8b232",
+      "langchain_core.prompt_values": "fa620dba9c71bb16fd8caa049d6b9dfef8aa3b40252fdbb906f24df6ad1dfdb7",
+      "langchain_core.rate_limiters": "9f3eb6de17afeebcfc7ad9441f041b9cc0bbb17b1907b58d949165a2514d93f7",
+      "langchain_core.runnables": "3115ee61a18a70378fcdfa9a7eb3bc9cb765b7734cd481156110d711f9c41143",
+      "langchain_core.runnables.base": "35840ef0581e472f34bb15d172ea90ed8e35aaf447a4e6d0104df97cca5dd8d0",
+      "langchain_core.runnables.config": "304ae7748a0b47a052551182a638f2bf9e40840eaa5f9042011a3b349c6cf06b",
+      "langchain_core.runnables.graph": "2145a39ed245924bef7620eeda48a403b3cb73688402289c581c5d4df43f3286",
+      "langchain_core.runnables.passthrough": "260de5bbbc388123f43ef30b9c4625e3e4748fd4c378db5f2f646347dc8bf556",
+      "langchain_core.runnables.schema": "78c05a217a5401260bb8aae245f9f72748ef92a7639153a4afa9a341ee4e83a2",
+      "langchain_core.runnables.utils": "bc1d726e41f2e6092a2e524b3dffcca3daa7d47ea0559ade4fb93d3fe48db9dc",
+      "langchain_core.tools": "d1bd72c189435f6935072871e69db5872570674dd36db2aa223174321d235955",
+      "langchain_core.tools.base": "259da69b2ca5e171f4cc58acec2190352e7091f4d96a20158ce51feed4a78a02",
+      "langchain_core.tools.convert": "6b92dd07d522d0dda6d912555cfb531e0752b2a67d3fbb232536c195d969933d",
+      "langchain_core.tools.simple": "c860f81c4fc16442caf0605f1a87a40b04bfeef121ad059c1a7859ac8a1935cb",
+      "langchain_core.tools.structured": "40fd8a7cf75bde67b0d967ee022b875fc139b74d2667c98caf14d2b889fe3e26",
+      "langchain_core.tracers": "14f73c4f4f1a8021df2195d2443474e92cd92925b31c336085bfe074eb726127",
+      "langchain_core.tracers._compat": "70025260e5fcc02de58234f9cc3fcfa82b33d172e7f96c10d99c93b422611c1d",
+      "langchain_core.tracers._streaming": "06793eb5fbbee9a88ffe0d01a12bd993dce01280c9265046fd7f22d00d9aa902",
+      "langchain_core.tracers.base": "cb0087dd94263f2e8add3849a24876fa0f38a0ba487adf768f431d448451a10d",
+      "langchain_core.tracers.core": "4a15e92b4d16e264dacd5eab7a1c515f23a9b9d9e047ee632f8097f97a9781a4",
+      "langchain_core.tracers.event_stream": "b9ead987172cc14776a36d6429ad2a5464a8e4f65e5782f61a68741fc039f260",
+      "langchain_core.tracers.langchain": "fc4439d4ef1ab8c89d1496526701a0f18676223247ce684ae2bac4abd5c183d5",
+      "langchain_core.tracers.log_stream": "cc669467195c44443c8939f11a3c464d8268e917ecab3e7468c9e884713b03f0",
+      "langchain_core.tracers.memory_stream": "ea317e4543e0aa39ef0eb29cca364a266dc1699b2abee996096cf820a1ad5a19",
+      "langchain_core.tracers.root_listeners": "58c732eb6caba3c88263102353898217c6f1b4a88a527c38a28d2d7b3d03a4ef",
+      "langchain_core.tracers.schemas": "f81d79f49fc0d692dd98de862d1df23364bf2a8cc959ac0a68573bbc8db15da5",
+      "langchain_core.utils": "ca7e991873318bb323aa88d20644f6b02c58469a3beb300805c2a74d1689d8f7",
+      "langchain_core.utils._gateway": "65706c13663a33aeab5ec770d43628bcf23e59b4ca724e4235471bdce47e21de",
+      "langchain_core.utils._merge": "5a4d22710505194c7b0cafae5186b2e6a14711316d6016bf5ae55d1f0cde2ccd",
+      "langchain_core.utils.aiter": "76f4b3d55024361f4e87d6f42d2033927b6fd7f762b5401047bed3f466cb5636",
+      "langchain_core.utils.env": "cd718be532a4eb1be24f212d831d7f0e8ab835b50ced4b9e53ddd29da7e65c23",
+      "langchain_core.utils.function_calling": "5006fd0dcbb3bbe35bef7c21c87cddf4c3897520ba4bff9c60bbe29256c27838",
+      "langchain_core.utils.input": "6e1c13a650c28f3f8b8c099ad4504143a31a0a87ad4e543815c3489ce72c758f",
+      "langchain_core.utils.interactive_env": "79bb3ad67774af0363087e8628e9874414a4dc57cd9b051fb532e13931097dde",
+      "langchain_core.utils.iter": "20d2b8c6d99dc9dc905c22dc61bd10a2f3f95e8bc5fee763aa9683c03255649c",
+      "langchain_core.utils.json": "4d09adfc1580449e18533ea8364b3c480db7905045cb3b4f7d6c389642d18e38",
+      "langchain_core.utils.json_schema": "25a47b19b4514badc9c8dff24881de6f6934ed374bab6ae47ed7054acfe280e3",
+      "langchain_core.utils.pydantic": "c8e9fb374c1b6ab269682ccdf6eb1f1893f4a54e5e071a845713e9af95f58357",
+      "langchain_core.utils.usage": "530e0fd50999c5a93979fbfcc7f477357350141e2e51ba1949006adb27abfa24",
+      "langchain_core.utils.utils": "af80566feed88b5aeeb6310795bd88f4ada902e528d20c468ffe95e82873c1ee",
+      "langchain_core.utils.uuid": "5f42ea5a1adcc1827fb5ac292f09fa5e9ae2fa359e5a725b9a922e6e7958d55b",
+      "langchain_core.version": "0f6b4095a0171c7699451ee835658de4d936667ece888c1243aa0bd067eb7d8b",
+      "langgraph._internal": "0ef92d8f5b3845fe7923378fcf39891380657b5fba21c491b922443aac592ca0",
+      "langgraph._internal._cache": "25cf2d24b029be5671da777507f4078dc1d2dc0f472a131af8df19edcb3a96cf",
+      "langgraph._internal._config": "a0f8b4533ab09aeeb7b477d47e4e9a69a47d03abf0de0909c087bc2aabe1e00e",
+      "langgraph._internal._constants": "65e43f9791364bcc7aaec5cea36e32db590f4c37fa3f829769b3d1c68d554e1e",
+      "langgraph._internal._fields": "22d0c7e2b7540f106f1feb91f63e2aaf902cd4a67eaf152f70abe041089ee752",
+      "langgraph._internal._future": "87d95f6ee355270b4a1503fe0a43c8912511b6c9fa791a990caa6f144c3aa134",
+      "langgraph._internal._pydantic": "e3ca9b3189a4cf768fa2bb34bee69c49bbe6a6e724297e06471870f730490b0c",
+      "langgraph._internal._queue": "64fef539eb7c10a25e73fc9ac76974c860116a376a767fdaf6949586ec2f1053",
+      "langgraph._internal._replay": "6d0ad54ebd4f805d94e4ff54eb2eae445771c8cee3ebdff8da4d8d5609ac460d",
+      "langgraph._internal._retry": "cee7f2f7b1541bc0ac90484e9f48879f80a407e2d92c52d9a8a3bab78face13e",
+      "langgraph._internal._runnable": "ae3f2bd1c5c01f20200ccbab84a088c3e7ba1377117e01e823deafec28d9b9f3",
+      "langgraph._internal._scratchpad": "8d60ef91c783d8aae3e3c393f384a5940430d74cd280de543e6de48e5bbdd446",
+      "langgraph._internal._serde": "4c75a54590e8ed27b463e990e4c61e12b7485fc0669d758007eaffdc78509ffe",
+      "langgraph._internal._timeout": "28401803595016dec23371d92d0fb32977cbafb5b904e9a9f18b3e5ba411684b",
+      "langgraph._internal._typing": "bc6e3cf0cc2f8c62eeb5eec485f20e9a5857e881ac03469afa87142089f00936",
+      "langgraph.cache.base": "b0da57a4a15b6b67a266526f167ab7d34dd997dfd15cfbf6fce0ae3fd02f5dd4",
+      "langgraph.callbacks": "bedc1d843b61aab93b13b9465613106e0a81054cd6f8a00177772651ef5fb726",
+      "langgraph.channels": "2d28bd4f3f21a55cf4bf2505629b176ba5b99c52083d5072e20f651387cc39b6",
+      "langgraph.channels.any_value": "cab1ae7537ac45c7cf02511b4277305bc0f4891c9216d056015541394e74a8ab",
+      "langgraph.channels.base": "d64a543b37985534719bc1479d96813f4f6a0fa252c1844ba2f542e602a8c5e9",
+      "langgraph.channels.binop": "85dbe7cdd3cea5f2973dbf3f358ad04c61c7b8dad5dc74a579739aa328a1b54e",
+      "langgraph.channels.delta": "c7de0e212055fcbc6508ef39fa6080653f9e7d25554c093b1507970feca03435",
+      "langgraph.channels.ephemeral_value": "81a498846249762ca3ba3b77538507a994b35fb9f9cf29257a577902223f6572",
+      "langgraph.channels.last_value": "36cbc586aeaac0f8c9b5a8d8b903039023a7d24294408391eb8c7f10aab3a308",
+      "langgraph.channels.named_barrier_value": "18498401cfec1bc6c735d81f2d113945effd5520dac6cbae17c58ca791b6434c",
+      "langgraph.channels.topic": "abb4058990997c484d38f03401e4741ad54307a538258794ee3799ea7caa2564",
+      "langgraph.channels.untracked_value": "ea15573ce7899269b75b4aa81dec04a08a5efc7b0887d64bb8ff9810155aafee",
+      "langgraph.checkpoint.base": "2953a9af1106ce832eda01add85013168b5cb7b316a5865cc7f1a67ad01ad73e",
+      "langgraph.checkpoint.base.id": "f4635d8f5f1e713c0f55eb111ad32a323121b318e1b2456eb5d61b305c25785b",
+      "langgraph.checkpoint.serde": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "langgraph.checkpoint.serde._msgpack": "0c861f9e2288b3cb886b819d264f4488e604c0213fb3838a46a641666e0edb7c",
+      "langgraph.checkpoint.serde.base": "1f3bd8194dbc25ae6f8e24c14304632868d1ba42bcb9c732dc45edb61dd92bcb",
+      "langgraph.checkpoint.serde.encrypted": "d1a15ed8f9d97f916bbc02ad51db965994ee736c81dd6af887d4f2cd17568be0",
+      "langgraph.checkpoint.serde.event_hooks": "437c5184fed52e229dafb367eca936b52cf4f8189af49a79e9261344d2effc92",
+      "langgraph.checkpoint.serde.jsonplus": "daad0d87adccf5a2b135e9c10b2e85ac200dd5576a3b729a03caf90b727215c8",
+      "langgraph.checkpoint.serde.types": "a2c029b31b149804744063033a8b116570c504de86d0b5e8f76db4b465f0c503",
+      "langgraph.config": "dd52c5ef1e9af7d2de534305c8a934abd00d736971b19f65f56e6114cc7ffba7",
+      "langgraph.constants": "a9d1e6e5877bd98009ca105ec8667d82d5de7df8f31e318ade6fa14bcca6c6e3",
+      "langgraph.errors": "e3a5e19ff884d64015e0a6eb3c722618e153f48153d90cb10a5d6725e809c73f",
+      "langgraph.graph": "b357457698c9603ae999a295d082c2c55319a7e03517e012135f6813e6a71a52",
+      "langgraph.graph._branch": "2d0e8da9936edaa6ca0202f59178fe50326d10f34ef2c5c882a59cd34430fe40",
+      "langgraph.graph._node": "105cdf869cc1a5d187afafd00c3ccdf752dffaecdc38d7ee3a4e287c023b5a07",
+      "langgraph.graph.message": "c811816a1367cd2af060a46724dbd2802ccd7c25f5d94f1d9c0dd127092be6e8",
+      "langgraph.graph.state": "59c805a8c80bc345936909ee0f72e391c0a9f60cf23b04b1c846bab57cc5fc0b",
+      "langgraph.managed": "7257008527ef47513b9765ec8284cd740d2f781ad6ff0b7cabe066848232e741",
+      "langgraph.managed.base": "1ffbac50065dc163dcee0d9ee21d42891652c5d5e9ab4c9f7c74e26e37cd3689",
+      "langgraph.managed.is_last_step": "6fe0e58317aa0b0b01cb119e2589fcc9d5b788c6c06645a4282d3032d993f791",
+      "langgraph.prebuilt": "b44259999e2ccda2a90223741bd975d1bcfae5d7523c9457028288ee9e0bc6cc",
+      "langgraph.prebuilt._tool_adapter": "a4539863ede0372175ae0f26097d91088ff76fc954577966e03432eb05495e17",
+      "langgraph.prebuilt._tool_call_stream": "3da9912edd0a2ecded21222859c7acda2998583f969463f4df4bd2c212c692f8",
+      "langgraph.prebuilt._tool_call_transformer": "a52adfc36fbed234953c8aef2e10c373cb59c56d4da6db2f86bee2a46e8f1080",
+      "langgraph.prebuilt.chat_agent_executor": "d3b98412c47daba13de4fca50fb7ab2e37f08705db6ab549f3ab8fab6600bc8d",
+      "langgraph.prebuilt.interrupt": "4ec639c642ccfb76eeaff602557ee88cc3dc31e9dfbc7b1721510184f07bd044",
+      "langgraph.prebuilt.security": "5dadcc6e3b53402601e52b28fc585d514acc19c6494bc5deee0fa490762db9e5",
+      "langgraph.prebuilt.security._linux_worker": "f90b3ced7b74a7564335933f8c163890595351c779cfd04915273ce593ecd2d7",
+      "langgraph.prebuilt.security._mediation_catalog": "7f8c9ee89fd3d0bd0ce798b7cdaf2d662ff0c846a0cb73ad3e26505adbf57e10",
+      "langgraph.prebuilt.security.audit": "a1842747b0ad308d9e6db730f365a9915b511ece5fe7bf40652cc5aa54b1cd12",
+      "langgraph.prebuilt.security.binding": "9443aca44d89d3b7440b1953aacc66919f09dee60b46a5e76f970ffa1be1ed5f",
+      "langgraph.prebuilt.security.blobs": "854c14ebe2d2d864b54e834de0297d69e7da3339a009cd98b693b3f10eb5b6c3",
+      "langgraph.prebuilt.security.boundary_verification": "225ca4e90a6acb54d1ffd6fcb59a8c7b7b5b7e2296bfc78cde57f253c70d6c0b",
+      "langgraph.prebuilt.security.config": "e7a92783b3715c2ccb776e1699351f658c76f067f1423737da41b1eb7da8122f",
+      "langgraph.prebuilt.security.dac": "543dea97924fdc3b0222dadea8e112bf2b22c354d953b6ec2a5276538bbbc236",
+      "langgraph.prebuilt.security.descriptor": "2c34226ed51de9665c797c9085d7348c9b3407f559e924a7196e53dcc8787cc2",
+      "langgraph.prebuilt.security.enforcement": "fde68a131df472d0e64d6383b35889c5266cf63270ec218c85f70e9c03dd2f44",
+      "langgraph.prebuilt.security.errors": "f7de73e8c20de84a1968d2dc151e3589c8c2a0fd8e9489ac2af8638a2ca0937b",
+      "langgraph.prebuilt.security.execution": "2c6dc1d57f209d82bb5b0d1dc60f4eb091e47d1fae865ce87f47de074ce8276a",
+      "langgraph.prebuilt.security.flow": "145a468b0cf337a57f37ee36a8f822ecbda32e9e5a5c5153f96e15e3ef6597af",
+      "langgraph.prebuilt.security.guarded": "34d346768a75c45962765c30b3aee49f9fb1beac7cc010f2e502b74ef6321a04",
+      "langgraph.prebuilt.security.hooks": "096fa665394b7be81f831bf8a0d609d9df6dc45f9276eda8bcd483059b4da596",
+      "langgraph.prebuilt.security.host_boundary": "8a897dab2eb230377bb0c5501375dbf2504e152f1e658bbcc3bc7823149fbd3b",
+      "langgraph.prebuilt.security.host_router": "064c57a976f03db87100350f2bc0ff114702cf5fbf3077cee7515591b72d20bc",
+      "langgraph.prebuilt.security.introspect": "7287cc54458b5b57ebf89de49af869cf8f454cf5cb24e5157c3c4e5aa5fc132b",
+      "langgraph.prebuilt.security.linux": "4b65592a8b1bc1b318fcfeab1fa4b4b7ca87f6b71e8e91db256a946ca6537be0",
+      "langgraph.prebuilt.security.mediation": "ddf8059f46df0e677cfba50f65aef6bed54b3d96e92f2dd3acef16c8b2b90c7e",
+      "langgraph.prebuilt.security.observability": "898988b2c749f39b2335fe2334f7daea689383698878b5a2ba7a8dea56e5b498",
+      "langgraph.prebuilt.security.policy": "bf70433971e9cf4ce7e0b6e4ec6ef935003d74fff4a6a5541762ba25d9ac306f",
+      "langgraph.prebuilt.security.profile": "5b500f7a4dd315964eafc30c1380ee8ed52959145eff152daa2742ae750eaa6b",
+      "langgraph.prebuilt.security.resource_boundary": "12907f0173933e03564f03df6138f2dfc2f42b79d867d37b0c58f031590bbfeb",
+      "langgraph.prebuilt.security.stack": "b61e6da2435dead668132cbbb0461261ecf51e06d2abe35e467927afcd50d5fe",
+      "langgraph.prebuilt.security.taint": "527eda5e440d850362db4229b07b4280760c756b3e11089e35e8d65fc8a583a1",
+      "langgraph.prebuilt.security.tool_api_verifier": "7a3379579e6549f49020e83810135d22d92e43ea8ad6851190d0f106aa4b53e8",
+      "langgraph.prebuilt.security.types": "795d378f0ea31ffe434da5072dfc6b8d952a49228e928a7be8a3072a52d441fe",
+      "langgraph.prebuilt.security.verification": "ac4937b7b85a2a7d42fcdfcdd0cdb82177b5eded8196a5c314f3bf4269b34e0b",
+      "langgraph.prebuilt.tool_node": "89f43b5247af68410dbbeeba7826735c7163cf6fac9b6798640d9e20ca1a7d9f",
+      "langgraph.prebuilt.tool_validator": "97e2986e28e39711b00016757db2bfc0720e9905d8c4a4e28aecec1376c3c250",
+      "langgraph.pregel": "88ea6667a370774432125df7d4fa78f86e18f844d17ed860098736180703b676",
+      "langgraph.pregel._algo": "29d54dc6704e4e4a0385d36317faa74f4fa2ceefd6836aca03f1938b9fa51fa5",
+      "langgraph.pregel._call": "38aa434fc1624e4e2e9140729b8b750f78cd17012620fcb33458a63585e8793d",
+      "langgraph.pregel._checkpoint": "0f816e875d844eb114a2c920cd507150441b7778b7bd050674e1511a1a161e05",
+      "langgraph.pregel._draw": "4039bab2d51151dbb1d32d07c33caa2720b5fdafd948ac0674b6fb7ec3c68028",
+      "langgraph.pregel._executor": "5afb1e7e7bd768fc5ff7ed5e222539abb73bd11f88d8e150eb75c30a8484364d",
+      "langgraph.pregel._io": "a9c2c16bff60d8e42b2d6f92f4d8b004896987ba526355148a9c778a99c0e544",
+      "langgraph.pregel._log": "b7ec6e7780aa404ba4b0faa35d99bbdbc04bd9c150bc75d1bd39b95e0535dc13",
+      "langgraph.pregel._loop": "33150cf70fc08fd01affeae0345aa20569d2705704e3d209733d9c7b43dd5c0a",
+      "langgraph.pregel._messages": "ae9e949288b80fc88d4491b1c60a664051e7e282740adae7866a6103a9cf0e97",
+      "langgraph.pregel._read": "c44cc0c8597055fee343a65f4d8c1841bdf07a67e0b7d5e0a291523ec970a3dd",
+      "langgraph.pregel._retry": "667a74090e23fda724e74ad377586e32325510cdd9042d320d60306f783f0a9d",
+      "langgraph.pregel._runner": "316cf133c724163a18ef279322615588b3fa8b96e359289a7cadea90f0df7622",
+      "langgraph.pregel._tools": "e3b995731a56af5d6d0198f50592b7052e31e43eae4a831b8c561978b42c974a",
+      "langgraph.pregel._utils": "f9bc501c3a8d9c31808be0f9edc8dcb3d5a7b5be5638fc28c683c5100c24fafb",
+      "langgraph.pregel._validate": "62641424580d0dc5f7796c4750520a7b660b80c6a7b57df463d426745ba6a476",
+      "langgraph.pregel._write": "4f067c1c034fab2be682ec52b6101631d44494a0d23f9048aafbe65f660218d2",
+      "langgraph.pregel.debug": "2e86304ed87e79ea53ad89f565f1eefc1b3a192456a7c7fc33dfbdd9323c4251",
+      "langgraph.pregel.main": "02651dc9471b88f9299d12f6d836e67ad1114ad84498b9ae26df6cd75be8592c",
+      "langgraph.pregel.protocol": "bb01f15b767867ce23ca80f3f90cea567e1f714dfa61bc2ca16d1d4fa3f06ce5",
+      "langgraph.runtime": "5a5e3aad147f67397481ea47c67cde97938d85b5762a7aa4d4ce511dcd693c42",
+      "langgraph.store.base": "c91e0bcd0bba52a5368217cf2cc1cfa9c73bc84bda5304f2a0d88867aa8cd268",
+      "langgraph.store.base.embed": "e8340c0734b49fa79c5bbb11adf3fa339b1ea1137fed5833a72a74bd80aadc66",
+      "langgraph.stream": "2f1d6dfb3f16672498632dfa56036e19a5d1fd1252b3f22dd74fa01d44467f38",
+      "langgraph.stream._convert": "9aa68288f83885709a4ffdd368f390e9a4c5d5f0b6ac814d8e3ebd4f635bfc40",
+      "langgraph.stream._mux": "4a41a05ba1d4be6ba7d3fe3a4366d2e9844fbd0d8ff417cf1f93f8eb4ce99732",
+      "langgraph.stream._types": "fa3c59acb554cd466ab0d0d1aa113cf2163c8efa9e03e74e61bf1aece21bf192",
+      "langgraph.stream.run_stream": "994660f7f872233ad460fea5f4fd76814d7c9bdd16d2a9f5d109b024a571747a",
+      "langgraph.stream.stream_channel": "0425e8aca9ed1ea0eb84abb4c49d5a676f85b8cb7b8c335db7339f8ee2cfdb6d",
+      "langgraph.stream.transformers": "551a93a37057ce1a312e7e7588a76d29ba5a2b1710e9421f2e33a7a281d52719",
+      "langgraph.types": "cb451aef481886ba5e9701230e85ef38b35eb95608f959ed421f409a05a5a6e6",
+      "langgraph.typing": "1bfa647f6597a09b37da8d898c4224e30db64a68ed6a523c431df67d56ab3ccb",
+      "langgraph.warnings": "382d8b3778a1c113b2f3e2652da407b553be3b65acc4a655cc60c2b061ee2763",
+      "pydantic": "e62127278c07bf5384cdd2903f368a69929f3b8a524000bae4e0eb608ebf4bc6",
+      "pydantic._internal": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "pydantic._internal._config": "473cacd49a1f7e7e097331257180eab192d18018079f69585aa0d1e79a0048f0",
+      "pydantic._internal._core_metadata": "63f836b778bbba5b8afb05c266fcc97d114c3d4336dda0582df69ee05cc13f2d",
+      "pydantic._internal._core_utils": "d63aeee156c9d31eb747a76d55cb8e23e74a4130bf77f9529c9584050cc63444",
+      "pydantic._internal._decorators": "443106fc96aee4d88971f3b4c60753ec43a0b14d4b816218957ef0379ad8b55b",
+      "pydantic._internal._decorators_v1": "b5f75f76940a6384765c23b0a876d97a840cbabe95362811adf86e757047c77f",
+      "pydantic._internal._discriminated_union": "24bc7f3152dea7b331975cdba5d3598ef1c3733f89dce116e9671d575f3875c3",
+      "pydantic._internal._docs_extraction": "7f2ce74801e1e40ce88675d94ad5741ef1fe9d16dabcd1cfca0fa49f1f92fc41",
+      "pydantic._internal._fields": "85779bfb3a1d1b04c3bc6f4e2b5ba6d7c3fae1bedca876f418e9e03f88eb81c6",
+      "pydantic._internal._forward_ref": "e67dd8efedc028b9fcfc54b761cecabad2e23d48725e602d90464e6859e89f03",
+      "pydantic._internal._generate_schema": "3e3a2051ac085e67fc2ee2cd7bdb1e26987b58b5b8309efe181b17c02b100bd4",
+      "pydantic._internal._generics": "0978dc22796f722f157a36969f57f7f64bf401c7c92f4479db7a912c56550feb",
+      "pydantic._internal._import_utils": "4d18710f93ae63a094a2c8a805d05c254b34a26ec820e36265d60057bcd0f233",
+      "pydantic._internal._internal_dataclass": "fdb79d7355dbbaeca044688b66a914930c05a506a847584a2e5479d359f2c926",
+      "pydantic._internal._known_annotated_metadata": "3f29d020543ad7fff819caf39f40f910d96583b8cfabf731a0b4e6b8540163cf",
+      "pydantic._internal._mock_val_ser": "c2645115206fa9f70b6c8e353ec165881e2ed80677989a597a21116c3df1293a",
+      "pydantic._internal._model_construction": "2682a663826b0c1bb79c6fed088ac982d249135baaeafdbd4ef4f3e449471398",
+      "pydantic._internal._namespace_utils": "865dfe4d102bf365368d3c8f3f7b7e42ab2f28b8abc6d90b7cd7eb37e7e9d31f",
+      "pydantic._internal._repr": "8d07e726ec83c50a5244d846dbd208f4f5fc7b836fdaa599ac4c3696a8a1dd41",
+      "pydantic._internal._schema_gather": "f2727eb8ce98e33eb1a5ab271a89c432e6ed3555ff9b179e44316677fa8c54b0",
+      "pydantic._internal._schema_generation_shared": "17fadb41bae4a289a0c6cb24747a4fd23509ed309f7b40400c0124aba089e273",
+      "pydantic._internal._serializers": "6085af4a6011e5f9db19258239076e5add72078650638d9e02bb9cf9e9eb6fa7",
+      "pydantic._internal._signature": "8bf6fac2d96e895599461d5963c52f076519ce23f52a3a925d9802f87c70393d",
+      "pydantic._internal._typing_extra": "743c6a178ea5ceea82a0a2eb007fe4f791036dac8478a6f69478ee4c9e4e0686",
+      "pydantic._internal._utils": "80de3c06c47e143ac90e26c29a8ebdb6d420ebb59bb85addcbfd4d40bddcbcb2",
+      "pydantic._internal._validators": "ec64e35d758530b89be1dc50f8779a8879406624760761bc6f2098306ae6438f",
+      "pydantic._migration": "545ef72d1094cf722b6f9c55b75de36f7340717567105e93d7e27438b7de6790",
+      "pydantic.aliases": "be1087ca84969d7f8427ec166f9aa3e31c91b2c8065a74d07f3429e06499f6e8",
+      "pydantic.annotated_handlers": "59fc854aac28108157061ed3ef73f270a9682350e25f8e465a2d3e24eb024786",
+      "pydantic.config": "a353faec53162101befd17c6b4a8ac9641f0a38a579bfea37ec478d4ff3cbfbf",
+      "pydantic.deprecated": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "pydantic.deprecated.class_validators": "9f48d840e71be58422c346fb617ca2ecd3e261d57bba3591e0ac99ba68d33e89",
+      "pydantic.errors": "0eb1023c25a1498ad0f016b83bc84acc800cda2f460474d75802f36850e92dfe",
+      "pydantic.fields": "6bc66125f23c143e934030fbf9c58c9b5657950bdad3031d4f6132e55bd57be3",
+      "pydantic.functional_serializers": "cf04408d9bac391b446edc69554db4920f05a5e9b2673e05abac099359a9c184",
+      "pydantic.functional_validators": "ee9fb88ef3ffffd8d9caf71d5e289d7b9a406bf26533b7c9d41824a9b8f14963",
+      "pydantic.json_schema": "75ade143dbd03cb1213ecac39d49628df4357ee0825621959d4cceac064b803b",
+      "pydantic.main": "35b842cfe92ef300e060b40c062ef93afee1cb075cf0b7b0037a1434867c2554",
+      "pydantic.plugin": "6bb4f0dfae94e8ade496d08235963bea773db2cfbbb86190e344d769df4eca94",
+      "pydantic.plugin._loader": "8408e04a58e82211b1dc0569229baac3948fb6d04d35e181493aea48c9cd8899",
+      "pydantic.plugin._schema_validator": "e4ce487356d99e384d0f1b510d529b44f4d0ea9a3a42e28c63b320b8c907796d",
+      "pydantic.root_model": "70e328796769e77e8a17ce6e448716fa8cf53bb7791910a9c7d1d34b8fb5b9ff",
+      "pydantic.type_adapter": "4f4e60f1641ccc1b1553fdf945d2b1823222ed8ecb222a7aee9177348ed7e061",
+      "pydantic.types": "7e961c1a702770ae108da166de366da98c31258cc1eeb2493df025f3d7a6cf24",
+      "pydantic.v1": "4b140f925801b385c727013a059f6aa1ec18a0688dc98527987cc414265b7e72",
+      "pydantic.v1.annotated_types": "ba4d8d000c6a88d10b2a388787287129a20e87c1759585bf2f3ad6dd7ee86417",
+      "pydantic.v1.class_validators": "50b39a21481850306c1cbec411511aadc33e52e6ca52082837c8526c3a27b051",
+      "pydantic.v1.color": "8990012d8a7a395a28d801643fd229ae2ff049cebe2a496ef18ba149aaed7798",
+      "pydantic.v1.config": "6ba3f459eafdc7871bc0a5bb5eff29a1252a33858ff912d6c17e9832962af400",
+      "pydantic.v1.dataclasses": "efce1caaf2276f020f5abf6eb1fa57ddc87bcf8b77276b532ba374ebbff0935a",
+      "pydantic.v1.datetime_parse": "e10cb5910a6adeb3556497881de48f0e9b92d81be1a7528fb73246d71bbe1f4d",
+      "pydantic.v1.decorator": "cda6b1c71a163c29bcd7c0f56ecd3285aa518d79b7d95f06d191d609d335b970",
+      "pydantic.v1.env_settings": "03d557c2d465d36018fa31f40b4a2ecb954dc377e2e85fe9933b870e380000e3",
+      "pydantic.v1.error_wrappers": "ebadb931fc3daa40b63708ad07f2450167bc07e5efeb3054eeb2fd936f2d7f2a",
+      "pydantic.v1.errors": "988c0f103e6f18ce50e6fe02e19d493e5753447fa89af132947ea4b0c84e98fc",
+      "pydantic.v1.fields": "56a5890ab894362132a6d5eba03549e74d49a550347a7d9500d724b2a5cbd9bf",
+      "pydantic.v1.json": "590e47cbf848a5f751dd84bc93a37613a28c273b1d6c18bf95d58e3c9695f353",
+      "pydantic.v1.main": "bd10754dba64ccf3773f98a326573e72336e3be1dc88d3a90b86fc2b7cd99df7",
+      "pydantic.v1.networks": "1d836d2807ce98e9ca269b0383583a488923f563e153ffa2f25e5ed89281a46e",
+      "pydantic.v1.parse": "049b5daa2651b5abfd55114298ec6863e2889909a33f2f80fcda288e21546716",
+      "pydantic.v1.schema": "6aa06e03ef9cabc8005648a6e4124f140487cce67c745b66157fdf346afa8a9e",
+      "pydantic.v1.tools": "d650dd5c79348cbe6e3f7bb9442600bd402518296000efb8e6592af63edfc810",
+      "pydantic.v1.types": "07397e45c9e2b4f0479eac308fd8afec98c7b8dd46a67587db874a905de5f5ef",
+      "pydantic.v1.typing": "a2fc2d2e911909b9e08596877d2349ba9cdeb731cd90b5e39ffeba9204e7215e",
+      "pydantic.v1.utils": "d4fa8e225cfa3955b019db371c12a5c3812de9ab05a2ed1452902da3b8c5382b",
+      "pydantic.v1.validators": "9725249f5316847c65097e597c48058ff0801e88e888f71a41e31d10cf57be25",
+      "pydantic.v1.version": "6291d63902ad1a8c5fca29331ab7265c954a515601f4405da0247df784314a71",
+      "pydantic.version": "4f9af38b00cfacc8df694d17fbee5f05d195be1f784339cd43b4230f82df8260",
+      "pydantic.warnings": "dd0c90a3a94ddf970eece5c36c511759c35a3e518245aade815640f86fa56702"
+    },
+    "summary": {
+      "dispatch_obligations": 0,
+      "entries": 175,
+      "unresolved": 174,
+      "verified": 1,
+      "violated": 0
+    },
+    "terminal_parameters": {
+      "langgraph.prebuilt.security.guarded._GuardedExecutor.security.host_executor.ainvoke": [
+        "principal",
+        "call",
+        "constraints"
+      ],
+      "langgraph.prebuilt.security.guarded._GuardedExecutor.security.host_executor.invoke": [
+        "principal",
+        "call",
+        "constraints"
+      ],
+      "langgraph.prebuilt.security.guarded._GuardedExecutor.stack.apermission": [
+        "principal",
+        "call",
+        "approval"
+      ],
+      "langgraph.prebuilt.security.guarded._GuardedExecutor.stack.permission": [
+        "principal",
+        "call",
+        "approval"
+      ],
+      "langgraph.prebuilt.tool_node.ToolNode._security_host_executor.ainvoke": [
+        "principal",
+        "call",
+        "constraints"
+      ],
+      "langgraph.prebuilt.tool_node.ToolNode._security_host_executor.invoke": [
+        "principal",
+        "call",
+        "constraints"
+      ],
+      "langgraph.prebuilt.tool_node.ToolNode._security_stack.apermission": [
+        "principal",
+        "call",
+        "approval"
+      ],
+      "langgraph.prebuilt.tool_node.ToolNode._security_stack.permission": [
+        "principal",
+        "call",
+        "approval"
+      ]
+    },
+    "terminals": {
+      "authorizers": [
+        {
+          "bindings": [
+            "arg:0",
+            "arg:1",
+            "result:constraints"
+          ],
+          "decision": "",
+          "permission": "tool_call",
+          "target": "langgraph.prebuilt.security.guarded._GuardedExecutor.stack.permission"
+        },
+        {
+          "bindings": [
+            "arg:0",
+            "arg:1",
+            "result:constraints"
+          ],
+          "decision": "",
+          "permission": "tool_call",
+          "target": "langgraph.prebuilt.security.guarded._GuardedExecutor.stack.apermission"
+        },
+        {
+          "bindings": [
+            "arg:0",
+            "arg:1",
+            "result:constraints"
+          ],
+          "decision": "",
+          "permission": "tool_call",
+          "target": "langgraph.prebuilt.tool_node.ToolNode._security_stack.permission"
+        },
+        {
+          "bindings": [
+            "arg:0",
+            "arg:1",
+            "result:constraints"
+          ],
+          "decision": "",
+          "permission": "tool_call",
+          "target": "langgraph.prebuilt.tool_node.ToolNode._security_stack.apermission"
+        }
+      ],
+      "operations": [
+        {
+          "bindings": [
+            "arg:0",
+            "arg:1",
+            "arg:2"
+          ],
+          "permission": "tool_call",
+          "target": "langgraph.prebuilt.security.guarded._GuardedExecutor.security.host_executor.invoke"
+        },
+        {
+          "bindings": [
+            "arg:0",
+            "arg:1",
+            "arg:2"
+          ],
+          "permission": "tool_call",
+          "target": "langgraph.prebuilt.security.guarded._GuardedExecutor.security.host_executor.ainvoke"
+        },
+        {
+          "bindings": [
+            "arg:0",
+            "arg:1",
+            "arg:2"
+          ],
+          "permission": "tool_call",
+          "target": "langgraph.prebuilt.tool_node.ToolNode._security_host_executor.invoke"
+        },
+        {
+          "bindings": [
+            "arg:0",
+            "arg:1",
+            "arg:2"
+          ],
+          "permission": "tool_call",
+          "target": "langgraph.prebuilt.tool_node.ToolNode._security_host_executor.ainvoke"
+        }
+      ]
+    },
+    "unresolved_entries": [
+      {
+        "dispatch_obligations": 0,
+        "distinct_blockers": 10,
+        "entry": "langchain_core.tools.base.BaseTool.__init_subclass__",
+        "first_blocker": {
+          "call_path": [
+            "langchain_core.tools.base.BaseTool.__init_subclass__"
+          ],
+          "function": "langchain_core.tools.base.BaseTool.__init_subclass__",
+          "line": 450,
+          "reason": "super receiver has unresolved method resolution order"
+        },
+        "implementation": "langchain_core.tools.base.BaseTool.__init_subclass__",
+        "settled_exceptions": 1
+      },
+      {
+        "dispatch_obligations": 0,
+        "distinct_blockers": 8,
+        "entry": "langchain_core.tools.base.BaseTool.__init__",
+        "first_blocker": {
+          "call_path": [
+            "langchain_core.tools.base.BaseTool.__init__",
+            "langchain_core.utils.pydantic.is_basemodel_subclass"
+          ],
+          "function": "langchain_core.utils.pydantic.is_basemodel_subclass",
+          "line": 109,
+          "reason": "unresolved call target: inspect.isclass"
+        },
+        "implementation": "langchain_core.tools.base.BaseTool.__init__",
+        "settled_exceptions": 2
+      },
+      {
+        "dispatch_obligations": 0,
+        "distinct_blockers": 4,
+        "entry": "langchain_core.tools.base.BaseTool.is_single_input",
+        "first_blocker": {
+          "call_path": [
+            "langchain_core.tools.base.BaseTool.is_single_input"
+          ],
+          "function": "langchain_core.tools.base.BaseTool.is_single_input",
+          "line": 598,
+          "reason": "decorated function requires a model"
+        },
+        "implementation": "langchain_core.tools.base.BaseTool.is_single_input",
+        "settled_exceptions": 0
+      },
+      {
+        "dispatch_obligations": 0,
+        "distinct_blockers": 9,
+        "entry": "langchain_core.tools.base.BaseTool.args",
+        "first_blocker": {
+          "call_path": [
+            "langchain_core.tools.base.BaseTool.args"
+          ],
+          "function": "langchain_core.tools.base.BaseTool.args",
+          "line": 608,
+          "reason": "decorated function requires a model"
+        },
+        "implementation": "langchain_core.tools.base.BaseTool.args",
+        "settled_exceptions": 1
+      },
+      {
+        "dispatch_obligations": 0,
+        "distinct_blockers": 5,
+        "entry": "langchain_core.tools.base.BaseTool.__setattr__",
+        "first_blocker": {
+          "call_path": [
+            "langchain_core.tools.base.BaseTool.__setattr__"
+          ],
+          "function": "langchain_core.tools.base.BaseTool.__setattr__",
+          "line": 640,
+          "reason": "super receiver has unresolved method resolution order"
+        },
+        "implementation": "langchain_core.tools.base.BaseTool.__setattr__",
+        "settled_exceptions": 0
+      },
+      {
+        "dispatch_obligations": 0,
+        "distinct_blockers": 5,
+        "entry": "langchain_core.tools.base.BaseTool.model_copy",
+        "first_blocker": {
+          "call_path": [
+            "langchain_core.tools.base.BaseTool.model_copy"
+          ],
+          "function": "langchain_core.tools.base.BaseTool.model_copy",
+          "line": 655,
+          "reason": "super receiver has unresolved method resolution order"
+        },
+        "implementation": "langchain_core.tools.base.BaseTool.model_copy",
+        "settled_exceptions": 0
+      },
+      {
+        "dispatch_obligations": 0,
+        "distinct_blockers": 7,
+        "entry": "langchain_core.tools.base.BaseTool.__getstate__",
+        "first_blocker": {
+          "call_path": [
+            "langchain_core.tools.base.BaseTool.__getstate__"
+          ],
+          "function": "langchain_core.tools.base.BaseTool.__getstate__",
+          "line": 666,
+          "reason": "super receiver has unresolved method resolution order"
+        },
+        "implementation": "langchain_core.tools.base.BaseTool.__getstate__",
+        "settled_exceptions": 0
+      },
+      {
+        "dispatch_obligations": 0,
+        "distinct_blockers": 80,
+        "entry": "langchain_core.tools.base.BaseTool.tool_call_schema",
+        "first_blocker": {
+          "call_path": [
+            "langchain_core.tools.base.BaseTool.tool_call_schema"
+          ],
+          "function": "langchain_core.tools.base.BaseTool.tool_call_schema",
+          "line": 677,
+          "reason": "decorated function requires a model"
+        },
+        "implementation": "langchain_core.tools.base.BaseTool.tool_call_schema",
+        "settled_exceptions": 26
+      },
+      {
+        "dispatch_obligations": 0,
+        "distinct_blockers": 28,
+        "entry": "langchain_core.tools.base.BaseTool._injected_args_keys",
+        "first_blocker": {
+          "call_path": [
+            "langchain_core.tools.base.BaseTool._injected_args_keys"
+          ],
+          "function": "langchain_core.tools.base.BaseTool._injected_args_keys",
+          "line": 725,
+          "reason": "decorated function requires a model"
+        },
+        "implementation": "langchain_core.tools.base.BaseTool._injected_args_keys",
+        "settled_exceptions": 0
+      },
+      {
+        "dispatch_obligations": 0,
+        "distinct_blockers": 53,
+        "entry": "langchain_core.tools.base.BaseTool.get_input_schema",
+        "first_blocker": {
+          "call_path": [
+            "langchain_core.tools.base.BaseTool.get_input_schema"
+          ],
+          "function": "langchain_core.tools.base.BaseTool.get_input_schema",
+          "line": 752,
+          "reason": "super receiver has unresolved method resolution order"
+        },
+        "implementation": "langchain_core.tools.base.BaseTool.get_input_schema",
+        "settled_exceptions": 26
+      },
+      {
+        "dispatch_obligations": 0,
+        "distinct_blockers": 91,
+        "entry": "langchain_core.tools.base.BaseTool.invoke",
+        "first_blocker": {
+          "call_path": [
+            "langchain_core.tools.base.BaseTool.invoke",
+            "langchain_core.tools.base._prep_run_args",
+            "langchain_core.runnables.config.ensure_config"
+          ],
+          "function": "langchain_core.runnables.config.ensure_config",
+          "line": 277,
+          "reason": "unresolved call target: var_config.items"
+        },
+        "implementation": "langchain_core.tools.base.BaseTool.invoke",
+        "settled_exceptions": 1
+      },
+      {
+        "dispatch_obligations": 0,
+        "distinct_blockers": 92,
+        "entry": "langchain_core.tools.base.BaseTool.ainvoke",
+        "first_blocker": {
+          "call_path": [
+            "langchain_core.tools.base.BaseTool.ainvoke",
+            "langchain_core.tools.base._prep_run_args",
+            "langchain_core.runnables.config.ensure_config"
+          ],
+          "function": "langchain_core.runnables.config.ensure_config",
+          "line": 277,
+          "reason": "unresolved call target: var_config.items"
+        },
+        "implementation": "langchain_core.tools.base.BaseTool.ainvoke",
+        "settled_exceptions": 1
+      },
+      {
+        "dispatch_obligations": 0,
+        "distinct_blockers": 43,
+        "entry": "langchain_core.tools.base.BaseTool._parse_input",
+        "first_blocker": {
+          "call_path": [
+            "langchain_core.tools.base.BaseTool._parse_input"
+          ],
+          "function": "langchain_core.tools.base.BaseTool._parse_input",
+          "line": 806,
+          "reason": "unresolved global: next"
+        },
+        "implementation": "langchain_core.tools.base.BaseTool._parse_input",
+        "settled_exceptions": 3
+      },
+      {
+        "dispatch_obligations": 0,
+        "distinct_blockers": 1,
+        "entry": "langchain_core.tools.base.BaseTool._run",
+        "first_blocker": {
+          "call_path": [
+            "langchain_core.tools.base.BaseTool._run"
+          ],
+          "function": "langchain_core.tools.base.BaseTool._run",
+          "line": 909,
+          "reason": "decorated function requires a model"
+        },
+        "implementation": "langchain_core.tools.base.BaseTool._run",
+        "settled_exceptions": 0
+      },
+      {
+        "dispatch_obligations": 0,
+        "distinct_blockers": 12,
+        "entry": "langchain_core.tools.base.BaseTool._arun",
+        "first_blocker": {
+          "call_path": [
+            "langchain_core.tools.base.BaseTool._arun"
+          ],
+          "function": "langchain_core.tools.base.BaseTool._arun",
+          "line": 928,
+          "reason": "unresolved call target: signature"
+        },
+        "implementation": "langchain_core.tools.base.BaseTool._arun",
+        "settled_exceptions": 8
+      },
+      {
+        "dispatch_obligations": 0,
+        "distinct_blockers": 38,
+        "entry": "langchain_core.tools.base.BaseTool._filter_injected_args",
+        "first_blocker": {
+          "call_path": [
+            "langchain_core.tools.base.BaseTool._filter_injected_args"
+          ],
+          "function": "langchain_core.tools.base.BaseTool._filter_injected_args",
+          "line": 947,
+          "reason": "unresolved global: set"
+        },
+        "implementation": "langchain_core.tools.base.BaseTool._filter_injected_args",
+        "settled_exceptions": 0
+      },
+      {
+        "dispatch_obligations": 0,
+        "distinct_blockers": 45,
+        "entry": "langchain_core.tools.base.BaseTool._to_args_and_kwargs",
+        "first_blocker": {
+          "call_path": [
+            "langchain_core.tools.base.BaseTool._to_args_and_kwargs"
+          ],
+          "function": "langchain_core.tools.base.BaseTool._to_args_and_kwargs",
+          "line": 987,
+          "reason": "unresolved global: type"
+        },
+        "implementation": "langchain_core.tools.base.BaseTool._to_args_and_kwargs",
+        "settled_exceptions": 2
+      },
+      {
+        "dispatch_obligations": 0,
+        "distinct_blockers": 81,
+        "entry": "langchain_core.tools.base.BaseTool.run",
+        "first_blocker": {
+          "call_path": [
+            "langchain_core.tools.base.BaseTool.run"
+          ],
+          "function": "langchain_core.tools.base.BaseTool.run",
+          "line": 1050,
+          "reason": "builtin data operation requires an argument model"
+        },
+        "implementation": "langchain_core.tools.base.BaseTool.run",
+        "settled_exceptions": 0
+      },
+      {
+        "dispatch_obligations": 0,
+        "distinct_blockers": 82,
+        "entry": "langchain_core.tools.base.BaseTool.arun",
+        "first_blocker": {
+          "call_path": [
+            "langchain_core.tools.base.BaseTool.arun"
+          ],
+          "function": "langchain_core.tools.base.BaseTool.arun",
+          "line": 1178,
+          "reason": "builtin data operation requires an argument model"
+        },
+        "implementation": "langchain_core.tools.base.BaseTool.arun",
+        "settled_exceptions": 0
+      },
+      {
+        "dispatch_obligations": 0,
+        "distinct_blockers": 10,
+        "entry": "langchain_core.tools.simple.Tool.__init_subclass__",
+        "first_blocker": {
+          "call_path": [
+            "langchain_core.tools.base.BaseTool.__init_subclass__"
+          ],
+          "function": "langchain_core.tools.base.BaseTool.__init_subclass__",
+          "line": 450,
+          "reason": "super receiver has unresolved method resolution order"
+        },
+        "implementation": "langchain_core.tools.base.BaseTool.__init_subclass__",
+        "settled_exceptions": 1
+      },
+      {
+        "dispatch_obligations": 0,
+        "distinct_blockers": 3,
+        "entry": "langchain_core.tools.simple.Tool.__init__",
+        "first_blocker": {
+          "call_path": [
+            "langchain_core.tools.simple.Tool.__init__"
+          ],
+          "function": "langchain_core.tools.simple.Tool.__init__",
+          "line": 166,
+          "reason": "super receiver has unresolved method resolution order"
+        },
+        "implementation": "langchain_core.tools.simple.Tool.__init__",
+        "settled_exceptions": 0
+      },
+      {
+        "dispatch_obligations": 0,
+        "distinct_blockers": 4,
+        "entry": "langchain_core.tools.simple.Tool.is_single_input",
+        "first_blocker": {
+          "call_path": [
+            "langchain_core.tools.base.BaseTool.is_single_input"
+          ],
+          "function": "langchain_core.tools.base.BaseTool.is_single_input",
+          "line": 598,
+          "reason": "decorated function requires a model"
+        },
+        "implementation": "langchain_core.tools.base.BaseTool.is_single_input",
+        "settled_exceptions": 0
+      },
+      {
+        "dispatch_obligations": 0,
+        "distinct_blockers": 2,
+        "entry": "langchain_core.tools.simple.Tool.args",
+        "first_blocker": {
+          "call_path": [
+            "langchain_core.tools.simple.Tool.args"
+          ],
+          "function": "langchain_core.tools.simple.Tool.args",
+          "line": 60,
+          "reason": "decorated function requires a model"
+        },
+        "implementation": "langchain_core.tools.simple.Tool.args",
+        "settled_exceptions": 0
+      },
+      {
+        "dispatch_obligations": 0,
+        "distinct_blockers": 5,
+        "entry": "langchain_core.tools.simple.Tool.__setattr__",
+        "first_blocker": {
+          "call_path": [
+            "langchain_core.tools.base.BaseTool.__setattr__"
+          ],
+          "function": "langchain_core.tools.base.BaseTool.__setattr__",
+          "line": 640,
+          "reason": "super receiver has unresolved method resolution order"
+        },
+        "implementation": "langchain_core.tools.base.BaseTool.__setattr__",
+        "settled_exceptions": 0
+      },
+      {
+        "dispatch_obligations": 0,
+        "distinct_blockers": 5,
+        "entry": "langchain_core.tools.simple.Tool.model_copy",
+        "first_blocker": {
+          "call_path": [
+            "langchain_core.tools.base.BaseTool.model_copy"
+          ],
+          "function": "langchain_core.tools.base.BaseTool.model_copy",
+          "line": 655,
+          "reason": "super receiver has unresolved method resolution order"
+        },
+        "implementation": "langchain_core.tools.base.BaseTool.model_copy",
+        "settled_exceptions": 0
+      },
+      {
+        "dispatch_obligations": 0,
+        "distinct_blockers": 7,
+        "entry": "langchain_core.tools.simple.Tool.__getstate__",
+        "first_blocker": {
+          "call_path": [
+            "langchain_core.tools.base.BaseTool.__getstate__"
+          ],
+          "function": "langchain_core.tools.base.BaseTool.__getstate__",
+          "line": 666,
+          "reason": "super receiver has unresolved method resolution order"
+        },
+        "implementation": "langchain_core.tools.base.BaseTool.__getstate__",
+        "settled_exceptions": 0
+      },
+      {
+        "dispatch_obligations": 0,
+        "distinct_blockers": 80,
+        "entry": "langchain_core.tools.simple.Tool.tool_call_schema",
+        "first_blocker": {
+          "call_path": [
+            "langchain_core.tools.base.BaseTool.tool_call_schema"
+          ],
+          "function": "langchain_core.tools.base.BaseTool.tool_call_schema",
+          "line": 677,
+          "reason": "decorated function requires a model"
+        },
+        "implementation": "langchain_core.tools.base.BaseTool.tool_call_schema",
+        "settled_exceptions": 26
+      },
+      {
+        "dispatch_obligations": 0,
+        "distinct_blockers": 28,
+        "entry": "langchain_core.tools.simple.Tool._injected_args_keys",
+        "first_blocker": {
+          "call_path": [
+            "langchain_core.tools.base.BaseTool._injected_args_keys"
+          ],
+          "function": "langchain_core.tools.base.BaseTool._injected_args_keys",
+          "line": 725,
+          "reason": "decorated function requires a model"
+        },
+        "implementation": "langchain_core.tools.base.BaseTool._injected_args_keys",
+        "settled_exceptions": 0
+      },
+      {
+        "dispatch_obligations": 0,
+        "distinct_blockers": 53,
+        "entry": "langchain_core.tools.simple.Tool.get_input_schema",
+        "first_blocker": {
+          "call_path": [
+            "langchain_core.tools.base.BaseTool.get_input_schema"
+          ],
+          "function": "langchain_core.tools.base.BaseTool.get_input_schema",
+          "line": 752,
+          "reason": "super receiver has unresolved method resolution order"
+        },
+        "implementation": "langchain_core.tools.base.BaseTool.get_input_schema",
+        "settled_exceptions": 26
+      },
+      {
+        "dispatch_obligations": 0,
+        "distinct_blockers": 91,
+        "entry": "langchain_core.tools.simple.Tool.invoke",
+        "first_blocker": {
+          "call_path": [
+            "langchain_core.tools.base.BaseTool.invoke",
+            "langchain_core.tools.base._prep_run_args",
+            "langchain_core.runnables.config.ensure_config"
+          ],
+          "function": "langchain_core.runnables.config.ensure_config",
+          "line": 277,
+          "reason": "unresolved call target: var_config.items"
+        },
+        "implementation": "langchain_core.tools.base.BaseTool.invoke",
+        "settled_exceptions": 1
+      },
+      {
+        "dispatch_obligations": 0,
+        "distinct_blockers": 13,
+        "entry": "langchain_core.tools.simple.Tool.ainvoke",
+        "first_blocker": {
+          "call_path": [
+            "langchain_core.tools.simple.Tool.ainvoke",
+            "langchain_core.runnables.config.run_in_executor"
+          ],
+          "function": "langchain_core.runnables.config.run_in_executor",
+          "line": 696,
+          "reason": "unsupported statement: FunctionDef"
+        },
+        "implementation": "langchain_core.tools.simple.Tool.ainvoke",
+        "settled_exceptions": 2
+      },
+      {
+        "dispatch_obligations": 0,
+        "distinct_blockers": 43,
+        "entry": "langchain_core.tools.simple.Tool._parse_input",
+        "first_blocker": {
+          "call_path": [
+            "langchain_core.tools.base.BaseTool._parse_input"
+          ],
+          "function": "langchain_core.tools.base.BaseTool._parse_input",
+          "line": 806,
+          "reason": "unresolved global: next"
+        },
+        "implementation": "langchain_core.tools.base.BaseTool._parse_input",
+        "settled_exceptions": 3
+      },
+      {
+        "dispatch_obligations": 0,
+        "distinct_blockers": 18,
+        "entry": "langchain_core.tools.simple.Tool._run",
+        "first_blocker": {
+          "call_path": [
+            "langchain_core.tools.simple.Tool._run"
+          ],
+          "function": "langchain_core.tools.simple.Tool._run",
+          "line": 118,
+          "reason": "unresolved call target: signature"
+        },
+        "implementation": "langchain_core.tools.simple.Tool._run",
+        "settled_exceptions": 13
+      },
+      {
+        "dispatch_obligations": 0,
+        "distinct_blockers": 22,
+        "entry": "langchain_core.tools.simple.Tool._arun",
+        "first_blocker": {
+          "call_path": [
+            "langchain_core.tools.simple.Tool._arun"
+          ],
+          "function": "langchain_core.tools.simple.Tool._arun",
+          "line": 145,
+          "reason": "unresolved call target: signature"
+        },
+        "implementation": "langchain_core.tools.simple.Tool._arun",
+        "settled_exceptions": 12
+      },
+      {
+        "dispatch_obligations": 0,
+        "distinct_blockers": 38,
+        "entry": "langchain_core.tools.simple.Tool._filter_injected_args",
+        "first_blocker": {
+          "call_path": [
+            "langchain_core.tools.base.BaseTool._filter_injected_args"
+          ],
+          "function": "langchain_core.tools.base.BaseTool._filter_injected_args",
+          "line": 947,
+          "reason": "unresolved global: set"
+        },
+        "implementation": "langchain_core.tools.base.BaseTool._filter_injected_args",
+        "settled_exceptions": 0
+      },
+      {
+        "dispatch_obligations": 0,
+        "distinct_blockers": 11,
+        "entry": "langchain_core.tools.simple.Tool._to_args_and_kwargs",
+        "first_blocker": {
+          "call_path": [
+            "langchain_core.tools.simple.Tool._to_args_and_kwargs"
+          ],
+          "function": "langchain_core.tools.simple.Tool._to_args_and_kwargs",
+          "line": 87,
+          "reason": "super receiver has unresolved method resolution order"
+        },
+        "implementation": "langchain_core.tools.simple.Tool._to_args_and_kwargs",
+        "settled_exceptions": 1
+      },
+      {
+        "dispatch_obligations": 0,
+        "distinct_blockers": 81,
+        "entry": "langchain_core.tools.simple.Tool.run",
+        "first_blocker": {
+          "call_path": [
+            "langchain_core.tools.base.BaseTool.run"
+          ],
+          "function": "langchain_core.tools.base.BaseTool.run",
+          "line": 1050,
+          "reason": "builtin data operation requires an argument model"
+        },
+        "implementation": "langchain_core.tools.base.BaseTool.run",
+        "settled_exceptions": 0
+      },
+      {
+        "dispatch_obligations": 0,
+        "distinct_blockers": 82,
+        "entry": "langchain_core.tools.simple.Tool.arun",
+        "first_blocker": {
+          "call_path": [
+            "langchain_core.tools.base.BaseTool.arun"
+          ],
+          "function": "langchain_core.tools.base.BaseTool.arun",
+          "line": 1178,
+          "reason": "builtin data operation requires an argument model"
+        },
+        "implementation": "langchain_core.tools.base.BaseTool.arun",
+        "settled_exceptions": 0
+      },
+      {
+        "dispatch_obligations": 0,
+        "distinct_blockers": 4,
+        "entry": "langchain_core.tools.simple.Tool.from_function",
+        "first_blocker": {
+          "call_path": [
+            "langchain_core.tools.simple.Tool.from_function"
+          ],
+          "function": "langchain_core.tools.simple.Tool.from_function",
+          "line": 200,
+          "reason": "open keyword expansion requires a source callable signature"
+        },
+        "implementation": "langchain_core.tools.simple.Tool.from_function",
+        "settled_exceptions": 1
+      },
+      {
+        "dispatch_obligations": 0,
+        "distinct_blockers": 10,
+        "entry": "langchain_core.tools.structured.StructuredTool.__init_subclass__",
+        "first_blocker": {
+          "call_path": [
+            "langchain_core.tools.base.BaseTool.__init_subclass__"
+          ],
+          "function": "langchain_core.tools.base.BaseTool.__init_subclass__",
+          "line": 450,
+          "reason": "super receiver has unresolved method resolution order"
+        },
+        "implementation": "langchain_core.tools.base.BaseTool.__init_subclass__",
+        "settled_exceptions": 1
+      },
+      {
+        "dispatch_obligations": 0,
+        "distinct_blockers": 8,
+        "entry": "langchain_core.tools.structured.StructuredTool.__init__",
+        "first_blocker": {
+          "call_path": [
+            "langchain_core.tools.base.BaseTool.__init__",
+            "langchain_core.utils.pydantic.is_basemodel_subclass"
+          ],
+          "function": "langchain_core.utils.pydantic.is_basemodel_subclass",
+          "line": 109,
+          "reason": "unresolved call target: inspect.isclass"
+        },
+        "implementation": "langchain_core.tools.base.BaseTool.__init__",
+        "settled_exceptions": 2
+      },
+      {
+        "dispatch_obligations": 0,
+        "distinct_blockers": 4,
+        "entry": "langchain_core.tools.structured.StructuredTool.is_single_input",
+        "first_blocker": {
+          "call_path": [
+            "langchain_core.tools.base.BaseTool.is_single_input"
+          ],
+          "function": "langchain_core.tools.base.BaseTool.is_single_input",
+          "line": 598,
+          "reason": "decorated function requires a model"
+        },
+        "implementation": "langchain_core.tools.base.BaseTool.is_single_input",
+        "settled_exceptions": 0
+      },
+      {
+        "dispatch_obligations": 0,
+        "distinct_blockers": 9,
+        "entry": "langchain_core.tools.structured.StructuredTool.args",
+        "first_blocker": {
+          "call_path": [
+            "langchain_core.tools.base.BaseTool.args"
+          ],
+          "function": "langchain_core.tools.base.BaseTool.args",
+          "line": 608,
+          "reason": "decorated function requires a model"
+        },
+        "implementation": "langchain_core.tools.base.BaseTool.args",
+        "settled_exceptions": 1
+      },
+      {
+        "dispatch_obligations": 0,
+        "distinct_blockers": 5,
+        "entry": "langchain_core.tools.structured.StructuredTool.__setattr__",
+        "first_blocker": {
+          "call_path": [
+            "langchain_core.tools.base.BaseTool.__setattr__"
+          ],
+          "function": "langchain_core.tools.base.BaseTool.__setattr__",
+          "line": 640,
+          "reason": "super receiver has unresolved method resolution order"
+        },
+        "implementation": "langchain_core.tools.base.BaseTool.__setattr__",
+        "settled_exceptions": 0
+      },
+      {
+        "dispatch_obligations": 0,
+        "distinct_blockers": 5,
+        "entry": "langchain_core.tools.structured.StructuredTool.model_copy",
+        "first_blocker": {
+          "call_path": [
+            "langchain_core.tools.base.BaseTool.model_copy"
+          ],
+          "function": "langchain_core.tools.base.BaseTool.model_copy",
+          "line": 655,
+          "reason": "super receiver has unresolved method resolution order"
+        },
+        "implementation": "langchain_core.tools.base.BaseTool.model_copy",
+        "settled_exceptions": 0
+      },
+      {
+        "dispatch_obligations": 0,
+        "distinct_blockers": 7,
+        "entry": "langchain_core.tools.structured.StructuredTool.__getstate__",
+        "first_blocker": {
+          "call_path": [
+            "langchain_core.tools.base.BaseTool.__getstate__"
+          ],
+          "function": "langchain_core.tools.base.BaseTool.__getstate__",
+          "line": 666,
+          "reason": "super receiver has unresolved method resolution order"
+        },
+        "implementation": "langchain_core.tools.base.BaseTool.__getstate__",
+        "settled_exceptions": 0
+      },
+      {
+        "dispatch_obligations": 0,
+        "distinct_blockers": 80,
+        "entry": "langchain_core.tools.structured.StructuredTool.tool_call_schema",
+        "first_blocker": {
+          "call_path": [
+            "langchain_core.tools.base.BaseTool.tool_call_schema"
+          ],
+          "function": "langchain_core.tools.base.BaseTool.tool_call_schema",
+          "line": 677,
+          "reason": "decorated function requires a model"
+        },
+        "implementation": "langchain_core.tools.base.BaseTool.tool_call_schema",
+        "settled_exceptions": 26
+      },
+      {
+        "dispatch_obligations": 0,
+        "distinct_blockers": 28,
+        "entry": "langchain_core.tools.structured.StructuredTool._injected_args_keys",
+        "first_blocker": {
+          "call_path": [
+            "langchain_core.tools.structured.StructuredTool._injected_args_keys"
+          ],
+          "function": "langchain_core.tools.structured.StructuredTool._injected_args_keys",
+          "line": 310,
+          "reason": "decorated function requires a model"
+        },
+        "implementation": "langchain_core.tools.structured.StructuredTool._injected_args_keys",
+        "settled_exceptions": 0
+      },
+      {
+        "dispatch_obligations": 0,
+        "distinct_blockers": 53,
+        "entry": "langchain_core.tools.structured.StructuredTool.get_input_schema",
+        "first_blocker": {
+          "call_path": [
+            "langchain_core.tools.base.BaseTool.get_input_schema"
+          ],
+          "function": "langchain_core.tools.base.BaseTool.get_input_schema",
+          "line": 752,
+          "reason": "super receiver has unresolved method resolution order"
+        },
+        "implementation": "langchain_core.tools.base.BaseTool.get_input_schema",
+        "settled_exceptions": 26
+      },
+      {
+        "dispatch_obligations": 0,
+        "distinct_blockers": 91,
+        "entry": "langchain_core.tools.structured.StructuredTool.invoke",
+        "first_blocker": {
+          "call_path": [
+            "langchain_core.tools.base.BaseTool.invoke",
+            "langchain_core.tools.base._prep_run_args",
+            "langchain_core.runnables.config.ensure_config"
+          ],
+          "function": "langchain_core.runnables.config.ensure_config",
+          "line": 277,
+          "reason": "unresolved call target: var_config.items"
+        },
+        "implementation": "langchain_core.tools.base.BaseTool.invoke",
+        "settled_exceptions": 1
+      },
+      {
+        "dispatch_obligations": 0,
+        "distinct_blockers": 13,
+        "entry": "langchain_core.tools.structured.StructuredTool.ainvoke",
+        "first_blocker": {
+          "call_path": [
+            "langchain_core.tools.structured.StructuredTool.ainvoke",
+            "langchain_core.runnables.config.run_in_executor"
+          ],
+          "function": "langchain_core.runnables.config.run_in_executor",
+          "line": 696,
+          "reason": "unsupported statement: FunctionDef"
+        },
+        "implementation": "langchain_core.tools.structured.StructuredTool.ainvoke",
+        "settled_exceptions": 2
+      },
+      {
+        "dispatch_obligations": 0,
+        "distinct_blockers": 43,
+        "entry": "langchain_core.tools.structured.StructuredTool._parse_input",
+        "first_blocker": {
+          "call_path": [
+            "langchain_core.tools.base.BaseTool._parse_input"
+          ],
+          "function": "langchain_core.tools.base.BaseTool._parse_input",
+          "line": 806,
+          "reason": "unresolved global: next"
+        },
+        "implementation": "langchain_core.tools.base.BaseTool._parse_input",
+        "settled_exceptions": 3
+      },
+      {
+        "dispatch_obligations": 0,
+        "distinct_blockers": 18,
+        "entry": "langchain_core.tools.structured.StructuredTool._run",
+        "first_blocker": {
+          "call_path": [
+            "langchain_core.tools.structured.StructuredTool._run"
+          ],
+          "function": "langchain_core.tools.structured.StructuredTool._run",
+          "line": 148,
+          "reason": "unresolved call target: signature"
+        },
+        "implementation": "langchain_core.tools.structured.StructuredTool._run",
+        "settled_exceptions": 13
+      },
+      {
+        "dispatch_obligations": 0,
+        "distinct_blockers": 22,
+        "entry": "langchain_core.tools.structured.StructuredTool._arun",
+        "first_blocker": {
+          "call_path": [
+            "langchain_core.tools.structured.StructuredTool._arun"
+          ],
+          "function": "langchain_core.tools.structured.StructuredTool._arun",
+          "line": 175,
+          "reason": "unresolved call target: signature"
+        },
+        "implementation": "langchain_core.tools.structured.StructuredTool._arun",
+        "settled_exceptions": 12
+      },
+      {
+        "dispatch_obligations": 0,
+        "distinct_blockers": 38,
+        "entry": "langchain_core.tools.structured.StructuredTool._filter_injected_args",
+        "first_blocker": {
+          "call_path": [
+            "langchain_core.tools.base.BaseTool._filter_injected_args"
+          ],
+          "function": "langchain_core.tools.base.BaseTool._filter_injected_args",
+          "line": 947,
+          "reason": "unresolved global: set"
+        },
+        "implementation": "langchain_core.tools.base.BaseTool._filter_injected_args",
+        "settled_exceptions": 0
+      },
+      {
+        "dispatch_obligations": 0,
+        "distinct_blockers": 45,
+        "entry": "langchain_core.tools.structured.StructuredTool._to_args_and_kwargs",
+        "first_blocker": {
+          "call_path": [
+            "langchain_core.tools.base.BaseTool._to_args_and_kwargs"
+          ],
+          "function": "langchain_core.tools.base.BaseTool._to_args_and_kwargs",
+          "line": 987,
+          "reason": "unresolved global: type"
+        },
+        "implementation": "langchain_core.tools.base.BaseTool._to_args_and_kwargs",
+        "settled_exceptions": 2
+      },
+      {
+        "dispatch_obligations": 0,
+        "distinct_blockers": 81,
+        "entry": "langchain_core.tools.structured.StructuredTool.run",
+        "first_blocker": {
+          "call_path": [
+            "langchain_core.tools.base.BaseTool.run"
+          ],
+          "function": "langchain_core.tools.base.BaseTool.run",
+          "line": 1050,
+          "reason": "builtin data operation requires an argument model"
+        },
+        "implementation": "langchain_core.tools.base.BaseTool.run",
+        "settled_exceptions": 0
+      },
+      {
+        "dispatch_obligations": 0,
+        "distinct_blockers": 82,
+        "entry": "langchain_core.tools.structured.StructuredTool.arun",
+        "first_blocker": {
+          "call_path": [
+            "langchain_core.tools.base.BaseTool.arun"
+          ],
+          "function": "langchain_core.tools.base.BaseTool.arun",
+          "line": 1178,
+          "reason": "builtin data operation requires an argument model"
+        },
+        "implementation": "langchain_core.tools.base.BaseTool.arun",
+        "settled_exceptions": 0
+      },
+      {
+        "dispatch_obligations": 0,
+        "distinct_blockers": 80,
+        "entry": "langchain_core.tools.structured.StructuredTool.from_function",
+        "first_blocker": {
+          "call_path": [
+            "langchain_core.tools.structured.StructuredTool.from_function",
+            "langchain_core.tools.structured._filter_schema_args"
+          ],
+          "function": "langchain_core.tools.structured._filter_schema_args",
+          "line": 318,
+          "reason": "collection conversion requires a known inert iterable"
+        },
+        "implementation": "langchain_core.tools.structured.StructuredTool.from_function",
+        "settled_exceptions": 353
+      },
+      {
+        "dispatch_obligations": 0,
+        "distinct_blockers": 62,
+        "entry": "langgraph.prebuilt.security.guarded._GuardedExecutor.__init__",
+        "first_blocker": {
+          "call_path": [
+            "langgraph.prebuilt.security.guarded._GuardedExecutor.__init__",
+            "langgraph.prebuilt.security.descriptor.security_for_tool",
+            "langgraph.prebuilt.security.descriptor._tool_declarations"
+          ],
+          "function": "langgraph.prebuilt.security.descriptor._tool_declarations",
+          "line": 418,
+          "reason": "unresolved global: getattr"
+        },
+        "implementation": "langgraph.prebuilt.security.guarded._GuardedExecutor.__init__",
+        "settled_exceptions": 322
+      },
+      {
+        "dispatch_obligations": 0,
+        "distinct_blockers": 119,
+        "entry": "langgraph.prebuilt.security.guarded._GuardedExecutor.invoke",
+        "first_blocker": {
+          "call_path": [
+            "langgraph.prebuilt.security.guarded._GuardedExecutor.invoke",
+            "langgraph.prebuilt.security.guarded._GuardedExecutor._prepare",
+            "langgraph.prebuilt.security.binding.principal_from"
+          ],
+          "function": "langgraph.prebuilt.security.binding.principal_from",
+          "line": 119,
+          "reason": "unresolved call target: config.get"
+        },
+        "implementation": "langgraph.prebuilt.security.guarded._GuardedExecutor.invoke",
+        "settled_exceptions": 345
+      },
+      {
+        "dispatch_obligations": 0,
+        "distinct_blockers": 119,
+        "entry": "langgraph.prebuilt.security.guarded._GuardedExecutor.ainvoke",
+        "first_blocker": {
+          "call_path": [
+            "langgraph.prebuilt.security.guarded._GuardedExecutor.ainvoke",
+            "langgraph.prebuilt.security.guarded._GuardedExecutor._prepare",
+            "langgraph.prebuilt.security.binding.principal_from"
+          ],
+          "function": "langgraph.prebuilt.security.binding.principal_from",
+          "line": 119,
+          "reason": "unresolved call target: config.get"
+        },
+        "implementation": "langgraph.prebuilt.security.guarded._GuardedExecutor.ainvoke",
+        "settled_exceptions": 345
+      },
+      {
+        "dispatch_obligations": 0,
+        "distinct_blockers": 9,
+        "entry": "langgraph.prebuilt.security.guarded._GuardedExecutor._invoke_in_process",
+        "first_blocker": {
+          "call_path": [
+            "langgraph.prebuilt.security.guarded._GuardedExecutor._invoke_in_process"
+          ],
+          "function": "langgraph.prebuilt.security.guarded._GuardedExecutor._invoke_in_process",
+          "line": 307,
+          "reason": "constructor arguments require a source initializer"
+        },
+        "implementation": "langgraph.prebuilt.security.guarded._GuardedExecutor._invoke_in_process",
+        "settled_exceptions": 4
+      },
+      {
+        "dispatch_obligations": 0,
+        "distinct_blockers": 9,
+        "entry": "langgraph.prebuilt.security.guarded._GuardedExecutor._ainvoke_in_process",
+        "first_blocker": {
+          "call_path": [
+            "langgraph.prebuilt.security.guarded._GuardedExecutor._ainvoke_in_process"
+          ],
+          "function": "langgraph.prebuilt.security.guarded._GuardedExecutor._ainvoke_in_process",
+          "line": 319,
+          "reason": "constructor arguments require a source initializer"
+        },
+        "implementation": "langgraph.prebuilt.security.guarded._GuardedExecutor._ainvoke_in_process",
+        "settled_exceptions": 4
+      },
+      {
+        "dispatch_obligations": 0,
+        "distinct_blockers": 34,
+        "entry": "langgraph.prebuilt.security.guarded._GuardedExecutor._prepare",
+        "first_blocker": {
+          "call_path": [
+            "langgraph.prebuilt.security.guarded._GuardedExecutor._prepare",
+            "langgraph.prebuilt.security.binding.principal_from"
+          ],
+          "function": "langgraph.prebuilt.security.binding.principal_from",
+          "line": 119,
+          "reason": "unresolved call target: config.get"
+        },
+        "implementation": "langgraph.prebuilt.security.guarded._GuardedExecutor._prepare",
+        "settled_exceptions": 57
+      },
+      {
+        "dispatch_obligations": 0,
+        "distinct_blockers": 10,
+        "entry": "langgraph.prebuilt.security.guarded._GuardedExecutor._acquire_flow",
+        "first_blocker": {
+          "call_path": [
+            "langgraph.prebuilt.security.guarded._GuardedExecutor._acquire_flow"
+          ],
+          "function": "langgraph.prebuilt.security.guarded._GuardedExecutor._acquire_flow",
+          "line": 358,
+          "reason": "unresolved call target: policy.acquire"
+        },
+        "implementation": "langgraph.prebuilt.security.guarded._GuardedExecutor._acquire_flow",
+        "settled_exceptions": 5
+      },
+      {
+        "dispatch_obligations": 0,
+        "distinct_blockers": 1,
+        "entry": "langgraph.prebuilt.security.guarded._GuardedExecutor._release_flow",
+        "first_blocker": {
+          "call_path": [
+            "langgraph.prebuilt.security.guarded._GuardedExecutor._release_flow"
+          ],
+          "function": "langgraph.prebuilt.security.guarded._GuardedExecutor._release_flow",
+          "line": 373,
+          "reason": "unresolved call target: policy.release"
+        },
+        "implementation": "langgraph.prebuilt.security.guarded._GuardedExecutor._release_flow",
+        "settled_exceptions": 0
+      },
+      {
+        "dispatch_obligations": 0,
+        "distinct_blockers": 6,
+        "entry": "langgraph.prebuilt.security.guarded._GuardedExecutor._finalize_flow",
+        "first_blocker": {
+          "call_path": [
+            "langgraph.prebuilt.security.guarded._GuardedExecutor._finalize_flow"
+          ],
+          "function": "langgraph.prebuilt.security.guarded._GuardedExecutor._finalize_flow",
+          "line": 386,
+          "reason": "unresolved call target: policy.release"
+        },
+        "implementation": "langgraph.prebuilt.security.guarded._GuardedExecutor._finalize_flow",
+        "settled_exceptions": 3
+      },
+      {
+        "dispatch_obligations": 0,
+        "distinct_blockers": 50,
+        "entry": "langgraph.prebuilt.security.guarded._GuardedExecutor._resume",
+        "first_blocker": {
+          "call_path": [
+            "langgraph.prebuilt.security.guarded._GuardedExecutor._resume"
+          ],
+          "function": "langgraph.prebuilt.security.guarded._GuardedExecutor._resume",
+          "line": 405,
+          "reason": "unresolved call target: escalation.to_payload"
+        },
+        "implementation": "langgraph.prebuilt.security.guarded._GuardedExecutor._resume",
+        "settled_exceptions": 32
+      },
+      {
+        "dispatch_obligations": 0,
+        "distinct_blockers": 50,
+        "entry": "langgraph.prebuilt.security.guarded._GuardedExecutor._aresume",
+        "first_blocker": {
+          "call_path": [
+            "langgraph.prebuilt.security.guarded._GuardedExecutor._aresume"
+          ],
+          "function": "langgraph.prebuilt.security.guarded._GuardedExecutor._aresume",
+          "line": 420,
+          "reason": "unresolved call target: escalation.to_payload"
+        },
+        "implementation": "langgraph.prebuilt.security.guarded._GuardedExecutor._aresume",
+        "settled_exceptions": 32
+      },
+      {
+        "dispatch_obligations": 0,
+        "distinct_blockers": 10,
+        "entry": "langgraph.prebuilt.security.guarded._GuardedStructuredTool.__init_subclass__",
+        "first_blocker": {
+          "call_path": [
+            "langchain_core.tools.base.BaseTool.__init_subclass__"
+          ],
+          "function": "langchain_core.tools.base.BaseTool.__init_subclass__",
+          "line": 450,
+          "reason": "super receiver has unresolved method resolution order"
+        },
+        "implementation": "langchain_core.tools.base.BaseTool.__init_subclass__",
+        "settled_exceptions": 1
+      },
+      {
+        "dispatch_obligations": 0,
+        "distinct_blockers": 8,
+        "entry": "langgraph.prebuilt.security.guarded._GuardedStructuredTool.__init__",
+        "first_blocker": {
+          "call_path": [
+            "langchain_core.tools.base.BaseTool.__init__",
+            "langchain_core.utils.pydantic.is_basemodel_subclass"
+          ],
+          "function": "langchain_core.utils.pydantic.is_basemodel_subclass",
+          "line": 109,
+          "reason": "unresolved call target: inspect.isclass"
+        },
+        "implementation": "langchain_core.tools.base.BaseTool.__init__",
+        "settled_exceptions": 2
+      },
+      {
+        "dispatch_obligations": 0,
+        "distinct_blockers": 4,
+        "entry": "langgraph.prebuilt.security.guarded._GuardedStructuredTool.is_single_input",
+        "first_blocker": {
+          "call_path": [
+            "langchain_core.tools.base.BaseTool.is_single_input"
+          ],
+          "function": "langchain_core.tools.base.BaseTool.is_single_input",
+          "line": 598,
+          "reason": "decorated function requires a model"
+        },
+        "implementation": "langchain_core.tools.base.BaseTool.is_single_input",
+        "settled_exceptions": 0
+      },
+      {
+        "dispatch_obligations": 0,
+        "distinct_blockers": 9,
+        "entry": "langgraph.prebuilt.security.guarded._GuardedStructuredTool.args",
+        "first_blocker": {
+          "call_path": [
+            "langchain_core.tools.base.BaseTool.args"
+          ],
+          "function": "langchain_core.tools.base.BaseTool.args",
+          "line": 608,
+          "reason": "decorated function requires a model"
+        },
+        "implementation": "langchain_core.tools.base.BaseTool.args",
+        "settled_exceptions": 1
+      },
+      {
+        "dispatch_obligations": 0,
+        "distinct_blockers": 5,
+        "entry": "langgraph.prebuilt.security.guarded._GuardedStructuredTool.__setattr__",
+        "first_blocker": {
+          "call_path": [
+            "langchain_core.tools.base.BaseTool.__setattr__"
+          ],
+          "function": "langchain_core.tools.base.BaseTool.__setattr__",
+          "line": 640,
+          "reason": "super receiver has unresolved method resolution order"
+        },
+        "implementation": "langchain_core.tools.base.BaseTool.__setattr__",
+        "settled_exceptions": 0
+      },
+      {
+        "dispatch_obligations": 0,
+        "distinct_blockers": 5,
+        "entry": "langgraph.prebuilt.security.guarded._GuardedStructuredTool.model_copy",
+        "first_blocker": {
+          "call_path": [
+            "langchain_core.tools.base.BaseTool.model_copy"
+          ],
+          "function": "langchain_core.tools.base.BaseTool.model_copy",
+          "line": 655,
+          "reason": "super receiver has unresolved method resolution order"
+        },
+        "implementation": "langchain_core.tools.base.BaseTool.model_copy",
+        "settled_exceptions": 0
+      },
+      {
+        "dispatch_obligations": 0,
+        "distinct_blockers": 7,
+        "entry": "langgraph.prebuilt.security.guarded._GuardedStructuredTool.__getstate__",
+        "first_blocker": {
+          "call_path": [
+            "langchain_core.tools.base.BaseTool.__getstate__"
+          ],
+          "function": "langchain_core.tools.base.BaseTool.__getstate__",
+          "line": 666,
+          "reason": "super receiver has unresolved method resolution order"
+        },
+        "implementation": "langchain_core.tools.base.BaseTool.__getstate__",
+        "settled_exceptions": 0
+      },
+      {
+        "dispatch_obligations": 0,
+        "distinct_blockers": 80,
+        "entry": "langgraph.prebuilt.security.guarded._GuardedStructuredTool.tool_call_schema",
+        "first_blocker": {
+          "call_path": [
+            "langchain_core.tools.base.BaseTool.tool_call_schema"
+          ],
+          "function": "langchain_core.tools.base.BaseTool.tool_call_schema",
+          "line": 677,
+          "reason": "decorated function requires a model"
+        },
+        "implementation": "langchain_core.tools.base.BaseTool.tool_call_schema",
+        "settled_exceptions": 26
+      },
+      {
+        "dispatch_obligations": 0,
+        "distinct_blockers": 28,
+        "entry": "langgraph.prebuilt.security.guarded._GuardedStructuredTool._injected_args_keys",
+        "first_blocker": {
+          "call_path": [
+            "langchain_core.tools.structured.StructuredTool._injected_args_keys"
+          ],
+          "function": "langchain_core.tools.structured.StructuredTool._injected_args_keys",
+          "line": 310,
+          "reason": "decorated function requires a model"
+        },
+        "implementation": "langchain_core.tools.structured.StructuredTool._injected_args_keys",
+        "settled_exceptions": 0
+      },
+      {
+        "dispatch_obligations": 0,
+        "distinct_blockers": 53,
+        "entry": "langgraph.prebuilt.security.guarded._GuardedStructuredTool.get_input_schema",
+        "first_blocker": {
+          "call_path": [
+            "langchain_core.tools.base.BaseTool.get_input_schema"
+          ],
+          "function": "langchain_core.tools.base.BaseTool.get_input_schema",
+          "line": 752,
+          "reason": "super receiver has unresolved method resolution order"
+        },
+        "implementation": "langchain_core.tools.base.BaseTool.get_input_schema",
+        "settled_exceptions": 26
+      },
+      {
+        "dispatch_obligations": 0,
+        "distinct_blockers": 91,
+        "entry": "langgraph.prebuilt.security.guarded._GuardedStructuredTool.invoke",
+        "first_blocker": {
+          "call_path": [
+            "langchain_core.tools.base.BaseTool.invoke",
+            "langchain_core.tools.base._prep_run_args",
+            "langchain_core.runnables.config.ensure_config"
+          ],
+          "function": "langchain_core.runnables.config.ensure_config",
+          "line": 277,
+          "reason": "unresolved call target: var_config.items"
+        },
+        "implementation": "langchain_core.tools.base.BaseTool.invoke",
+        "settled_exceptions": 1
+      },
+      {
+        "dispatch_obligations": 0,
+        "distinct_blockers": 13,
+        "entry": "langgraph.prebuilt.security.guarded._GuardedStructuredTool.ainvoke",
+        "first_blocker": {
+          "call_path": [
+            "langchain_core.tools.structured.StructuredTool.ainvoke",
+            "langchain_core.runnables.config.run_in_executor"
+          ],
+          "function": "langchain_core.runnables.config.run_in_executor",
+          "line": 696,
+          "reason": "unsupported statement: FunctionDef"
+        },
+        "implementation": "langchain_core.tools.structured.StructuredTool.ainvoke",
+        "settled_exceptions": 2
+      },
+      {
+        "dispatch_obligations": 0,
+        "distinct_blockers": 43,
+        "entry": "langgraph.prebuilt.security.guarded._GuardedStructuredTool._parse_input",
+        "first_blocker": {
+          "call_path": [
+            "langchain_core.tools.base.BaseTool._parse_input"
+          ],
+          "function": "langchain_core.tools.base.BaseTool._parse_input",
+          "line": 806,
+          "reason": "unresolved global: next"
+        },
+        "implementation": "langchain_core.tools.base.BaseTool._parse_input",
+        "settled_exceptions": 3
+      },
+      {
+        "dispatch_obligations": 0,
+        "distinct_blockers": 18,
+        "entry": "langgraph.prebuilt.security.guarded._GuardedStructuredTool._run",
+        "first_blocker": {
+          "call_path": [
+            "langchain_core.tools.structured.StructuredTool._run"
+          ],
+          "function": "langchain_core.tools.structured.StructuredTool._run",
+          "line": 148,
+          "reason": "unresolved call target: signature"
+        },
+        "implementation": "langchain_core.tools.structured.StructuredTool._run",
+        "settled_exceptions": 13
+      },
+      {
+        "dispatch_obligations": 0,
+        "distinct_blockers": 22,
+        "entry": "langgraph.prebuilt.security.guarded._GuardedStructuredTool._arun",
+        "first_blocker": {
+          "call_path": [
+            "langchain_core.tools.structured.StructuredTool._arun"
+          ],
+          "function": "langchain_core.tools.structured.StructuredTool._arun",
+          "line": 175,
+          "reason": "unresolved call target: signature"
+        },
+        "implementation": "langchain_core.tools.structured.StructuredTool._arun",
+        "settled_exceptions": 12
+      },
+      {
+        "dispatch_obligations": 0,
+        "distinct_blockers": 38,
+        "entry": "langgraph.prebuilt.security.guarded._GuardedStructuredTool._filter_injected_args",
+        "first_blocker": {
+          "call_path": [
+            "langchain_core.tools.base.BaseTool._filter_injected_args"
+          ],
+          "function": "langchain_core.tools.base.BaseTool._filter_injected_args",
+          "line": 947,
+          "reason": "unresolved global: set"
+        },
+        "implementation": "langchain_core.tools.base.BaseTool._filter_injected_args",
+        "settled_exceptions": 0
+      },
+      {
+        "dispatch_obligations": 0,
+        "distinct_blockers": 45,
+        "entry": "langgraph.prebuilt.security.guarded._GuardedStructuredTool._to_args_and_kwargs",
+        "first_blocker": {
+          "call_path": [
+            "langchain_core.tools.base.BaseTool._to_args_and_kwargs"
+          ],
+          "function": "langchain_core.tools.base.BaseTool._to_args_and_kwargs",
+          "line": 987,
+          "reason": "unresolved global: type"
+        },
+        "implementation": "langchain_core.tools.base.BaseTool._to_args_and_kwargs",
+        "settled_exceptions": 2
+      },
+      {
+        "dispatch_obligations": 0,
+        "distinct_blockers": 81,
+        "entry": "langgraph.prebuilt.security.guarded._GuardedStructuredTool.run",
+        "first_blocker": {
+          "call_path": [
+            "langchain_core.tools.base.BaseTool.run"
+          ],
+          "function": "langchain_core.tools.base.BaseTool.run",
+          "line": 1050,
+          "reason": "builtin data operation requires an argument model"
+        },
+        "implementation": "langchain_core.tools.base.BaseTool.run",
+        "settled_exceptions": 0
+      },
+      {
+        "dispatch_obligations": 0,
+        "distinct_blockers": 82,
+        "entry": "langgraph.prebuilt.security.guarded._GuardedStructuredTool.arun",
+        "first_blocker": {
+          "call_path": [
+            "langchain_core.tools.base.BaseTool.arun"
+          ],
+          "function": "langchain_core.tools.base.BaseTool.arun",
+          "line": 1178,
+          "reason": "builtin data operation requires an argument model"
+        },
+        "implementation": "langchain_core.tools.base.BaseTool.arun",
+        "settled_exceptions": 0
+      },
+      {
+        "dispatch_obligations": 0,
+        "distinct_blockers": 80,
+        "entry": "langgraph.prebuilt.security.guarded._GuardedStructuredTool.from_function",
+        "first_blocker": {
+          "call_path": [
+            "langchain_core.tools.structured.StructuredTool.from_function",
+            "langchain_core.tools.structured._filter_schema_args"
+          ],
+          "function": "langchain_core.tools.structured._filter_schema_args",
+          "line": 318,
+          "reason": "collection conversion requires a known inert iterable"
+        },
+        "implementation": "langchain_core.tools.structured.StructuredTool.from_function",
+        "settled_exceptions": 353
+      },
+      {
+        "dispatch_obligations": 0,
+        "distinct_blockers": 11,
+        "entry": "langgraph.prebuilt.security.guarded._GuardedStructuredTool.as_tool",
+        "first_blocker": {
+          "call_path": [
+            "langgraph.prebuilt.security.guarded._GuardedStructuredTool.as_tool"
+          ],
+          "function": "langgraph.prebuilt.security.guarded._GuardedStructuredTool.as_tool",
+          "line": 75,
+          "reason": "super receiver has unresolved method resolution order"
+        },
+        "implementation": "langgraph.prebuilt.security.guarded._GuardedStructuredTool.as_tool",
+        "settled_exceptions": 0
+      },
+      {
+        "dispatch_obligations": 0,
+        "distinct_blockers": 13,
+        "entry": "langgraph.prebuilt.tool_node.ToolNode.get_name",
+        "first_blocker": {
+          "call_path": [
+            "langchain_core.runnables.base.Runnable.get_name"
+          ],
+          "function": "langchain_core.runnables.base.Runnable.get_name",
+          "line": 282,
+          "reason": "unresolved global: hasattr"
+        },
+        "implementation": "langchain_core.runnables.base.Runnable.get_name",
+        "settled_exceptions": 0
+      },
+      {
+        "dispatch_obligations": 0,
+        "distinct_blockers": 14,
+        "entry": "langgraph.prebuilt.tool_node.ToolNode.InputType",
+        "first_blocker": {
+          "call_path": [
+            "langchain_core.runnables.base.Runnable.InputType"
+          ],
+          "function": "langchain_core.runnables.base.Runnable.InputType",
+          "line": 309,
+          "reason": "decorated function requires a model"
+        },
+        "implementation": "langchain_core.runnables.base.Runnable.InputType",
+        "settled_exceptions": 1
+      },
+      {
+        "dispatch_obligations": 0,
+        "distinct_blockers": 14,
+        "entry": "langgraph.prebuilt.tool_node.ToolNode.OutputType",
+        "first_blocker": {
+          "call_path": [
+            "langchain_core.runnables.base.Runnable.OutputType"
+          ],
+          "function": "langchain_core.runnables.base.Runnable.OutputType",
+          "line": 344,
+          "reason": "decorated function requires a model"
+        },
+        "implementation": "langchain_core.runnables.base.Runnable.OutputType",
+        "settled_exceptions": 1
+      },
+      {
+        "dispatch_obligations": 0,
+        "distinct_blockers": 63,
+        "entry": "langgraph.prebuilt.tool_node.ToolNode.input_schema",
+        "first_blocker": {
+          "call_path": [
+            "langchain_core.runnables.base.Runnable.input_schema"
+          ],
+          "function": "langchain_core.runnables.base.Runnable.input_schema",
+          "line": 375,
+          "reason": "decorated function requires a model"
+        },
+        "implementation": "langchain_core.runnables.base.Runnable.input_schema",
+        "settled_exceptions": 95
+      },
+      {
+        "dispatch_obligations": 0,
+        "distinct_blockers": 62,
+        "entry": "langgraph.prebuilt.tool_node.ToolNode.get_input_schema",
+        "first_blocker": {
+          "call_path": [
+            "langchain_core.runnables.base.Runnable.get_input_schema"
+          ],
+          "function": "langchain_core.runnables.base.Runnable.get_input_schema",
+          "line": 401,
+          "reason": "unresolved call target: inspect.isclass"
+        },
+        "implementation": "langchain_core.runnables.base.Runnable.get_input_schema",
+        "settled_exceptions": 95
+      },
+      {
+        "dispatch_obligations": 0,
+        "distinct_blockers": 69,
+        "entry": "langgraph.prebuilt.tool_node.ToolNode.get_input_jsonschema",
+        "first_blocker": {
+          "call_path": [
+            "langchain_core.runnables.base.Runnable.get_input_jsonschema",
+            "langchain_core.runnables.base.Runnable.get_input_schema"
+          ],
+          "function": "langchain_core.runnables.base.Runnable.get_input_schema",
+          "line": 401,
+          "reason": "unresolved call target: inspect.isclass"
+        },
+        "implementation": "langchain_core.runnables.base.Runnable.get_input_jsonschema",
+        "settled_exceptions": 345
+      },
+      {
+        "dispatch_obligations": 0,
+        "distinct_blockers": 63,
+        "entry": "langgraph.prebuilt.tool_node.ToolNode.output_schema",
+        "first_blocker": {
+          "call_path": [
+            "langchain_core.runnables.base.Runnable.output_schema"
+          ],
+          "function": "langchain_core.runnables.base.Runnable.output_schema",
+          "line": 451,
+          "reason": "decorated function requires a model"
+        },
+        "implementation": "langchain_core.runnables.base.Runnable.output_schema",
+        "settled_exceptions": 95
+      },
+      {
+        "dispatch_obligations": 0,
+        "distinct_blockers": 62,
+        "entry": "langgraph.prebuilt.tool_node.ToolNode.get_output_schema",
+        "first_blocker": {
+          "call_path": [
+            "langchain_core.runnables.base.Runnable.get_output_schema"
+          ],
+          "function": "langchain_core.runnables.base.Runnable.get_output_schema",
+          "line": 480,
+          "reason": "unresolved call target: inspect.isclass"
+        },
+        "implementation": "langchain_core.runnables.base.Runnable.get_output_schema",
+        "settled_exceptions": 95
+      },
+      {
+        "dispatch_obligations": 0,
+        "distinct_blockers": 69,
+        "entry": "langgraph.prebuilt.tool_node.ToolNode.get_output_jsonschema",
+        "first_blocker": {
+          "call_path": [
+            "langchain_core.runnables.base.Runnable.get_output_jsonschema",
+            "langchain_core.runnables.base.Runnable.get_output_schema"
+          ],
+          "function": "langchain_core.runnables.base.Runnable.get_output_schema",
+          "line": 480,
+          "reason": "unresolved call target: inspect.isclass"
+        },
+        "implementation": "langchain_core.runnables.base.Runnable.get_output_jsonschema",
+        "settled_exceptions": 345
+      },
+      {
+        "dispatch_obligations": 0,
+        "distinct_blockers": 1,
+        "entry": "langgraph.prebuilt.tool_node.ToolNode.config_specs",
+        "first_blocker": {
+          "call_path": [
+            "langchain_core.runnables.base.Runnable.config_specs"
+          ],
+          "function": "langchain_core.runnables.base.Runnable.config_specs",
+          "line": 530,
+          "reason": "decorated function requires a model"
+        },
+        "implementation": "langchain_core.runnables.base.Runnable.config_specs",
+        "settled_exceptions": 0
+      },
+      {
+        "dispatch_obligations": 0,
+        "distinct_blockers": 52,
+        "entry": "langgraph.prebuilt.tool_node.ToolNode.config_schema",
+        "first_blocker": {
+          "call_path": [
+            "langchain_core.runnables.base.Runnable.config_schema"
+          ],
+          "function": "langchain_core.runnables.base.Runnable.config_schema",
+          "line": 552,
+          "reason": "iteration requires a known tuple or mapping"
+        },
+        "implementation": "langchain_core.runnables.base.Runnable.config_schema",
+        "settled_exceptions": 96
+      },
+      {
+        "dispatch_obligations": 0,
+        "distinct_blockers": 53,
+        "entry": "langgraph.prebuilt.tool_node.ToolNode.get_config_jsonschema",
+        "first_blocker": {
+          "call_path": [
+            "langchain_core.runnables.base.Runnable.get_config_jsonschema",
+            "langchain_core.runnables.base.Runnable.config_schema"
+          ],
+          "function": "langchain_core.runnables.base.Runnable.config_schema",
+          "line": 552,
+          "reason": "iteration requires a known tuple or mapping"
+        },
+        "implementation": "langchain_core.runnables.base.Runnable.get_config_jsonschema",
+        "settled_exceptions": 96
+      },
+      {
+        "dispatch_obligations": 0,
+        "distinct_blockers": 77,
+        "entry": "langgraph.prebuilt.tool_node.ToolNode.get_graph",
+        "first_blocker": {
+          "call_path": [
+            "langchain_core.runnables.base.Runnable.get_graph"
+          ],
+          "function": "langchain_core.runnables.base.Runnable.get_graph",
+          "line": 596,
+          "reason": "unsupported statement: ImportFrom"
+        },
+        "implementation": "langchain_core.runnables.base.Runnable.get_graph",
+        "settled_exceptions": 101
+      },
+      {
+        "dispatch_obligations": 0,
+        "distinct_blockers": 79,
+        "entry": "langgraph.prebuilt.tool_node.ToolNode.get_prompts",
+        "first_blocker": {
+          "call_path": [
+            "langchain_core.runnables.base.Runnable.get_prompts"
+          ],
+          "function": "langchain_core.runnables.base.Runnable.get_prompts",
+          "line": 619,
+          "reason": "unsupported statement: ImportFrom"
+        },
+        "implementation": "langchain_core.runnables.base.Runnable.get_prompts",
+        "settled_exceptions": 101
+      },
+      {
+        "dispatch_obligations": 0,
+        "distinct_blockers": 32,
+        "entry": "langgraph.prebuilt.tool_node.ToolNode.__or__",
+        "first_blocker": {
+          "call_path": [
+            "langchain_core.runnables.base.Runnable.__or__",
+            "langchain_core.runnables.base.coerce_to_runnable"
+          ],
+          "function": "langchain_core.runnables.base.coerce_to_runnable",
+          "line": 6652,
+          "reason": "isinstance type has an unresolved metaclass or ancestry"
+        },
+        "implementation": "langchain_core.runnables.base.Runnable.__or__",
+        "settled_exceptions": 65
+      },
+      {
+        "dispatch_obligations": 0,
+        "distinct_blockers": 33,
+        "entry": "langgraph.prebuilt.tool_node.ToolNode.__ror__",
+        "first_blocker": {
+          "call_path": [
+            "langchain_core.runnables.base.Runnable.__ror__",
+            "langchain_core.runnables.base.coerce_to_runnable"
+          ],
+          "function": "langchain_core.runnables.base.coerce_to_runnable",
+          "line": 6652,
+          "reason": "isinstance type has an unresolved metaclass or ancestry"
+        },
+        "implementation": "langchain_core.runnables.base.Runnable.__ror__",
+        "settled_exceptions": 65
+      },
+      {
+        "dispatch_obligations": 0,
+        "distinct_blockers": 32,
+        "entry": "langgraph.prebuilt.tool_node.ToolNode.pipe",
+        "first_blocker": {
+          "call_path": [
+            "langchain_core.runnables.base.Runnable.pipe"
+          ],
+          "function": "langchain_core.runnables.base.Runnable.pipe",
+          "line": 771,
+          "reason": "argument expansion requires a known tuple"
+        },
+        "implementation": "langchain_core.runnables.base.Runnable.pipe",
+        "settled_exceptions": 7
+      },
+      {
+        "dispatch_obligations": 0,
+        "distinct_blockers": 3,
+        "entry": "langgraph.prebuilt.tool_node.ToolNode.pick",
+        "first_blocker": {
+          "call_path": [
+            "langchain_core.runnables.base.Runnable.pick"
+          ],
+          "function": "langchain_core.runnables.base.Runnable.pick",
+          "line": 832,
+          "reason": "unsupported statement: ImportFrom"
+        },
+        "implementation": "langchain_core.runnables.base.Runnable.pick",
+        "settled_exceptions": 0
+      },
+      {
+        "dispatch_obligations": 0,
+        "distinct_blockers": 3,
+        "entry": "langgraph.prebuilt.tool_node.ToolNode.assign",
+        "first_blocker": {
+          "call_path": [
+            "langchain_core.runnables.base.Runnable.assign"
+          ],
+          "function": "langchain_core.runnables.base.Runnable.assign",
+          "line": 879,
+          "reason": "unsupported statement: ImportFrom"
+        },
+        "implementation": "langchain_core.runnables.base.Runnable.assign",
+        "settled_exceptions": 0
+      },
+      {
+        "dispatch_obligations": 0,
+        "distinct_blockers": 102,
+        "entry": "langgraph.prebuilt.tool_node.ToolNode.invoke",
+        "first_blocker": {
+          "call_path": [
+            "langgraph._internal._runnable.RunnableCallable.invoke"
+          ],
+          "function": "langgraph._internal._runnable.RunnableCallable.invoke",
+          "line": 379,
+          "reason": "unsupported expression: JoinedStr"
+        },
+        "implementation": "langgraph._internal._runnable.RunnableCallable.invoke",
+        "settled_exceptions": 25
+      },
+      {
+        "dispatch_obligations": 0,
+        "distinct_blockers": 121,
+        "entry": "langgraph.prebuilt.tool_node.ToolNode.ainvoke",
+        "first_blocker": {
+          "call_path": [
+            "langgraph._internal._runnable.RunnableCallable.ainvoke",
+            "langgraph._internal._runnable.RunnableCallable.invoke"
+          ],
+          "function": "langgraph._internal._runnable.RunnableCallable.invoke",
+          "line": 379,
+          "reason": "unsupported expression: JoinedStr"
+        },
+        "implementation": "langgraph._internal._runnable.RunnableCallable.ainvoke",
+        "settled_exceptions": 25
+      },
+      {
+        "dispatch_obligations": 0,
+        "distinct_blockers": 38,
+        "entry": "langgraph.prebuilt.tool_node.ToolNode.batch",
+        "first_blocker": {
+          "call_path": [
+            "langchain_core.runnables.base.Runnable.batch"
+          ],
+          "function": "langchain_core.runnables.base.Runnable.batch",
+          "line": 963,
+          "reason": "length requires a known inert collection"
+        },
+        "implementation": "langchain_core.runnables.base.Runnable.batch",
+        "settled_exceptions": 10
+      },
+      {
+        "dispatch_obligations": 0,
+        "distinct_blockers": 36,
+        "entry": "langgraph.prebuilt.tool_node.ToolNode.batch_as_completed",
+        "first_blocker": {
+          "call_path": [
+            "langchain_core.runnables.base.Runnable.batch_as_completed"
+          ],
+          "function": "langchain_core.runnables.base.Runnable.batch_as_completed",
+          "line": 1032,
+          "reason": "length requires a known inert collection"
+        },
+        "implementation": "langchain_core.runnables.base.Runnable.batch_as_completed",
+        "settled_exceptions": 8
+      },
+      {
+        "dispatch_obligations": 0,
+        "distinct_blockers": 34,
+        "entry": "langgraph.prebuilt.tool_node.ToolNode.abatch",
+        "first_blocker": {
+          "call_path": [
+            "langchain_core.runnables.base.Runnable.abatch"
+          ],
+          "function": "langchain_core.runnables.base.Runnable.abatch",
+          "line": 1100,
+          "reason": "length requires a known inert collection"
+        },
+        "implementation": "langchain_core.runnables.base.Runnable.abatch",
+        "settled_exceptions": 6
+      },
+      {
+        "dispatch_obligations": 0,
+        "distinct_blockers": 33,
+        "entry": "langgraph.prebuilt.tool_node.ToolNode.abatch_as_completed",
+        "first_blocker": {
+          "call_path": [
+            "langchain_core.runnables.base.Runnable.abatch_as_completed"
+          ],
+          "function": "langchain_core.runnables.base.Runnable.abatch_as_completed",
+          "line": 1165,
+          "reason": "length requires a known inert collection"
+        },
+        "implementation": "langchain_core.runnables.base.Runnable.abatch_as_completed",
+        "settled_exceptions": 2
+      },
+      {
+        "dispatch_obligations": 0,
+        "distinct_blockers": 2,
+        "entry": "langgraph.prebuilt.tool_node.ToolNode.stream",
+        "first_blocker": {
+          "call_path": [
+            "langchain_core.runnables.base.Runnable.stream"
+          ],
+          "function": "langchain_core.runnables.base.Runnable.stream",
+          "line": 1213,
+          "reason": "unsupported expression: Yield"
+        },
+        "implementation": "langchain_core.runnables.base.Runnable.stream",
+        "settled_exceptions": 0
+      },
+      {
+        "dispatch_obligations": 0,
+        "distinct_blockers": 2,
+        "entry": "langgraph.prebuilt.tool_node.ToolNode.astream",
+        "first_blocker": {
+          "call_path": [
+            "langchain_core.runnables.base.Runnable.astream"
+          ],
+          "function": "langchain_core.runnables.base.Runnable.astream",
+          "line": 1234,
+          "reason": "unsupported expression: Yield"
+        },
+        "implementation": "langchain_core.runnables.base.Runnable.astream",
+        "settled_exceptions": 0
+      },
+      {
+        "dispatch_obligations": 0,
+        "distinct_blockers": 25,
+        "entry": "langgraph.prebuilt.tool_node.ToolNode.astream_log",
+        "first_blocker": {
+          "call_path": [
+            "langchain_core.runnables.base.Runnable.astream_log",
+            "langchain_core._api.deprecation.warn_deprecated"
+          ],
+          "function": "langchain_core._api.deprecation.warn_deprecated",
+          "line": 524,
+          "reason": "unsupported expression: JoinedStr"
+        },
+        "implementation": "langchain_core.runnables.base.Runnable.astream_log",
+        "settled_exceptions": 2
+      },
+      {
+        "dispatch_obligations": 0,
+        "distinct_blockers": 20,
+        "entry": "langgraph.prebuilt.tool_node.ToolNode.astream_events",
+        "first_blocker": {
+          "call_path": [
+            "langgraph.prebuilt.tool_node.ToolNode.astream_events",
+            "langchain_core.runnables.base.RunnableLambda.__init__",
+            "langchain_core.runnables.utils.is_async_callable"
+          ],
+          "function": "langchain_core.runnables.utils.is_async_callable",
+          "line": 795,
+          "reason": "unresolved call target: inspect.iscoroutinefunction"
+        },
+        "implementation": "langgraph.prebuilt.tool_node.ToolNode.astream_events",
+        "settled_exceptions": 13
+      },
+      {
+        "dispatch_obligations": 0,
+        "distinct_blockers": 2,
+        "entry": "langgraph.prebuilt.tool_node.ToolNode._astream_events_v3_unsupported",
+        "first_blocker": {
+          "call_path": [
+            "langchain_core.runnables.base.Runnable._astream_events_v3_unsupported"
+          ],
+          "function": "langchain_core.runnables.base.Runnable._astream_events_v3_unsupported",
+          "line": 1608,
+          "reason": "unsupported expression: JoinedStr"
+        },
+        "implementation": "langchain_core.runnables.base.Runnable._astream_events_v3_unsupported",
+        "settled_exceptions": 1
+      },
+      {
+        "dispatch_obligations": 0,
+        "distinct_blockers": 10,
+        "entry": "langgraph.prebuilt.tool_node.ToolNode._astream_events_v1_v2",
+        "first_blocker": {
+          "call_path": [
+            "langchain_core.runnables.base.Runnable._astream_events_v1_v2"
+          ],
+          "function": "langchain_core.runnables.base.Runnable._astream_events_v1_v2",
+          "line": 1629,
+          "reason": "ordered/equality comparison requires known inert values"
+        },
+        "implementation": "langchain_core.runnables.base.Runnable._astream_events_v1_v2",
+        "settled_exceptions": 5
+      },
+      {
+        "dispatch_obligations": 0,
+        "distinct_blockers": 4,
+        "entry": "langgraph.prebuilt.tool_node.ToolNode.stream_events",
+        "first_blocker": {
+          "call_path": [
+            "langchain_core.runnables.base.Runnable.stream_events"
+          ],
+          "function": "langchain_core.runnables.base.Runnable.stream_events",
+          "line": 1745,
+          "reason": "ordered/equality comparison requires known inert values"
+        },
+        "implementation": "langchain_core.runnables.base.Runnable.stream_events",
+        "settled_exceptions": 2
+      },
+      {
+        "dispatch_obligations": 0,
+        "distinct_blockers": 1,
+        "entry": "langgraph.prebuilt.tool_node.ToolNode.transform",
+        "first_blocker": {
+          "call_path": [
+            "langchain_core.runnables.base.Runnable.transform"
+          ],
+          "function": "langchain_core.runnables.base.Runnable.transform",
+          "line": 1785,
+          "reason": "iteration requires a known tuple or mapping"
+        },
+        "implementation": "langchain_core.runnables.base.Runnable.transform",
+        "settled_exceptions": 0
+      },
+      {
+        "dispatch_obligations": 0,
+        "distinct_blockers": 1,
+        "entry": "langgraph.prebuilt.tool_node.ToolNode.atransform",
+        "first_blocker": {
+          "call_path": [
+            "langchain_core.runnables.base.Runnable.atransform"
+          ],
+          "function": "langchain_core.runnables.base.Runnable.atransform",
+          "line": 1830,
+          "reason": "unsupported statement: AsyncFor"
+        },
+        "implementation": "langchain_core.runnables.base.Runnable.atransform",
+        "settled_exceptions": 0
+      },
+      {
+        "dispatch_obligations": 0,
+        "distinct_blockers": 2,
+        "entry": "langgraph.prebuilt.tool_node.ToolNode.bind",
+        "first_blocker": {
+          "call_path": [
+            "langchain_core.runnables.base.Runnable.bind"
+          ],
+          "function": "langchain_core.runnables.base.Runnable.bind",
+          "line": 1883,
+          "reason": "constructor arguments require a source initializer"
+        },
+        "implementation": "langchain_core.runnables.base.Runnable.bind",
+        "settled_exceptions": 0
+      },
+      {
+        "dispatch_obligations": 0,
+        "distinct_blockers": 4,
+        "entry": "langgraph.prebuilt.tool_node.ToolNode.with_config",
+        "first_blocker": {
+          "call_path": [
+            "langchain_core.runnables.base.Runnable.with_config"
+          ],
+          "function": "langchain_core.runnables.base.Runnable.with_config",
+          "line": 1905,
+          "reason": "mapping expansion requires known keys"
+        },
+        "implementation": "langchain_core.runnables.base.Runnable.with_config",
+        "settled_exceptions": 0
+      },
+      {
+        "dispatch_obligations": 0,
+        "distinct_blockers": 4,
+        "entry": "langgraph.prebuilt.tool_node.ToolNode.with_listeners",
+        "first_blocker": {
+          "call_path": [
+            "langchain_core.runnables.base.Runnable.with_listeners"
+          ],
+          "function": "langchain_core.runnables.base.Runnable.with_listeners",
+          "line": 1969,
+          "reason": "unsupported expression: Lambda"
+        },
+        "implementation": "langchain_core.runnables.base.Runnable.with_listeners",
+        "settled_exceptions": 0
+      },
+      {
+        "dispatch_obligations": 0,
+        "distinct_blockers": 4,
+        "entry": "langgraph.prebuilt.tool_node.ToolNode.with_alisteners",
+        "first_blocker": {
+          "call_path": [
+            "langchain_core.runnables.base.Runnable.with_alisteners"
+          ],
+          "function": "langchain_core.runnables.base.Runnable.with_alisteners",
+          "line": 2066,
+          "reason": "unsupported expression: Lambda"
+        },
+        "implementation": "langchain_core.runnables.base.Runnable.with_alisteners",
+        "settled_exceptions": 0
+      },
+      {
+        "dispatch_obligations": 0,
+        "distinct_blockers": 2,
+        "entry": "langgraph.prebuilt.tool_node.ToolNode.with_types",
+        "first_blocker": {
+          "call_path": [
+            "langchain_core.runnables.base.Runnable.with_types"
+          ],
+          "function": "langchain_core.runnables.base.Runnable.with_types",
+          "line": 2094,
+          "reason": "constructor arguments require a source initializer"
+        },
+        "implementation": "langchain_core.runnables.base.Runnable.with_types",
+        "settled_exceptions": 0
+      },
+      {
+        "dispatch_obligations": 0,
+        "distinct_blockers": 3,
+        "entry": "langgraph.prebuilt.tool_node.ToolNode.with_retry",
+        "first_blocker": {
+          "call_path": [
+            "langchain_core.runnables.base.Runnable.with_retry"
+          ],
+          "function": "langchain_core.runnables.base.Runnable.with_retry",
+          "line": 2153,
+          "reason": "unsupported statement: ImportFrom"
+        },
+        "implementation": "langchain_core.runnables.base.Runnable.with_retry",
+        "settled_exceptions": 0
+      },
+      {
+        "dispatch_obligations": 0,
+        "distinct_blockers": 2,
+        "entry": "langgraph.prebuilt.tool_node.ToolNode.map",
+        "first_blocker": {
+          "call_path": [
+            "langchain_core.runnables.base.Runnable.map"
+          ],
+          "function": "langchain_core.runnables.base.Runnable.map",
+          "line": 2186,
+          "reason": "constructor arguments require a source initializer"
+        },
+        "implementation": "langchain_core.runnables.base.Runnable.map",
+        "settled_exceptions": 0
+      },
+      {
+        "dispatch_obligations": 0,
+        "distinct_blockers": 3,
+        "entry": "langgraph.prebuilt.tool_node.ToolNode.with_fallbacks",
+        "first_blocker": {
+          "call_path": [
+            "langchain_core.runnables.base.Runnable.with_fallbacks"
+          ],
+          "function": "langchain_core.runnables.base.Runnable.with_fallbacks",
+          "line": 2255,
+          "reason": "unsupported statement: ImportFrom"
+        },
+        "implementation": "langchain_core.runnables.base.Runnable.with_fallbacks",
+        "settled_exceptions": 0
+      },
+      {
+        "dispatch_obligations": 0,
+        "distinct_blockers": 78,
+        "entry": "langgraph.prebuilt.tool_node.ToolNode._call_with_config",
+        "first_blocker": {
+          "call_path": [
+            "langchain_core.runnables.base.Runnable._call_with_config",
+            "langchain_core.runnables.config.ensure_config"
+          ],
+          "function": "langchain_core.runnables.config.ensure_config",
+          "line": 277,
+          "reason": "unresolved call target: var_config.items"
+        },
+        "implementation": "langchain_core.runnables.base.Runnable._call_with_config",
+        "settled_exceptions": 12
+      },
+      {
+        "dispatch_obligations": 0,
+        "distinct_blockers": 78,
+        "entry": "langgraph.prebuilt.tool_node.ToolNode._acall_with_config",
+        "first_blocker": {
+          "call_path": [
+            "langchain_core.runnables.base.Runnable._acall_with_config",
+            "langchain_core.runnables.config.ensure_config"
+          ],
+          "function": "langchain_core.runnables.config.ensure_config",
+          "line": 277,
+          "reason": "unresolved call target: var_config.items"
+        },
+        "implementation": "langchain_core.runnables.base.Runnable._acall_with_config",
+        "settled_exceptions": 12
+      },
+      {
+        "dispatch_obligations": 0,
+        "distinct_blockers": 42,
+        "entry": "langgraph.prebuilt.tool_node.ToolNode._batch_with_config",
+        "first_blocker": {
+          "call_path": [
+            "langchain_core.runnables.base.Runnable._batch_with_config"
+          ],
+          "function": "langchain_core.runnables.base.Runnable._batch_with_config",
+          "line": 2386,
+          "reason": "length requires a known inert collection"
+        },
+        "implementation": "langchain_core.runnables.base.Runnable._batch_with_config",
+        "settled_exceptions": 48
+      },
+      {
+        "dispatch_obligations": 0,
+        "distinct_blockers": 45,
+        "entry": "langgraph.prebuilt.tool_node.ToolNode._abatch_with_config",
+        "first_blocker": {
+          "call_path": [
+            "langchain_core.runnables.base.Runnable._abatch_with_config"
+          ],
+          "function": "langchain_core.runnables.base.Runnable._abatch_with_config",
+          "line": 2456,
+          "reason": "length requires a known inert collection"
+        },
+        "implementation": "langchain_core.runnables.base.Runnable._abatch_with_config",
+        "settled_exceptions": 48
+      },
+      {
+        "dispatch_obligations": 0,
+        "distinct_blockers": 88,
+        "entry": "langgraph.prebuilt.tool_node.ToolNode._transform_stream_with_config",
+        "first_blocker": {
+          "call_path": [
+            "langchain_core.runnables.base.Runnable._transform_stream_with_config"
+          ],
+          "function": "langchain_core.runnables.base.Runnable._transform_stream_with_config",
+          "line": 2527,
+          "reason": "unresolved call target: tee"
+        },
+        "implementation": "langchain_core.runnables.base.Runnable._transform_stream_with_config",
+        "settled_exceptions": 12
+      },
+      {
+        "dispatch_obligations": 0,
+        "distinct_blockers": 90,
+        "entry": "langgraph.prebuilt.tool_node.ToolNode._atransform_stream_with_config",
+        "first_blocker": {
+          "call_path": [
+            "langchain_core.runnables.base.Runnable._atransform_stream_with_config"
+          ],
+          "function": "langchain_core.runnables.base.Runnable._atransform_stream_with_config",
+          "line": 2628,
+          "reason": "unresolved call target: atee"
+        },
+        "implementation": "langchain_core.runnables.base.Runnable._atransform_stream_with_config",
+        "settled_exceptions": 12
+      },
+      {
+        "dispatch_obligations": 0,
+        "distinct_blockers": 11,
+        "entry": "langgraph.prebuilt.tool_node.ToolNode.as_tool",
+        "first_blocker": {
+          "call_path": [
+            "langgraph.prebuilt.tool_node.ToolNode.as_tool"
+          ],
+          "function": "langgraph.prebuilt.tool_node.ToolNode.as_tool",
+          "line": 912,
+          "reason": "super receiver has unresolved method resolution order"
+        },
+        "implementation": "langgraph.prebuilt.tool_node.ToolNode.as_tool",
+        "settled_exceptions": 0
+      },
+      {
+        "dispatch_obligations": 0,
+        "distinct_blockers": 9,
+        "entry": "langgraph.prebuilt.tool_node.ToolNode.__init__",
+        "first_blocker": {
+          "call_path": [
+            "langgraph.prebuilt.tool_node.ToolNode.__init__"
+          ],
+          "function": "langgraph.prebuilt.tool_node.ToolNode.__init__",
+          "line": 834,
+          "reason": "super receiver has unresolved method resolution order"
+        },
+        "implementation": "langgraph.prebuilt.tool_node.ToolNode.__init__",
+        "settled_exceptions": 0
+      },
+      {
+        "dispatch_obligations": 0,
+        "distinct_blockers": 5,
+        "entry": "langgraph.prebuilt.tool_node.ToolNode.__repr__",
+        "first_blocker": {
+          "call_path": [
+            "langgraph._internal._runnable.RunnableCallable.__repr__"
+          ],
+          "function": "langgraph._internal._runnable.RunnableCallable.__repr__",
+          "line": 369,
+          "reason": "object protocol attribute requires a model"
+        },
+        "implementation": "langgraph._internal._runnable.RunnableCallable.__repr__",
+        "settled_exceptions": 0
+      },
+      {
+        "dispatch_obligations": 0,
+        "distinct_blockers": 2,
+        "entry": "langgraph.prebuilt.tool_node.ToolNode.tools_by_name",
+        "first_blocker": {
+          "call_path": [
+            "langgraph.prebuilt.tool_node.ToolNode.tools_by_name"
+          ],
+          "function": "langgraph.prebuilt.tool_node.ToolNode.tools_by_name",
+          "line": 871,
+          "reason": "decorated function requires a model"
+        },
+        "implementation": "langgraph.prebuilt.tool_node.ToolNode.tools_by_name",
+        "settled_exceptions": 0
+      },
+      {
+        "dispatch_obligations": 0,
+        "distinct_blockers": 2,
+        "entry": "langgraph.prebuilt.tool_node.ToolNode.descriptors_by_name",
+        "first_blocker": {
+          "call_path": [
+            "langgraph.prebuilt.tool_node.ToolNode.descriptors_by_name"
+          ],
+          "function": "langgraph.prebuilt.tool_node.ToolNode.descriptors_by_name",
+          "line": 876,
+          "reason": "decorated function requires a model"
+        },
+        "implementation": "langgraph.prebuilt.tool_node.ToolNode.descriptors_by_name",
+        "settled_exceptions": 0
+      },
+      {
+        "dispatch_obligations": 0,
+        "distinct_blockers": 2,
+        "entry": "langgraph.prebuilt.tool_node.ToolNode.dacs_by_name",
+        "first_blocker": {
+          "call_path": [
+            "langgraph.prebuilt.tool_node.ToolNode.dacs_by_name"
+          ],
+          "function": "langgraph.prebuilt.tool_node.ToolNode.dacs_by_name",
+          "line": 881,
+          "reason": "decorated function requires a model"
+        },
+        "implementation": "langgraph.prebuilt.tool_node.ToolNode.dacs_by_name",
+        "settled_exceptions": 0
+      },
+      {
+        "dispatch_obligations": 0,
+        "distinct_blockers": 77,
+        "entry": "langgraph.prebuilt.tool_node.ToolNode._security_check",
+        "first_blocker": {
+          "call_path": [
+            "langgraph.prebuilt.tool_node.ToolNode._security_check",
+            "langgraph.prebuilt.tool_node.ToolNode._prepare_security_request"
+          ],
+          "function": "langgraph.prebuilt.tool_node.ToolNode._prepare_security_request",
+          "line": 941,
+          "reason": "subscript requires a known tuple and constant index"
+        },
+        "implementation": "langgraph.prebuilt.tool_node.ToolNode._security_check",
+        "settled_exceptions": 2
+      },
+      {
+        "dispatch_obligations": 0,
+        "distinct_blockers": 77,
+        "entry": "langgraph.prebuilt.tool_node.ToolNode._prepare_security_request",
+        "first_blocker": {
+          "call_path": [
+            "langgraph.prebuilt.tool_node.ToolNode._prepare_security_request"
+          ],
+          "function": "langgraph.prebuilt.tool_node.ToolNode._prepare_security_request",
+          "line": 941,
+          "reason": "subscript requires a known tuple and constant index"
+        },
+        "implementation": "langgraph.prebuilt.tool_node.ToolNode._prepare_security_request",
+        "settled_exceptions": 2
+      },
+      {
+        "dispatch_obligations": 0,
+        "distinct_blockers": 21,
+        "entry": "langgraph.prebuilt.tool_node.ToolNode._invoke_secured_tool_sync",
+        "first_blocker": {
+          "call_path": [
+            "langgraph.prebuilt.tool_node.ToolNode._invoke_secured_tool_sync"
+          ],
+          "function": "langgraph.prebuilt.tool_node.ToolNode._invoke_secured_tool_sync",
+          "line": 1020,
+          "reason": "constructor arguments require a source initializer"
+        },
+        "implementation": "langgraph.prebuilt.tool_node.ToolNode._invoke_secured_tool_sync",
+        "settled_exceptions": 13
+      },
+      {
+        "dispatch_obligations": 0,
+        "distinct_blockers": 21,
+        "entry": "langgraph.prebuilt.tool_node.ToolNode._invoke_secured_tool_async",
+        "first_blocker": {
+          "call_path": [
+            "langgraph.prebuilt.tool_node.ToolNode._invoke_secured_tool_async"
+          ],
+          "function": "langgraph.prebuilt.tool_node.ToolNode._invoke_secured_tool_async",
+          "line": 1049,
+          "reason": "constructor arguments require a source initializer"
+        },
+        "implementation": "langgraph.prebuilt.tool_node.ToolNode._invoke_secured_tool_async",
+        "settled_exceptions": 13
+      },
+      {
+        "dispatch_obligations": 0,
+        "distinct_blockers": 21,
+        "entry": "langgraph.prebuilt.tool_node.ToolNode._acquire_security_flow",
+        "first_blocker": {
+          "call_path": [
+            "langgraph.prebuilt.tool_node.ToolNode._acquire_security_flow"
+          ],
+          "function": "langgraph.prebuilt.tool_node.ToolNode._acquire_security_flow",
+          "line": 1077,
+          "reason": "unresolved call target: policy.acquire"
+        },
+        "implementation": "langgraph.prebuilt.tool_node.ToolNode._acquire_security_flow",
+        "settled_exceptions": 15
+      },
+      {
+        "dispatch_obligations": 0,
+        "distinct_blockers": 1,
+        "entry": "langgraph.prebuilt.tool_node.ToolNode._release_security_flow",
+        "first_blocker": {
+          "call_path": [
+            "langgraph.prebuilt.tool_node.ToolNode._release_security_flow"
+          ],
+          "function": "langgraph.prebuilt.tool_node.ToolNode._release_security_flow",
+          "line": 1092,
+          "reason": "unresolved call target: policy.release"
+        },
+        "implementation": "langgraph.prebuilt.tool_node.ToolNode._release_security_flow",
+        "settled_exceptions": 0
+      },
+      {
+        "dispatch_obligations": 0,
+        "distinct_blockers": 6,
+        "entry": "langgraph.prebuilt.tool_node.ToolNode._finalize_security_flow",
+        "first_blocker": {
+          "call_path": [
+            "langgraph.prebuilt.tool_node.ToolNode._finalize_security_flow"
+          ],
+          "function": "langgraph.prebuilt.tool_node.ToolNode._finalize_security_flow",
+          "line": 1106,
+          "reason": "unresolved call target: policy.release"
+        },
+        "implementation": "langgraph.prebuilt.tool_node.ToolNode._finalize_security_flow",
+        "settled_exceptions": 3
+      },
+      {
+        "dispatch_obligations": 0,
+        "distinct_blockers": 2,
+        "entry": "langgraph.prebuilt.tool_node.ToolNode._normalize_security_args",
+        "first_blocker": {
+          "call_path": [
+            "langgraph.prebuilt.tool_node.ToolNode._normalize_security_args"
+          ],
+          "function": "langgraph.prebuilt.tool_node.ToolNode._normalize_security_args",
+          "line": 1123,
+          "reason": "iteration requires a known tuple or mapping"
+        },
+        "implementation": "langgraph.prebuilt.tool_node.ToolNode._normalize_security_args",
+        "settled_exceptions": 0
+      },
+      {
+        "dispatch_obligations": 0,
+        "distinct_blockers": 10,
+        "entry": "langgraph.prebuilt.tool_node.ToolNode._audit_security",
+        "first_blocker": {
+          "call_path": [
+            "langgraph.prebuilt.tool_node.ToolNode._audit_security"
+          ],
+          "function": "langgraph.prebuilt.tool_node.ToolNode._audit_security",
+          "line": 1155,
+          "reason": "dict construction requires a known mapping"
+        },
+        "implementation": "langgraph.prebuilt.tool_node.ToolNode._audit_security",
+        "settled_exceptions": 18
+      },
+      {
+        "dispatch_obligations": 0,
+        "distinct_blockers": 6,
+        "entry": "langgraph.prebuilt.tool_node.ToolNode._security_denial",
+        "first_blocker": {
+          "call_path": [
+            "langgraph.prebuilt.tool_node.ToolNode._security_denial"
+          ],
+          "function": "langgraph.prebuilt.tool_node.ToolNode._security_denial",
+          "line": 1177,
+          "reason": "unsupported expression: JoinedStr"
+        },
+        "implementation": "langgraph.prebuilt.tool_node.ToolNode._security_denial",
+        "settled_exceptions": 0
+      },
+      {
+        "dispatch_obligations": 0,
+        "distinct_blockers": 4,
+        "entry": "langgraph.prebuilt.tool_node.ToolNode._security_trace_config",
+        "first_blocker": {
+          "call_path": [
+            "langgraph.prebuilt.tool_node.ToolNode._security_trace_config"
+          ],
+          "function": "langgraph.prebuilt.tool_node.ToolNode._security_trace_config",
+          "line": 1191,
+          "reason": "unresolved call target: config.get"
+        },
+        "implementation": "langgraph.prebuilt.tool_node.ToolNode._security_trace_config",
+        "settled_exceptions": 0
+      },
+      {
+        "dispatch_obligations": 0,
+        "distinct_blockers": 60,
+        "entry": "langgraph.prebuilt.tool_node.ToolNode._resume_security",
+        "first_blocker": {
+          "call_path": [
+            "langgraph.prebuilt.tool_node.ToolNode._resume_security"
+          ],
+          "function": "langgraph.prebuilt.tool_node.ToolNode._resume_security",
+          "line": 1210,
+          "reason": "unresolved call target: escalation.to_payload"
+        },
+        "implementation": "langgraph.prebuilt.tool_node.ToolNode._resume_security",
+        "settled_exceptions": 248
+      },
+      {
+        "dispatch_obligations": 0,
+        "distinct_blockers": 60,
+        "entry": "langgraph.prebuilt.tool_node.ToolNode._aresume_security",
+        "first_blocker": {
+          "call_path": [
+            "langgraph.prebuilt.tool_node.ToolNode._aresume_security"
+          ],
+          "function": "langgraph.prebuilt.tool_node.ToolNode._aresume_security",
+          "line": 1232,
+          "reason": "unresolved call target: escalation.to_payload"
+        },
+        "implementation": "langgraph.prebuilt.tool_node.ToolNode._aresume_security",
+        "settled_exceptions": 248
+      },
+      {
+        "dispatch_obligations": 0,
+        "distinct_blockers": 15,
+        "entry": "langgraph.prebuilt.tool_node.ToolNode._coerce_approval",
+        "first_blocker": {
+          "call_path": [
+            "langgraph.prebuilt.tool_node.ToolNode._coerce_approval",
+            "langgraph.prebuilt.security.stack.coerce_approval"
+          ],
+          "function": "langgraph.prebuilt.security.stack.coerce_approval",
+          "line": 552,
+          "reason": "ordered/equality comparison requires known inert values"
+        },
+        "implementation": "langgraph.prebuilt.tool_node.ToolNode._coerce_approval",
+        "settled_exceptions": 10
+      },
+      {
+        "dispatch_obligations": 0,
+        "distinct_blockers": 73,
+        "entry": "langgraph.prebuilt.tool_node.ToolNode._func",
+        "first_blocker": {
+          "call_path": [
+            "langgraph.prebuilt.tool_node.ToolNode._func",
+            "langgraph.prebuilt.tool_node.ToolNode._parse_input"
+          ],
+          "function": "langgraph.prebuilt.tool_node.ToolNode._parse_input",
+          "line": 2043,
+          "reason": "subscript requires a known tuple and constant index"
+        },
+        "implementation": "langgraph.prebuilt.tool_node.ToolNode._func",
+        "settled_exceptions": 21
+      },
+      {
+        "dispatch_obligations": 0,
+        "distinct_blockers": 65,
+        "entry": "langgraph.prebuilt.tool_node.ToolNode._afunc",
+        "first_blocker": {
+          "call_path": [
+            "langgraph.prebuilt.tool_node.ToolNode._afunc",
+            "langgraph.prebuilt.tool_node.ToolNode._parse_input"
+          ],
+          "function": "langgraph.prebuilt.tool_node.ToolNode._parse_input",
+          "line": 2043,
+          "reason": "subscript requires a known tuple and constant index"
+        },
+        "implementation": "langgraph.prebuilt.tool_node.ToolNode._afunc",
+        "settled_exceptions": 21
+      },
+      {
+        "dispatch_obligations": 0,
+        "distinct_blockers": 3,
+        "entry": "langgraph.prebuilt.tool_node.ToolNode._premark_security_flow",
+        "first_blocker": {
+          "call_path": [
+            "langgraph.prebuilt.tool_node.ToolNode._premark_security_flow"
+          ],
+          "function": "langgraph.prebuilt.tool_node.ToolNode._premark_security_flow",
+          "line": 1330,
+          "reason": "unresolved global: zip"
+        },
+        "implementation": "langgraph.prebuilt.tool_node.ToolNode._premark_security_flow",
+        "settled_exceptions": 0
+      },
+      {
+        "dispatch_obligations": 0,
+        "distinct_blockers": 14,
+        "entry": "langgraph.prebuilt.tool_node.ToolNode._combine_tool_outputs",
+        "first_blocker": {
+          "call_path": [
+            "langgraph.prebuilt.tool_node.ToolNode._combine_tool_outputs"
+          ],
+          "function": "langgraph.prebuilt.tool_node.ToolNode._combine_tool_outputs",
+          "line": 1350,
+          "reason": "unresolved global: any"
+        },
+        "implementation": "langgraph.prebuilt.tool_node.ToolNode._combine_tool_outputs",
+        "settled_exceptions": 0
+      },
+      {
+        "dispatch_obligations": 0,
+        "distinct_blockers": 136,
+        "entry": "langgraph.prebuilt.tool_node.ToolNode._execute_tool_sync",
+        "first_blocker": {
+          "call_path": [
+            "langgraph.prebuilt.tool_node.ToolNode._execute_tool_sync",
+            "langgraph.prebuilt.tool_node.ToolNode._validate_tool_call"
+          ],
+          "function": "langgraph.prebuilt.tool_node.ToolNode._validate_tool_call",
+          "line": 2082,
+          "reason": "subscript requires a known tuple and constant index"
+        },
+        "implementation": "langgraph.prebuilt.tool_node.ToolNode._execute_tool_sync",
+        "settled_exceptions": 2
+      },
+      {
+        "dispatch_obligations": 0,
+        "distinct_blockers": 154,
+        "entry": "langgraph.prebuilt.tool_node.ToolNode._run_one",
+        "first_blocker": {
+          "call_path": [
+            "langgraph.prebuilt.tool_node.ToolNode._run_one"
+          ],
+          "function": "langgraph.prebuilt.tool_node.ToolNode._run_one",
+          "line": 1670,
+          "reason": "aggregate attribute requires an object projection model"
+        },
+        "implementation": "langgraph.prebuilt.tool_node.ToolNode._run_one",
+        "settled_exceptions": 3
+      },
+      {
+        "dispatch_obligations": 0,
+        "distinct_blockers": 136,
+        "entry": "langgraph.prebuilt.tool_node.ToolNode._execute_tool_async",
+        "first_blocker": {
+          "call_path": [
+            "langgraph.prebuilt.tool_node.ToolNode._execute_tool_async",
+            "langgraph.prebuilt.tool_node.ToolNode._validate_tool_call"
+          ],
+          "function": "langgraph.prebuilt.tool_node.ToolNode._validate_tool_call",
+          "line": 2082,
+          "reason": "subscript requires a known tuple and constant index"
+        },
+        "implementation": "langgraph.prebuilt.tool_node.ToolNode._execute_tool_async",
+        "settled_exceptions": 2
+      },
+      {
+        "dispatch_obligations": 0,
+        "distinct_blockers": 157,
+        "entry": "langgraph.prebuilt.tool_node.ToolNode._arun_one",
+        "first_blocker": {
+          "call_path": [
+            "langgraph.prebuilt.tool_node.ToolNode._arun_one"
+          ],
+          "function": "langgraph.prebuilt.tool_node.ToolNode._arun_one",
+          "line": 1984,
+          "reason": "aggregate attribute requires an object projection model"
+        },
+        "implementation": "langgraph.prebuilt.tool_node.ToolNode._arun_one",
+        "settled_exceptions": 3
+      },
+      {
+        "dispatch_obligations": 0,
+        "distinct_blockers": 15,
+        "entry": "langgraph.prebuilt.tool_node.ToolNode._parse_input",
+        "first_blocker": {
+          "call_path": [
+            "langgraph.prebuilt.tool_node.ToolNode._parse_input"
+          ],
+          "function": "langgraph.prebuilt.tool_node.ToolNode._parse_input",
+          "line": 2043,
+          "reason": "subscript requires a known tuple and constant index"
+        },
+        "implementation": "langgraph.prebuilt.tool_node.ToolNode._parse_input",
+        "settled_exceptions": 10
+      },
+      {
+        "dispatch_obligations": 0,
+        "distinct_blockers": 11,
+        "entry": "langgraph.prebuilt.tool_node.ToolNode._validate_tool_call",
+        "first_blocker": {
+          "call_path": [
+            "langgraph.prebuilt.tool_node.ToolNode._validate_tool_call"
+          ],
+          "function": "langgraph.prebuilt.tool_node.ToolNode._validate_tool_call",
+          "line": 2082,
+          "reason": "subscript requires a known tuple and constant index"
+        },
+        "implementation": "langgraph.prebuilt.tool_node.ToolNode._validate_tool_call",
+        "settled_exceptions": 0
+      },
+      {
+        "dispatch_obligations": 0,
+        "distinct_blockers": 12,
+        "entry": "langgraph.prebuilt.tool_node.ToolNode._extract_state",
+        "first_blocker": {
+          "call_path": [
+            "langgraph.prebuilt.tool_node.ToolNode._extract_state"
+          ],
+          "function": "langgraph.prebuilt.tool_node.ToolNode._extract_state",
+          "line": 2109,
+          "reason": "unresolved call target: input.get"
+        },
+        "implementation": "langgraph.prebuilt.tool_node.ToolNode._extract_state",
+        "settled_exceptions": 0
+      },
+      {
+        "dispatch_obligations": 0,
+        "distinct_blockers": 56,
+        "entry": "langgraph.prebuilt.tool_node.ToolNode._inject_tool_args",
+        "first_blocker": {
+          "call_path": [
+            "langgraph.prebuilt.tool_node.ToolNode._inject_tool_args"
+          ],
+          "function": "langgraph.prebuilt.tool_node.ToolNode._inject_tool_args",
+          "line": 2167,
+          "reason": "subscript requires a known tuple and constant index"
+        },
+        "implementation": "langgraph.prebuilt.tool_node.ToolNode._inject_tool_args",
+        "settled_exceptions": 1
+      },
+      {
+        "dispatch_obligations": 0,
+        "distinct_blockers": 32,
+        "entry": "langgraph.prebuilt.tool_node.ToolNode._normalize_tool_response",
+        "first_blocker": {
+          "call_path": [
+            "langgraph.prebuilt.tool_node.ToolNode._normalize_tool_response"
+          ],
+          "function": "langgraph.prebuilt.tool_node.ToolNode._normalize_tool_response",
+          "line": 2252,
+          "reason": "isinstance type has an unresolved metaclass or ancestry"
+        },
+        "implementation": "langgraph.prebuilt.tool_node.ToolNode._normalize_tool_response",
+        "settled_exceptions": 11
+      },
+      {
+        "dispatch_obligations": 0,
+        "distinct_blockers": 7,
+        "entry": "langgraph.prebuilt.tool_node.ToolNode._validate_tool_command_list",
+        "first_blocker": {
+          "call_path": [
+            "langgraph.prebuilt.tool_node.ToolNode._validate_tool_command_list"
+          ],
+          "function": "langgraph.prebuilt.tool_node.ToolNode._validate_tool_command_list",
+          "line": 2280,
+          "reason": "subscript requires a known tuple and constant index"
+        },
+        "implementation": "langgraph.prebuilt.tool_node.ToolNode._validate_tool_command_list",
+        "settled_exceptions": 1
+      },
+      {
+        "dispatch_obligations": 0,
+        "distinct_blockers": 19,
+        "entry": "langgraph.prebuilt.tool_node.ToolNode._validate_tool_command",
+        "first_blocker": {
+          "call_path": [
+            "langgraph.prebuilt.tool_node.ToolNode._validate_tool_command"
+          ],
+          "function": "langgraph.prebuilt.tool_node.ToolNode._validate_tool_command",
+          "line": 2327,
+          "reason": "membership requires known inert values"
+        },
+        "implementation": "langgraph.prebuilt.tool_node.ToolNode._validate_tool_command",
+        "settled_exceptions": 14
+      }
+    ],
+    "verifier_sha256": "ac4937b7b85a2a7d42fcdfcdd0cdb82177b5eded8196a5c314f3bf4269b34e0b"
+  }
+}

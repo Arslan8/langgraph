@@ -304,6 +304,7 @@ def create_react_agent(
     debug: bool = False,
     version: Literal["v1", "v2"] = "v2",
     name: str | None = None,
+    security: Any | None = None,
     **deprecated_kwargs: Any,
 ) -> CompiledStateGraph:
     """Creates an agent graph that calls tools in a loop until a stopping condition is met.
@@ -464,6 +465,9 @@ def create_react_agent(
                 node using the [Send](https://langchain-ai.github.io/langgraph/concepts/low_level/#send)
                 API.
         name: An optional name for the `CompiledStateGraph`.
+        security: Optional security configuration applied at graph compilation.
+            Secured graphs place model, dispatch, state, checkpoint, and output
+            operations on the configured object-manager route.
             This name will be automatically used when adding ReAct agent graph to another graph as a subgraph node -
             particularly useful for building multi-agent systems.
 
@@ -791,6 +795,11 @@ def create_react_agent(
             "agent",
             RunnableCallable(call_model, acall_model),
             input_schema=input_schema,
+            metadata={
+                "security_kind": "model",
+                "security_trust": "trusted",
+                "security_promotion_reason": "reviewed LangGraph model coordinator",
+            },
         )
         if pre_model_hook is not None:
             workflow.add_node("pre_model_hook", pre_model_hook)  # type: ignore[arg-type]
@@ -812,6 +821,13 @@ def create_react_agent(
                     generate_structured_response,
                     agenerate_structured_response,
                 ),
+                metadata={
+                    "security_kind": "model",
+                    "security_trust": "trusted",
+                    "security_promotion_reason": (
+                        "reviewed structured-output coordinator"
+                    ),
+                },
             )
             if post_model_hook is not None:
                 workflow.add_edge("post_model_hook", "generate_structured_response")
@@ -825,6 +841,7 @@ def create_react_agent(
             interrupt_after=interrupt_after,
             debug=debug,
             name=name,
+            security=security,
         )
 
     # Define the function that determines whether to continue or not
@@ -868,8 +885,21 @@ def create_react_agent(
         "agent",
         RunnableCallable(call_model, acall_model),
         input_schema=input_schema,
+        metadata={
+            "security_kind": "model",
+            "security_trust": "trusted",
+            "security_promotion_reason": "reviewed LangGraph model coordinator",
+        },
     )
-    workflow.add_node("tools", tool_node)
+    tool_metadata: dict[str, str] | None = None
+    if security is not None and security.host_executor is not None:
+        tool_metadata = {
+            "security_trust": "trusted",
+            "security_promotion_reason": (
+                "reviewed ToolNode coordinator; tool bodies use host execution"
+            ),
+        }
+    workflow.add_node("tools", tool_node, metadata=tool_metadata)
 
     # Optionally add a pre-model hook node that will be called
     # every time before the "agent" (LLM-calling node)
@@ -903,6 +933,11 @@ def create_react_agent(
                 generate_structured_response,
                 agenerate_structured_response,
             ),
+            metadata={
+                "security_kind": "model",
+                "security_trust": "trusted",
+                "security_promotion_reason": "reviewed structured-output coordinator",
+            },
         )
         if post_model_hook is not None:
             post_model_hook_paths.append("generate_structured_response")
@@ -999,6 +1034,7 @@ def create_react_agent(
         interrupt_after=interrupt_after,
         debug=debug,
         name=name,
+        security=security,
     )
 
 

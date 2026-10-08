@@ -250,6 +250,9 @@ class ToolProfile:
     services: tuple[NamedRule, ...] = ()
     limits: Limits = Limits()
     returns: str = "normal"
+    readable_channels: frozenset[str] = frozenset()
+    readable_store_keys: frozenset[str] = frozenset()
+    writable_store_keys: frozenset[str] = frozenset()
     location: SourceLocation | None = field(default=None, compare=False)
 
     def __post_init__(self) -> None:
@@ -266,6 +269,12 @@ class ToolProfile:
             raise ValueError("syscall set names must be identifiers")
         for scope in self.required_scopes:
             _reject_atom(scope, "required scope")
+        for resource in (
+            *self.readable_channels,
+            *self.readable_store_keys,
+            *self.writable_store_keys,
+        ):
+            _reject_atom(resource, "state or store resource")
         object.__setattr__(self, "call_grants", frozenset(self.call_grants))
         object.__setattr__(self, "required_scopes", frozenset(self.required_scopes))
         object.__setattr__(self, "syscall_sets", frozenset(self.syscall_sets))
@@ -273,6 +282,13 @@ class ToolProfile:
         object.__setattr__(self, "net", tuple(self.net))
         object.__setattr__(self, "exec", tuple(self.exec))
         object.__setattr__(self, "services", tuple(self.services))
+        object.__setattr__(self, "readable_channels", frozenset(self.readable_channels))
+        object.__setattr__(
+            self, "readable_store_keys", frozenset(self.readable_store_keys)
+        )
+        object.__setattr__(
+            self, "writable_store_keys", frozenset(self.writable_store_keys)
+        )
 
     def audit_payload(self) -> Mapping[str, object]:
         """Return a deterministic, JSON-compatible representation."""
@@ -319,6 +335,8 @@ class ToolProfile:
             ],
             "owner": self.owner,
             "required_scopes": sorted(self.required_scopes),
+            "readable_channels": sorted(self.readable_channels),
+            "readable_store_keys": sorted(self.readable_store_keys),
             "returns": self.returns,
             "runs": self.runs,
             "services": [
@@ -330,6 +348,7 @@ class ToolProfile:
                 for rule in self.services
             ],
             "syscall_sets": sorted(self.syscall_sets),
+            "writable_store_keys": sorted(self.writable_store_keys),
         }
 
     def as_tool_dac(self) -> ToolDac:
@@ -799,6 +818,8 @@ def _parse_tool(
                 if any(not _NAME.fullmatch(item) for item in sets):
                     raise ValueError("invalid syscall set name")
                 values[directive] = frozenset(sets)
+            elif directive in {"state_read", "store_read", "store_write"}:
+                values[directive] = _parse_resource_names(words, directive)
             elif directive == "fs":
                 values[directive] = _parse_fs(statement, source, tool=True)
             elif directive == "net":
@@ -832,6 +853,9 @@ def _parse_tool(
             services=values.get("service", ()),  # type: ignore[arg-type]
             limits=values.get("limits", Limits()),  # type: ignore[arg-type]
             returns=values.get("returns", "normal"),  # type: ignore[arg-type]
+            readable_channels=values.get("state_read", frozenset()),  # type: ignore[arg-type]
+            readable_store_keys=values.get("store_read", frozenset()),  # type: ignore[arg-type]
+            writable_store_keys=values.get("store_write", frozenset()),  # type: ignore[arg-type]
             location=location,
         )
     except ValueError as exc:
@@ -1037,6 +1061,17 @@ def _parse_grant(text: str) -> frozenset[str]:
         value != "*" and not _NAME.fullmatch(value) for value in values
     ):
         raise ValueError("grant subjects must be identifiers")
+    return values
+
+
+def _parse_resource_names(words: Sequence[str], directive: str) -> frozenset[str]:
+    if len(words) == 2 and words[1] == "none":
+        return frozenset()
+    if len(words) < 2:
+        raise ValueError(f"{directive} expects 'none' or one or more resources")
+    values = frozenset(words[1:])
+    for value in values:
+        _reject_atom(value, f"{directive} resource")
     return values
 
 

@@ -1,8 +1,4 @@
-"""Security framework for mediated tool calls.
-
-The package exposes tool descriptors and discretionary access-control metadata.
-Runtime mediation is added by the later security-framework modules.
-"""
+"""Layered object-manager security for LangGraph operations and host grants."""
 
 from langgraph.prebuilt.security.audit import (
     HmacAuditWitness,
@@ -16,6 +12,25 @@ from langgraph.prebuilt.security.binding import (
     with_principal,
 )
 from langgraph.prebuilt.security.blobs import allocate_blobs, copy_blobs
+from langgraph.prebuilt.security.broker import (
+    BrokerAuditRecord,
+    BrokerSession,
+    CredentialBroker,
+    CredentialIssuer,
+    GitHubAppIssuer,
+    IssuedCredential,
+    SpawnRecord,
+    StsSessionIssuer,
+    broker_request,
+)
+from langgraph.prebuilt.security.capabilities import (
+    LinuxCapabilities,
+    probe_landlock_abi,
+    probe_linux_capabilities,
+)
+from langgraph.prebuilt.security.cedar import CedarPolicyBackend
+from langgraph.prebuilt.security.check import ProfileSupport, check_profiles
+from langgraph.prebuilt.security.checkpoint_security import MediatedCheckpointer
 from langgraph.prebuilt.security.config import SecurityConfig
 from langgraph.prebuilt.security.dac import dac_check
 from langgraph.prebuilt.security.descriptor import (
@@ -51,6 +66,7 @@ from langgraph.prebuilt.security.enforcement import (
     RequirementCheck,
     RequirementEntry,
     RequirementLedger,
+    RuleEnforcement,
     SupportAssessment,
     SupportLevel,
     compile_grant,
@@ -86,7 +102,40 @@ from langgraph.prebuilt.security.introspect import (
     ToolInventoryEntry,
     introspect,
 )
+from langgraph.prebuilt.security.landlock import (
+    LandlockRuleset,
+    LandlockSandboxExecutor,
+    RuleLowering,
+    build_ruleset,
+    open_path_descriptor,
+)
 from langgraph.prebuilt.security.linux import LinuxSandboxExecutor, LinuxToolSpec
+from langgraph.prebuilt.security.mcp_proxy import (
+    McpServerSpec,
+    McpStdioProxy,
+    mcp_service_map,
+)
+from langgraph.prebuilt.security.object_manager import (
+    CheckpointEnvelope,
+    ObjectManagerHost,
+    ObjectManagerPolicy,
+    StoreResource,
+    ToolObjectDac,
+    seal_checkpoint,
+)
+from langgraph.prebuilt.security.objects import (
+    DispatchKind,
+    DispatchRequest,
+    FrameworkRequest,
+    LabeledValue,
+    ModelInvocationRequest,
+    ObjectAuthorization,
+    OutputRequest,
+    SecurityLabels,
+    StateOperation,
+    StateRequest,
+    ToolRegistryRequest,
+)
 from langgraph.prebuilt.security.observability import (
     LoggingSecurityObserver,
     MemorySecurityObserver,
@@ -94,6 +143,13 @@ from langgraph.prebuilt.security.observability import (
     SecurityEvent,
     SecurityObserver,
     langsmith_metadata,
+)
+from langgraph.prebuilt.security.placement import (
+    NodeKind,
+    NodeTrust,
+    OutputApprovalRequired,
+    PlacementSpec,
+    UntrustedNodeHost,
 )
 from langgraph.prebuilt.security.policy import (
     MandatoryPolicyBackend,
@@ -137,7 +193,9 @@ from langgraph.prebuilt.security.taint import (
     EscapeKind,
     EscapeSeverity,
     TaintReport,
+    WaiverDisposition,
     analyze_source,
+    apply_waivers,
 )
 from langgraph.prebuilt.security.types import (
     Approval,
@@ -160,6 +218,10 @@ from langgraph.prebuilt.security.types import (
     ToolCall,
     Verdict,
 )
+from langgraph.prebuilt.security.wasi import (
+    WasiSandboxExecutor,
+    WasiToolSpec,
+)
 
 __all__ = (
     "NORMALIZERS",
@@ -179,12 +241,20 @@ __all__ = (
     "BoundNamedRule",
     "BoundNetRule",
     "BoundPath",
+    "BrokerAuditRecord",
+    "BrokerSession",
     "CapModule",
+    "CedarPolicyBackend",
+    "CheckpointEnvelope",
     "Confidentiality",
     "ConstructiveGrant",
+    "CredentialBroker",
+    "CredentialIssuer",
     "DacOverrides",
     "DacEvaluation",
     "Decision",
+    "DispatchKind",
+    "DispatchRequest",
     "Effect",
     "EnforcementAdapter",
     "EnforcementCoordinator",
@@ -202,9 +272,11 @@ __all__ = (
     "ForbidCombination",
     "ForbidConstraint",
     "FlowStateStore",
+    "FrameworkRequest",
     "Grant",
     "GrantCompilation",
     "GrantRule",
+    "GitHubAppIssuer",
     "HostAttestation",
     "HostAttestationVerifier",
     "HostExecutionDenied",
@@ -212,22 +284,40 @@ __all__ = (
     "HostExecutionResult",
     "HostToolExecutor",
     "HmacAuditWitness",
+    "IssuedCredential",
     "Limits",
+    "LandlockRuleset",
+    "LandlockSandboxExecutor",
     "LinuxSandboxExecutor",
+    "LinuxCapabilities",
     "LinuxToolSpec",
+    "LabeledValue",
     "MandatoryPolicyBackend",
+    "McpServerSpec",
+    "McpStdioProxy",
     "MemoryAuditSink",
     "MemoryFlowStateStore",
     "MemorySecurityObserver",
+    "MediatedCheckpointer",
+    "ModelInvocationRequest",
     "NamedRule",
     "NegotiationResult",
     "NetRule",
+    "NodeKind",
+    "NodeTrust",
     "LoggingSecurityObserver",
     "OpenTelemetrySecurityObserver",
     "ObligationAssignment",
     "ObligationKind",
+    "ObjectAuthorization",
+    "ObjectManagerHost",
+    "ObjectManagerPolicy",
+    "OutputRequest",
+    "OutputApprovalRequired",
+    "PlacementSpec",
     "Principal",
     "PrincipalProfile",
+    "ProfileSupport",
     "ProfileDocument",
     "ProfileSyntaxError",
     "PathTemplate",
@@ -243,7 +333,10 @@ __all__ = (
     "ResourceBoundary",
     "ResourceBoundaryPolicy",
     "RulePredicate",
+    "RuleEnforcement",
+    "RuleLowering",
     "SecurityModule",
+    "SecurityLabels",
     "SecurityEvent",
     "SecurityObserver",
     "SecurityBindingError",
@@ -260,6 +353,11 @@ __all__ = (
     "SourceLocation",
     "SqliteAuditSink",
     "SqliteFlowStateStore",
+    "SpawnRecord",
+    "StsSessionIssuer",
+    "StateOperation",
+    "StateRequest",
+    "StoreResource",
     "SupportAssessment",
     "SupportLevel",
     "Tool",
@@ -269,15 +367,25 @@ __all__ = (
     "ToolFlowRule",
     "ToolInventory",
     "ToolInventoryEntry",
+    "ToolObjectDac",
     "ToolProfile",
+    "ToolRegistryRequest",
     "TypedPolicyBackend",
     "TaintReport",
+    "UntrustedNodeHost",
     "Verdict",
+    "WaiverDisposition",
+    "WasiSandboxExecutor",
+    "WasiToolSpec",
     "allocate_blobs",
     "analyze_source",
+    "apply_waivers",
+    "build_ruleset",
+    "broker_request",
     "copy_blobs",
     "compile_grant",
     "compile_obligations",
+    "check_profiles",
     "dac",
     "dac_check",
     "delegate",
@@ -286,9 +394,14 @@ __all__ = (
     "guarded_tool",
     "introspect",
     "langsmith_metadata",
+    "mcp_service_map",
     "normalize_resource",
+    "open_path_descriptor",
     "parse_profiles",
+    "probe_landlock_abi",
+    "probe_linux_capabilities",
     "principal_from",
     "resource_path",
+    "seal_checkpoint",
     "with_principal",
 )

@@ -19,6 +19,9 @@ def generate_tables(audit_dir: Path, output_dir: Path) -> tuple[Path, ...]:
     poc_events: dict[str, AuditEvent] = {}
     baseline_tests: dict[str, AuditEvent] = {}
     benchmark_sample: AuditEvent | None = None
+    parity: AuditEvent | None = None
+    completeness: AuditEvent | None = None
+    overhead: AuditEvent | None = None
     for database in databases:
         for event in read_events(database):
             if event.kind == "e1_census":
@@ -32,6 +35,12 @@ def generate_tables(audit_dir: Path, output_dir: Path) -> tuple[Path, ...]:
                 baseline_tests[event.payload["baseline"]] = event
             elif event.kind == "e1_benchmark_sample":
                 benchmark_sample = event
+            elif event.kind == "e3_parity":
+                parity = event
+            elif event.kind == "e4_completeness":
+                completeness = event
+            elif event.kind == "e5_overhead":
+                overhead = event
     output_dir.mkdir(parents=True, exist_ok=True)
     written: list[Path] = []
     if event := latest.get("e1_census"):
@@ -85,6 +94,39 @@ def generate_tables(audit_dir: Path, output_dir: Path) -> tuple[Path, ...]:
             benchmark_sample.payload["rows"],
             benchmark_sample,
             "`N/A` means source implementations are absent, not that exposure is zero.",
+        )
+        written.append(path)
+    if parity is not None:
+        path = output_dir / "e3-parity.md"
+        _write_table(
+            path,
+            "E3 benchmark adapter parity",
+            parity.payload["rows"],
+            parity,
+            parity.payload["scope"] + ". This is parity, not published-ASR reproduction.",
+        )
+        written.append(path)
+    if completeness is not None:
+        path = output_dir / "e4-completeness.md"
+        _write_table(
+            path,
+            "E4 synthetic mediation completeness",
+            completeness.payload["rows"],
+            completeness,
+            "Each denied graph shape must execute zero child effects.",
+        )
+        written.append(path)
+    if overhead is not None:
+        path = output_dir / "e5-overhead.md"
+        _write_table(
+            path,
+            "E5 measured overhead",
+            overhead.payload["rows"],
+            overhead,
+            (
+                f"Kernel `{overhead.payload['kernel']}`; Landlock ABI "
+                f"`{overhead.payload['landlock_abi']}`."
+            ),
         )
         written.append(path)
     if not written:

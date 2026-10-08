@@ -7,6 +7,7 @@ from typing import Any
 import pytest
 from langchain_core.messages import AIMessage
 from langchain_core.runnables import RunnableConfig, RunnableLambda
+from langchain_core.tools import Tool as SimpleTool
 from langchain_core.tools import tool
 from langgraph.checkpoint.memory import InMemorySaver
 from langgraph.graph import START, MessagesState, StateGraph
@@ -69,6 +70,40 @@ def test_guarded_tool_mediates_direct_invocation() -> None:
     with pytest.raises(SecurityDeniedError, match="blocked"):
         direct_read.invoke({"value": "secret"}, config=config)
     assert executed == 0
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("legacy", [False, True])
+@pytest.mark.parametrize("text_input", [False, True])
+async def test_guard_preserves_string_and_mapping_inputs(legacy, text_input) -> None:
+    observed = []
+
+    class Observe(SecurityModule):
+        name = "observe"
+
+        def tool_call_permission(self, principal, call):
+            observed.append(dict(call.args))
+            return Decision(Verdict.ALLOW, "allowed")
+
+    def read(value: str) -> str:
+        """Read the supplied value."""
+        return value
+
+    original = (
+        SimpleTool(name="direct_read", func=read, description="Read")
+        if legacy
+        else tool("direct_read")(read)
+    )
+    effects(Effect.READ)(original)
+    dac(owner="user", grants={"user": "x"})(original)
+    security = SecurityConfig(modules=(Observe(),))
+    guarded = guarded_tool(original, security=security)
+    config = with_principal({}, _principal(), modules=security.modules)
+    value = "payload" if text_input else {"value": "payload"}
+    assert guarded.invoke(value, config) == "payload"
+    assert await guarded.ainvoke(value, config) == "payload"
+    key = "tool_input" if legacy and text_input else "value"
+    assert observed == [{key: "payload"}, {key: "payload"}]
 
 
 @pytest.mark.asyncio

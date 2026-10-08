@@ -1,6 +1,6 @@
 # Evaluation hardware and model inventory
 
-Captured on 2026-10-05. Every generated result table must cite this file and the
+Captured on 2026-10-08. Every generated result table must cite this file and the
 per-run audit record.
 
 ## Host
@@ -52,7 +52,9 @@ imply that every backend can shard a particular model efficiently.
 | Parameters layer digest | `sha256:cff3f395ef3756ab63e58b0ad1b32bb6f802905cae1472e6a12034e4246fbbdb` |
 | License layer digest | `sha256:d18a5cc71b84bc4af394a31116bd3932b42241de70c77d2b76d69a314ec8aa12` |
 
-The model was pulled from the official Ollama `qwen3:8b` tag on 2026-10-05.
+The model inventory, IDs, and layer digests were reverified locally on
+2026-10-08. Ollama was started with `OLLAMA_CONTEXT_LENGTH=40960` before the
+inventory and live E3 calls; no remote model endpoint is configured.
 
 ## Installed models rejected for the study
 

@@ -1,513 +1,402 @@
-# 0007: Enforce tool grants through pluggable adapters
+# 0007: Layered reference monitor and object-manager boundary
 
 Status: Accepted
 
-The operational lowering sequence and failure diagnostics are specified in
-[Grant lowering and host capability negotiation](../lowering.md).
+This ADR is the review gate for the design. Acceptance fixes the architectural
+direction; each implementation PR is still reviewed on its own. Current and
+target coverage are tracked separately in
+[implementation status](../status.md).
 
 ## Context
 
-The existing security layer mediates configured `ToolNode` and `guarded_tool`
-calls. It does not confine an ordinary graph node, a tool implementation, a
-native extension, or a child process. Once admitted, tool code has the ambient
-authority of the framework process and may exceed its declared effects. A
-benign path-handling bug is therefore enough to turn attacker-controlled tool
-arguments into privilege escalation.
+The earlier documentation described the security hooks as "not process-wide
+MAC." That statement is true only of the framework layer in isolation and is an
+incomplete description of the intended system. It also allowed shipped policy
+defaults to narrow the architectural scope, excluded operations that already
+had refusal hooks, and made `ToolNode` and `guarded_tool` appear to be competing
+mediation boundaries.
 
-Python cannot repair this boundary from inside the same process. A Python
-timeout cannot reliably stop running native or synchronous code, a descriptor
-is only a claim about behavior, and wrappers do not mediate direct system calls.
-The framework must authorize a concrete least-privilege grant and pass it to
-adapters that enforce it at the operating system, sandbox, service, or resource
-owner. No platform mechanism is part of the policy or grant abstraction.
+The corrected model is layered. LangGraph is a user-space object manager for
+the framework objects it owns. The host kernel is the monitor for OS objects.
+Together they form the reference monitor for the system. This follows the
+SELinux precedent of user-space object managers for objects the kernel does not
+own directly, including X, D-Bus, and sepgsql, while the kernel continues to
+mediate kernel objects. The placement analysis follows the authorization-hook
+lineage of Zhang, Edwards, and Jaeger (USENIX Security 2002) and Jaeger,
+Edwards, and Zhang (TISSEC 2004).
 
-This decision refines ADRs 0001, 0003, 0004, and 0006. Their hook framework,
-ordering, private blobs, principal binding, approvals, auditing, delegation,
-and fail-closed behavior remain. Where an earlier ADR treats the Python hook as
-the enforcement boundary, this decision supersedes it.
+The design retains author-owned discretionary grants, restrict-only mandatory
+policy, durable approval, hash-chained audit, monotone delegation, and
+conservative lowering. It changes the framing and the target dispatch
+architecture: `HostRouter` is the single dispatch path for every mediated
+framework operation, and `ToolNode` and `guarded_tool` are callers into it.
 
-## Trust model
-
-Trusted components are the framework, operator node code, policy evaluator,
-selected enforcement adapters, their underlying isolation mechanisms, resource
-owners, and the hook-placement gate. Untrusted components are the model, every
-tool implementation, all input and retrieved data, native tool dependencies,
-and every subagent.
-
-Operator node code is trusted to implement application computation, but its
-security-sensitive operations are still subject to the compile gate. An
-exception requires a stable allow-list entry with an operator-written reason;
-the exception is an audit record rather than an implicit assumption.
-
-The Python layer authenticates, decides, audits, and dispatches. It is not the
-resource enforcer. A denial still prevents dispatch, but an allowed tool's
-filesystem, network, process, and resource consequences are bounded outside its
-Python interpreter.
+This ADR supersedes ADR 0003's separate innermost-boundary framing for
+`ToolNode` and `guarded_tool`. It refines ADR 0004's default-deny rule, ADR
+0005's approval semantics, and ADR 0006's fail-closed behavior for the expanded
+object model and host contract. ADR 0001 is untouched: DAC still runs before
+restrict-only mandatory policy. ADR 0002's private security blobs remain in
+force.
 
 ## Decision
 
-Use one platform-neutral policy pipeline and independently selected enforcement
-adapters at three loci:
+slangGraph is a user-space object manager for ten framework object classes.
+Each operation on those classes is dispatched through `HostRouter`, where the
+hook stack can refuse it. Host-resource authority is compiled into a grant and
+enforced by the kernel or another selected enforcer. The composed framework and
+host layers are the system reference monitor.
 
-1. Local code runs in a fresh worker confined by a host adapter before any
-   untrusted tool module is imported.
-2. Operations whose semantics or credentials cannot be represented by that host
-   adapter go through a trusted service adapter.
-3. Remote operations use resource adapters that mint short-lived credentials
-   whose remote permissions are no broader than the authorized grant.
+The scope rule is:
 
-The default mandatory-policy adapter uses Cedar. Cedar syntax, platform APIs,
-Landlock rule types, Windows handles, and broker protocols do not appear in the
-`Grant` IR. Changing the policy engine or enforcement platform does not change
-profiles, module hooks, or grant semantics.
+> An operation is in scope if and only if a hook on the single dispatch path can refuse it.
 
-The pipeline is:
+Scope is determined only by hook placement and refusal authority. Whether a
+shipped policy currently permits an operation, records labels only, or enables
+a reference policy by default does not change scope.
 
-```text
-profile + principal envelope + shares
-                  |
-                  v
-       constructive DAC candidates
-                  |
-                  v
-  mandatory line + aggregate filtering
-                  |
-                  v
-       assemble surviving call grant
-                  |
-                  v
-   requirement-ledger revalidation
-                  |
-                  v
-    canonical, platform-neutral Grant
-                  |
-                  v
-       enforcement-obligation DAG
-             /          |          \
-            v           v           v
-       host adapter  service adapter  resource adapter
-             \          |          /
-                  v
-       worker activation receipt
-```
+## Object classes and operations
 
-Default deny applies at every stage. Resource classes are discovery hints, not
-security guarantees. Adapters negotiate every exact obligation, including its
-resource scope and conditions, and the obligation DAG includes closed-world
-denial of unlisted authority. An adapter set that cannot enforce a required
-obligation reports it instead of silently lowering the rule to something broader.
+The seven existing hook names are frozen:
 
-## Constructive DAC profiles
+- `tool_alloc_security`
+- `cred_prepare`
+- `cred_transfer`
+- `tool_call_prepare`
+- `tool_call_permission`
+- `tool_call_post`
+- `resume_permission`
 
-The `.slp` profile grammar contains `tool` and `principal` blocks. This is the
-only new policy syntax. Tool authors describe the resources and limits a call
-needs; users describe their resource envelope, credentials, and shares. The
-effective DAC candidate is:
+New hooks are additive and default to `ALLOW`, so existing modules remain
+source-compatible. All hooks return a verdict and may emit forbid policies and
+labels within the module contract.
 
-```text
-profile(tool, normalized arguments) ∩ envelope(principal) ∩ shares
-```
+That compatibility default applies only to the module layer. Constructive DAC
+for an undeclared tool grants `tool_read` no state channels and no store keys,
+matching the undeclared default of no authority in every other class.
 
-Variables bind only to typed, normalized arguments. `need` lines deny the call
-when their intersection is empty. Empty `want` lines are removed and audited.
-Operator `dac_overrides` replace complete profile lines and are audited.
+| Object class | Operations | Refusing hook or enforcement point |
+| --- | --- | --- |
+| Principal | `bind`, `transfer`, `attenuate` | `cred_prepare`; session transfer plus `cred_transfer`; `cred_transfer` |
+| ToolCall | `prepare`, `invoke`, `post` | `tool_call_prepare`; `tool_call_permission`; `tool_call_post` |
+| Dispatch | `subgraph`, `Send`, `parallel_branch`, `subagent`, `nested_agent` | `cred_transfer` plus an explicit child-subset check for every dispatch |
+| ToolRegistry | `register` (static at compile time and dynamic at runtime), `override` | `tool_alloc_security`; inference supplies the undeclared default and every override is audited |
+| State | `write`, `restore`, `tool_read`, `model_read`, `store_read`, `store_write` | new `state_write`, `state_restore`, and `state_read` hooks; restore also verifies the hash chain and principal binding; store keys are resources with owners and labels |
+| Approval | `resume` | `resume_permission`, followed by the complete permission chain again; approval is per call, not per policy line |
+| FrameworkOp | `guard_operation` | existing `guard_operation` dispatch |
+| ModelInvocation | `invoke` | new `model_invoke`; the full verdict denies or strips labeled context before prompt assembly |
+| Output | `emit(destination)` | new `output_emit`; the full verdict is allow, deny, redact, or escalate, with content, confidentiality and integrity labels, and destination clearance visible to the hook |
+| HostResource | `file`, `socket`, `exec`, `syscalls`, `limits` | kernel enforcement of the compiled grant |
 
-Undeclared tools have no callers, filesystem, network, executable, service, or
-credential grants and receive only the minimal runtime syscall set. They cannot
-run until an explicit declaration or operator override supplies authority.
+`state_read` covers tool, model, and store reads. `state_write` covers graph state
+and store writes. Hook request types distinguish the operation and resource;
+they are not separate public hook names.
 
-DAC is constructive: it can only propose concrete authority owned by the tool
-author or user. Cross-tool authority combinations, organization-wide ceilings,
-escalation, and separation of duty belong to mandatory policy. End-to-end
-information flow is a separate property: a current-grant aggregate check cannot
-soundly track data through results, model context, checkpoints, graph state, or
-delegation, so this ADR does not claim session noninterference.
+Same-principal dispatch, including a parallel branch of one agent, still runs
+`cred_transfer` and emits an identity-transfer record. The record makes the
+dispatch visible in audit even when no authority is attenuated.
 
-The profile grammar freezes after the profile parser and monotonic DAC evaluator
-land. Property tests define monotonicity over set inclusion: reducing the tool
-profile, principal envelope, or applicable shares cannot enlarge the resulting
-candidate.
+## Default policy
 
-## Mandatory policy adapter
+The syntax, engine, broker phase, module contract, and naming choices below are
+decided by default; the instructor may reverse any of them before PR 1 without
+a new ADR.
 
-Cedar is the default mandatory-policy adapter. OPA may be supplied behind the
-same `Policy` interface by deployments that already operate it. Policy adapters
-return restrictive decisions over typed candidate lines; they do not emit
-platform-specific enforcement objects.
+This section describes shipped defaults, not scope. `model_invoke` and
+`output_emit` ship label-only. Reference non-exfiltration, integrity, and
+compartmentalization policies over those operations ship off by default.
 
-Each surviving DAC line is authorized independently. The evaluator creates one
-ephemeral Cedar `permit` matching exactly that candidate line, combines it with
-the operator-owned `forbid` set, and submits the typed domain, action, resource,
-and call context. A line survives only when Cedar returns `Allow` and reports no
-diagnostic or evaluation error. Any error denies that line. A removed `need`
-line denies the call.
+The default user syntax is one `.slp` file containing `tool`, `principal`, and
+`policy` blocks. The `policy` block is forbid-only and compiles internally to
+the mandatory-policy engine. Users do not see Cedar. Cedar is the default
+engine because it is analyzable and forbid-wins. A deployment that already
+operates OPA may provide it behind the same `Policy` interface.
 
-The evaluator also performs an aggregate authorization over the complete
-candidate so mandatory policy can reject combinations that would be unsafe even
-when each line survives separately. Broad resource sets are subtracted using a
-typed, sound resource algebra, checked at each concrete broker operation, or
-rejected; authorizing one representative resource never authorizes a set.
+Modules return verdicts, forbid policies, and labels only. They request human
+review through the hook's `ESCALATE` verdict. Broker and resource-side
+credential enforcement are phase two.
 
-`forbid` always wins. Student modules may set typed, namespaced labels and emit a
-bounded forbid-only constraint IR. They cannot submit arbitrary Cedar text,
-emit `permit`, alter the ephemeral base permit, invent entities, or contribute
-escalation policy. The framework validates ownership, types, references, scope,
-and complexity before translating the IR to Cedar. Authorization-affecting
-modules and the translator are in the TCB and are artifact-pinned. A module
-requests human review by returning the existing `ESCALATE` verdict. The
-escalation policy set is operator-owned and is consulted only after no mandatory
-policy forbids the candidate.
+The naming default is `slanggraph` for the package and CLI, slangGraph in prose,
+and `.slp` for grammar files; the bare name "slang" is not used.
 
-A type or evaluation error in a student policy is attributed to the module and
-denies the affected line. A module used by every line can therefore deny the
-whole call when it is buggy. This availability cost is the intended fail-closed
-behavior.
+## Complete path cover
 
-Cedar's symbolic compiler is used offline to validate properties of operator
-policy sets. It is not run as a per-request containment proof for module output.
+Placement analysis must map every path from untrusted input to a
+security-relevant effect to a refusing operation. A path that cannot be placed
+fails compilation.
 
-Reference operator policy covers ceilings, per-tool confinement, typed-domain
-compartmentalization, non-exfiltration, integrity, delegation depth, human
-oversight, quotas, supply-chain manifests, adapter attestation, separation of
-duty, and audit requirements.
-
-## Platform-neutral Grant IR
-
-An allowed call becomes an immutable `Grant`. It identifies the subject domain
-as `(principal, tool)` and contains typed resource selectors, filesystem
-operations, network operations, executable authority, syscall classes, resource
-limits, service rules, and provenance for every surviving line. The IR expresses
-security semantics, not a platform lowering: it contains no Landlock access bits,
-Linux file descriptors, Windows handles, sandbox bytecode, or broker wire types.
-
-The `Grant` is a closed-world allowlist: operations outside it are denied, rather
-than left as ambient worker authority. It also contains an explicit runtime
-baseline supplied by the selected adapter set before mandatory policy runs. On
-Python this normally includes
-read-only access to the interpreter's runtime libraries, standard library,
-declared tool artifact and dependencies, `/dev/urandom`, and timezone data;
-execute authority is limited to the interpreter. Native extension `.so` files
-need read access for `mmap`, not Landlock `EXECUTE`, which governs `execve`-style
-execution. A private per-worker temporary directory receives only the minimum
-read, write, create, truncate, and delete rights required by the profile.
-
-Baseline lines have adapter provenance, pass through the same operator forbids,
-appear in the final `Grant`, and are included in the attestation and audit. An
-adapter may not add hidden runtime authority during lowering. If its declared
-baseline is insufficient to start the runtime, execution fails rather than
-silently expanding the sandbox.
-
-The IR does not treat a `realpath()` string as sufficient proof of filesystem
-identity. It carries a canonical semantic selector and the provenance needed for
-an adapter to resolve it without widening authority. The Linux reference adapter
-uses `openat2` with `RESOLVE_BENEATH | RESOLVE_NO_MAGICLINKS` and `O_PATH`
-descriptors; a Windows adapter can use native handles and reparse-point-safe
-resolution; another sandbox may use its own object model. Native resolved objects
-belong to the adapter's compiled sandbox, not the portable `Grant`.
-
-The `Grant` type and Cedar request construction freeze together after the Cedar
-integration lands.
-
-## Host model
-
-An immutable `HostModel` describes the semantic enforcement capabilities that a
-particular machine currently provides. It is produced by trusted runtime probes,
-not supplied by graph state, tool metadata, policy data, or the model. Platform,
-architecture, capability evidence, probe versions, and a canonical digest are
-recorded for audit, while the capability names themselves remain platform-neutral.
-The digest authenticates nothing by itself: a `HostAttestation` must be verified
-against a configured trust anchor and bound to boot, namespaces, credentials,
-cgroup placement, adapter identity, freshness, and a challenge nonce.
-
-The host model is distinct from the adapter contract. A host can provide a
-primitive for which no selected adapter exists, and an adapter can support a
-capability that is unavailable on the current host. Class-level discovery first
-computes:
-
-```text
-required       = grant.classes()
-host_missing   = grant.host_classes() - host.capabilities()
-adapter_missing = required - adapters.declared_capabilities()
-effective      = adapters.capabilities(host)
-```
-
-This calculation only finds candidate adapters and produces diagnostics. It does
-not authorize execution. Every exact operation, selector, condition, dependency,
-and closed-world complement is then assessed as an obligation. Any unsupported
-host-bound obligation denies execution. Diagnostics attribute whether the host
-primitive, selected adapter, or exact rule representation is missing. Service
-and resource-side obligations are checked against their adapters rather than the
-host set.
-
-The host model used at compile time is an expectation, not a permanent fact. The
-selected adapters re-probe or validate attestation before dispatch. A stale model,
-changed host feature, failed probe, or unverifiable attestation denies execution;
-none silently selects advisory mode.
-
-## Enforcement-adapter obligation contract
-
-An adapter's supported rule classes are only discovery hints. The framework
-expands the `Grant` into exact enforcement obligations and asks adapters to assess
-each operation, selector, condition, dependency, and closed-world complement as
-`EXACT`, `STRICTER`, or `UNSUPPORTED`. Host, service, and resource adapters may be
-composed through an obligation DAG; each obligation has one primary enforcer and
-one grant rule may depend on several enforcers. A call may run as enforced only
-when every required obligation and dependency has worker-bound activation
-evidence.
-
-Lowering is conservative. An adapter may implement an obligation exactly,
-implement a strict subset, or report it unsupported. It may never implement a
-superset. Property tests compare each adapter's effective authority with its
-input obligations and recheck `need`/`want` after every reduction.
-
-An operator may explicitly waive only an obligation declared waivable. Such an
-execution is `DEGRADED`, never `ENFORCED`, and carries the complete missing
-guarantee set and known authority upper bound. Identity/artifact binding,
-closed-world default deny, isolation before import, grant integrity, credential
-custody, `need` satisfaction, approval binding, and audit precommit are
-non-waivable.
-
-The `advisory` adapter enforces nothing and makes that fact conspicuous in trace
-output. It exists for development and laptop compatibility, cannot satisfy a
-non-waivable obligation, and never produces an enforced result. The adapter and
-audit contracts freeze after the obligation, activation-receipt, degradation,
-and attestation paths land.
-
-## Linux reference adapter
-
-The first enforcing host adapter targets Landlock, seccomp-BPF, cgroup v2,
-rlimits, and a trusted supervisor. These mechanisms are an implementation of the
-generic adapter contract, not slangGraph's policy or Grant format:
-
-| Rule | Enforcement |
+| Untrusted-input-to-effect path | Required mediated landing |
 | --- | --- |
-| filesystem read, write, create, delete, execute, truncate | Landlock filesystem rights compiled from `O_PATH` descriptors |
-| TCP `connect(port)` and `bind(port)` | Landlock network rights |
-| UDP and raw sockets | denied by seccomp regardless of available Landlock ABI |
-| syscall allow-set | seccomp-BPF resolved for the worker architecture |
-| executable target | Landlock `EXECUTE`; seccomp only admits or rejects `execve` and `execveat` as syscall classes |
-| fork, clone, signal, ptrace | seccomp, Landlock scoping where available, and Yama; namespace isolation only when attested |
-| CPU, memory, PIDs | cgroup v2 when delegated; otherwise the supported rlimit subset |
-| open-file count | `RLIMIT_NOFILE` |
-| wall clock | supervisor timer followed by pidfd or cgroup termination |
+| The model proposes a call | ToolCall `prepare` and `invoke` |
+| A proposal arrives through a subgraph, `Send`, or subagent | Dispatch plus `cred_transfer` and child-subset check |
+| Injected content changes an argument | ToolCall `prepare` and `invoke` after final normalization |
+| Injected content is written to state and read later | State `write`, then the applicable `tool_read` or `model_read` |
+| A tool result carries a secret into context | ToolCall `post`, State `write`, and ModelInvocation `invoke` |
+| Another thread's data arrives through the store | State `store_read` on a key resource with owner and labels |
+| A checkpoint is tampered with or replayed | State `restore`, hash-chain verification, and principal binding |
+| A tool is added at runtime without a profile | ToolRegistry `register`, `tool_alloc_security`, and undeclared-default inference |
+| A human approves a call | Approval `resume`, then the complete permission chain again |
+| A tool touches the operating system | HostResource enforcement from the grant |
+| Output targets a destination with lower clearance | Output `emit(destination)` |
+| A child's output returns to its parent | Output `emit`, label propagation, and the parent State `write` |
 
-The Linux adapter queries `LANDLOCK_CREATE_RULESET_VERSION` and derives capabilities
-from the returned ABI. It never infers Landlock features from a kernel release
-number. TCP port rules require ABI 4 or later. Domain and destination-address
-policy is not represented as Landlock network authority; it requires the broker
-or an egress proxy.
+## Trust per node
 
-The framework process never forks. Phase one starts a dedicated single-threaded
-trusted spawner before the framework creates event loops, telemetry exporters,
-or any other threads. The spawner is the only component that forks workers. It
-contains no untrusted tool code and forks a fresh worker for every call.
+Operator-authored nodes are trusted by default. Imported components are
+untrusted by default. Promotion is an audited operator action, analogous to a
+DAC override.
 
-The Linux adapter's spawner resolves paths, opens the `O_PATH` descriptors, creates the Landlock
-ruleset, adds every filesystem and network rule, and then closes the `O_PATH`
-descriptors. The worker inherits one ruleset descriptor, the result pipe, and
-the broker socket only. Where cgroup delegation is available, the spawner holds
-the worker behind a synchronization barrier until the worker PID is placed in
-its prepared cgroup. The worker installs `no_new_privs`, calls `restrict_self`,
-closes the ruleset descriptor, applies seccomp and rlimits, and only then imports
-the untrusted tool. Because files opened before Landlock confinement are not
-retroactively restricted, the clean descriptor table is mandatory.
+Trusted node code runs in the coordinator. Hooks are honored by assumption;
+placement analysis checks that assumption. Placement analysis is a check on
+the trust assumption, not a security boundary.
 
-Phase one does not require Linux namespaces. PID isolation is a separately
-attested capability because unprivileged PID namespaces generally depend on a
-user namespace and host policy may prohibit their creation. Likewise, cgroup v2
-limits are capabilities only when the service manager delegated a subtree to
-the spawner. The Linux adapter detects delegation and `cgroup.kill` independently. If
-cgroup enforcement is unavailable, it reports the missing limit capabilities
-and may conservatively lower supported limits to `RLIMIT_CPU`, `RLIMIT_AS`,
-`RLIMIT_NPROC`, and `RLIMIT_NOFILE`. The capability contract decides whether the
-resulting strict subset may run.
+Untrusted node code is dispatched through `HostRouter` as a unit of work in a
+separate process. Its framework-object access crosses the same channel used by
+tools, so hooks mediate it by construction. Trusted and untrusted modes expose
+the same hook surface, and a module cannot distinguish them.
 
-Seccomp denial actions are part of the compiled policy and attestation.
-Capability probes and ordinary denied operations, including `socket()` and
-`connect()`, return `EPERM` with `SECCOMP_RET_ERRNO` so the tool can terminate
-normally and expose the failure to the audit path. Escape and kernel-attack
-syscalls including `ptrace`, `process_vm_readv`, `bpf`, and `unshare` use
-`SECCOMP_RET_KILL_PROCESS`. The supervisor records signal and exit status even
-when no per-syscall kernel audit record exists.
+No untrusted code runs in the coordinator process. The framework runtime,
+policy backend, grant compiler, modules, and operator-promoted trusted nodes are
+inside the framework TCB; untrusted nodes and tools are not.
 
-The worker inherits only the result descriptor and its authenticated broker
-descriptor. The socketpair is created with `SOCK_CLOEXEC`, or immediately
-marked `FD_CLOEXEC`, so an executed child cannot inherit broker authority.
-Explicitly delegable broker access requires a profile grant and a trusted
-launcher operation that deliberately transfers an authenticated child channel.
-After confinement, seccomp denies `socket()` and `connect()` for broker-only
-tools. The worker communicates over the inherited socketpair; it does not create
-or connect a socket.
+## Invariants
 
-Landlock and seccomp restrictions stack and are inherited by permitted child
-processes. They can only tighten local kernel authority. This is defense in
-depth, not a replacement for evaluator and broker subset checks.
+- Complete mediation: every operation on the ten classes crosses the hook stack through HostRouter as the single dispatch path; `ToolNode` and `guarded_tool` are callers into it, not peers.
+- Tamperproofing: no untrusted code in the coordinator process; modules cannot widen authority (verdicts, forbid policies, labels only; never permits; never mutation of principals, grants, or audit).
+- Policy flow: host enforcement implements the grant exactly or tighter, recorded per rule as `exact | tightened | unsupported`; looser is a denial; unsupported is a denial unless the class is explicitly waived.
+- Fail closed: exception, timeout, malformed output, missing principal, unverifiable checkpoint, unlowerable class, unplaceable path all deny, named in the audit.
+- Monotonicity: `prepare`, `attenuate`, and every dispatch yield a subset of the parent's authority, checked by the evaluator and, where the backend supports it, by the kernel. Delegation and every minted credential get an explicit child-subset check regardless of kernel attenuation.
+- Verifiability: TCB enumerated per layer (host: kernel, adapter, launcher, broker; framework: coordinator, LangGraph runtime, policy backend, grant compiler, modules, trusted node code); coverage tracked per operation in `status.md`.
 
-Landlock denial audit records are a conditional capability rather than a
-baseline guarantee. Landlock kernel audit support begins with Linux 6.15 and may
-also depend on host audit configuration. The attestation states whether it is
-active. On older or non-auditing hosts, evidence consists of the worker-visible
-`errno`, attempted operation metadata available to the supervisor, and worker
-exit status; the audit must not claim a kernel-generated denial event.
+## Out of scope
 
-## Service and resource adapters
+The following are outside the claim because no hook can be placed or no
+enforcement exists:
 
-The reference service adapter uses a broker. At fork time, that broker binds its
-socketpair endpoint to a spawn record
-containing the principal, tool identity, `Grant` hash, and nonce. Worker
-requests name only the desired broker operation and arguments. The broker
-ignores any worker-supplied identity, grant, or claimed scope and re-evaluates
-the operation against the spawn record and bound principal.
+- reads performed directly by trusted node code;
+- kernel bugs and side channels;
+- remote services that provide no usable scoping mechanism;
+- name-based network policy without a proxy;
+- what a tool computes over data it was granted, although where the result goes
+  is in scope through `post` and `output_emit`;
+- the model-provider channel, discharged for evaluation by using local Ollama;
+  and
+- denial of service.
 
-Credentials never enter the worker environment, filesystem, or descriptor
-table. The broker holds credentials and mints a token no broader than the
-service rule. Every mint performs an explicit child-subset check. Initial token
-issuers are AWS STS role sessions with session policies and GitHub App
-installation tokens restricted by repository and permission. The audit records
-issuer, effective scope, expiry, grant hash, and request identity, but never the
-credential value.
+Model invocation and output are not on this list: both have refusing hooks and
+are therefore in scope.
 
-Named services such as mail recipients, chat channels, SQL statements, HTTP
-domains, databases, browsers, and remote MCP servers are broker or proxy
-operations. Remote tools that declare local rule classes fail the capability
-contract unless operator policy explicitly permits advisory execution.
+## Host capability contract
 
-## Delegation and worker lifecycle
+Host capabilities are probed and attested per boot. The Landlock ABI is obtained
+from the return value of
+`landlock_create_ruleset(NULL, 0, LANDLOCK_CREATE_RULESET_VERSION)`, never by
+comparing a kernel version. Attestation also records cgroup v2 delegation and
+`cgroup.kill`, unprivileged user-namespace availability, BPF LSM, Landlock
+audit support, and the mechanism that confined each call.
 
-The evaluator and broker perform an explicit subset check for every delegated
-grant and minted credential. Typed labels use a registered attenuation partial
-order and meet; opaque labels are copied unchanged or are nondelegable. Shared
-budgets use an atomic escrow ledger so siblings cannot each consume the parent's
-entire limit. A child grant, labels, budget, baseline, leases, and credentials
-must all be no more authoritative than the parent. Inherited kernel restrictions
-reinforce this property only for local kernel resources.
+Compilation fails on an unsupported rule class unless the operator supplies a
+per-class waiver with a reason. Every audit record for affected calls is stamped
+`unenforced`. Module-introduced classes are rechecked at grant time; an
+unsupported class denies that call. Each lowered rule records `exact`,
+`tightened`, or `unsupported`.
 
-The dedicated single-threaded spawner is the only worker creation path and
-always produces one fresh worker per call. It is part of phase one. If later
-benchmarks require multiple preinitialized spawners, each remains free of
-untrusted tool code and is keyed by enforcement-envelope hash, subject, tool
-artifact hash, and taint class. Every call still receives a fresh child that
-tightens to the call grant before importing the tool. Arbitrary tool state never
-crosses calls, subjects, or grant keys.
+`slanggraph check --backend X profiles/` is the profile/backend linter and exits
+nonzero when an unwaived class is unsupported.
 
-## Verified hook placement
+## Mandatory-policy redlines
 
-This section specifies the target. The current implementation has an explicit
-escape-analysis CLI and a separate [bounded authorization-state checker](../mediation-analysis.md).
-The graph compile gate and whole-framework verification described below are not
-implemented. See [implementation status](../status.md) for shipped guarantees.
+- The evaluator creates one ephemeral `permit` for each surviving DAC line and
+  combines it with operator forbids.
+- Any diagnostic or evaluation error denies the affected line. A type error in
+  a module forbid denies the line and names the module; that availability cost
+  is intentional.
+- Modules are forbid-only. They never submit a `permit` or mutate the ephemeral
+  permit, entities, principals, grants, or audit.
+- The escalation policy set is operator-owned.
+- Cedar symbolic analysis is an explicit offline verification step, not free
+  validation on the request path.
 
-Hook placement is verified rather than assumed. The source analyzer is a
-compile gate for graphs built with `security=...`. Compilation fails when
-model-controlled data can reach an unmediated sink, an unresolved call, an
-unprotected execution path, or tool behavior absent from its declaration.
+## Kernel and worker redlines
 
-An operator may allow-list a finding only with a non-empty reason. Each entry is
-matched narrowly, included in the graph's security fingerprint, and written as
-an audit record at compile time. The framework's own findings must either be
-removed or carry a justification suitable for publication.
+- Landlock network objects are ports, not endpoints. Endpoint or name policy
+  requires a proxy or broker.
+- `exec(target)` is lowered with Landlock `EXECUTE`.
+- Seccomp admits or rejects syscall classes only. It returns
+  `SECCOMP_RET_ERRNO` with `EPERM` for `socket` and `connect`, so libraries fail
+  gracefully, and uses `SECCOMP_RET_KILL_PROCESS` for `ptrace`,
+  `process_vm_readv`, `bpf`, and `unshare`.
+- CPU, memory, and PID limits use cgroup v2; file-descriptor limits use
+  `RLIMIT_NOFILE`; wall time is enforced by the supervisor using a timer and
+  pidfd kill. Without cgroup delegation, `RLIMIT_CPU` and `RLIMIT_AS` are the
+  fallback and `limits` is reported as a strict subset.
+- Filesystem paths are resolved with
+  `openat2(RESOLVE_BENEATH | RESOLVE_NO_MAGICLINKS)` into `O_PATH` descriptors
+  passed as `parent_fd`. Create permission applies to the resolved parent. The
+  IR contains no `realpath` strings.
+- The trusted parent constructs the complete Landlock ruleset and passes the
+  worker a single ruleset fd. The worker only calls `restrict_self` and holds no
+  `O_PATH` descriptors. A clean fd table before `restrict_self` is mandatory.
+- The spawner is single-threaded and starts before any threads exist. A template
+  process contains no untrusted code; each call forks a fresh worker, tightens
+  it, and only then imports the target. Workers are not pooled by domain alone.
+- Every grant includes an explicit, attested, visible, read-only runtime
+  baseline for the interpreter, standard library, tool packages,
+  `/dev/urandom`, and temporary storage.
+- Phase one requires no namespaces. Bubblewrap depends on unprivileged user
+  namespaces, which Ubuntu 24.04 restricts by default; Landlock and seccomp do
+  not. Landlock is primary, `pid_isolation` is attested, and each audit records
+  the confinement mechanism.
+- Landlock audit is separately attested because it is available only from Linux
+  6.15. On older kernels, the worker's `errno` is denial evidence.
 
-This follows the authorization-hook-placement tradition established by Zhang,
-Edwards, and Jaeger's static verification of complete mediation and Jaeger,
-Edwards, and Zhang's consistency analysis of the relationship between hooks and
-security-sensitive operations.
+## Phase-two broker redlines
 
-## Tool execution routes
+The trusted parent creates a `socketpair()` before confinement. After
+confinement, the worker cannot call `socket()` or `connect()`. Descriptors are
+`CLOEXEC` by default. Each broker channel is bound to a spawn record containing
+the principal, tool, grant hash, and nonce; worker-supplied identity is never
+trusted. Initial credential issuers are GitHub App installation tokens and AWS
+STS session policies.
 
-The tool manifest selects the locus through its `runs` field:
+## Approval and pipeline order
 
-| Tool form | Route |
-| --- | --- |
-| Python function or native extension | fresh worker under the selected host adapter |
-| CLI or subprocess | confined worker with adapter-provided executable authority |
-| local MCP server | server envelope plus MCP proxy; strict mode starts a server per call |
-| code execution | WASI or microVM host adapter |
-| browser or computer use | confined launcher plus URL proxy |
-| database | broker-selected database role and row-level security |
-| HTTP API, SaaS, remote MCP | broker-held credential and resource-side token |
-| non-Python runtime | language-neutral `slanggraph-exec` launcher |
+Approval is for one call, not one policy line. An `ESCALATE` interrupts the
+call; resume begins a new evaluation of the complete permission chain and may
+not bypass a changed principal, policy, arguments, grant, or host capability.
 
-Local MCP per-call narrowing is service-adapter enforcement inside a host-confined
-server envelope. It does not claim that an already-running server's kernel
-domain can be widened or reset.
+```text
+profile + principal + shares
+            |
+            v
+constructive DAC candidates
+            |
+            v
+prepare / normalize / re-run DAC
+            |
+            v
+one ephemeral permit per surviving line + operator forbids
+            |
+            v
+                         call verdict
+                        /      |      \
+                       v       v       v
+                    deny     allow   ESCALATE
+                      |        |        |
+                      v        |        v
+                     stop      |  approval for this call
+                               |        |
+                               |        v
+                               |  complete permission chain again
+                               |        |
+                               +---+----+
+                                   |
+                                   v
+                        canonical Grant and lowering
+                                   |
+                                   v
+                          HostRouter dispatch
+```
 
-## Audit and failure behavior
+## Documentation changes
 
-The audit chain records candidate lines, removed lines and policy identifiers,
-normalization and descriptor-resolution failures, approval state, final grant
-and provenance, exact obligations, adapter assessments, verified host evidence,
-activation receipt, retained ambient authority, unenforced guarantees,
-delegation subset results, broker requests, effective token scope, worker exit,
-supervisor termination, and kernel denial evidence when available.
+`README.md`, `reference.md`, `escape-analysis.md`, and
+`users/security-boundary.md` are rewritten around the object-manager framing,
+scope rule, and ten-class scope list. `status.md` gains per-operation and
+per-authority coverage tables. `host-routing-completeness.md` is extended from
+seven entry points to the full router set, and `ToolNode` and `guarded_tool` are
+removed from its exclusions as they become router callers.
 
-Failure to parse, bind, normalize, resolve, authorize, lower, attest, isolate,
-or write the pre-dispatch audit record denies execution. After dispatch, an
-uncertain side effect or completion-audit failure is `INDETERMINATE`, not a
-denial. The chain is sealed with a terminal count/head and independently
-witnessed so valid-prefix truncation is detectable. No enforcement adapter
-silently degrades. Policy hook timeouts still deny the decision, but timeout of
-untrusted tool execution is enforced by the supervisor rather than a Python
-thread timeout.
+## Delivery order and freeze points
 
-## Delivery and freeze
+Phase one is planned as approximately five weeks. The order is mandatory:
 
-Phase one is five weeks and contains:
+1. Make `HostRouter` the single dispatch path. Route `ToolNode` and
+   `guarded_tool` through it and retire their separate completeness arguments.
+2. Add router entry points for Dispatch, ToolRegistry, State, ModelInvocation,
+   and Output with the hooks defined above.
+3. Mediate `ToolRuntime` injection. Profiles declare readable channels and
+   store keys; tools never receive `config` and receive only their principal ID.
+4. Verify checkpoint restore against the hash chain and bound principal; model
+   store keys as owned and labeled resources.
+5. Run `tool_alloc_security` and inference for dynamic registration, applying
+   the undeclared default at runtime.
+6. Enforce the compile gate: unmediated paths fail compilation, in-process
+   execution of untrusted code is rejected, and all 56 current findings are
+   removed or waived with reasons.
+7. Deliver PR 1 for profile grammar and the monotone constructive DAC evaluator;
+   PR 2 for attributed, canonical `Grant` construction; PR 3 for Cedar; PR 4
+   for backend contract, attestation, `advisory`, capability gate, and the
+   `check` linter; and PR 5 for Landlock, seccomp, cgroup v2 with rlimit
+   fallback, and the spawner.
 
-1. profile grammar and monotonic constructive DAC evaluator;
-2. attributed platform-neutral `Grant` IR and resource selectors;
-3. Cedar integration and reference mandatory policies;
-4. obligation and adapter interfaces, host attestation, activation receipts,
-   transactional audit changes, and explicit degradation; and
-5. the dedicated spawner and Linux reference adapter.
+Frozen now are the seven existing hook names and invocation structure. The
+`tool_call_permission` return contract, `Grant`, Cedar request construction,
+backend contract, audit schema, and new hook signatures remain open. The
+profile grammar freezes after PR 1; `Grant` and Cedar request construction
+freeze after PR 3; backend and audit contracts freeze after PR 4. The course
+contract promises only hook names and "return a verdict, optionally emit forbid
+policies."
 
-Service credential custody, MCP proxying, the native launcher, a second host adapter,
-and benchmark evaluation are phase two and are scoped after phase one.
+Phase two adds broker credential custody and scoped tokens, an MCP stdio proxy,
+the `slanggraph-exec` launcher, a second `wasi` or `microvm` backend, and the
+evaluation harness.
 
-The seven existing hook names and their invocation structure remain stable.
-The course contract promises that modules return a verdict and may optionally
-emit typed forbid constraints and labels. The detailed return type is not frozen
-until Cedar integration. The profile grammar freezes after step 1; `Grant` and Cedar request
-construction freeze after step 3; adapter and audit contracts freeze after step
-4.
+## Claim gates
+
+No guarantee is printed until its corresponding tests pass under both `invoke`
+and `ainvoke`.
+
+Kernel gates cover a granted file while a second file and `ctypes` `open(2)`
+receive `EACCES`, grandchild non-expansion, and a per-backend conservative
+lowering property. Contract gates cover unsupported compilation, waived
+`unenforced` audit stamps, the same profile reported as `exact` on Landlock ABI
+4, and denial of module-introduced unsupported classes.
+
+Object-model gates cover subgraph and `Send` dispatch under `DenyAll`, one
+`cred_transfer` record per dispatch, undeclared dynamic registration, principal
+isolation for store reads, checkpoint tamper refusal, low-integrity inputs to
+irreversible calls, and a completeness test for every router entry point.
+`ToolNode` and `guarded_tool` have no separate completeness tests.
+
+Read/output gates cover undeclared channels, context stripping before a
+lower-clearance model invocation, blocking secrets from lower-clearance output,
+and low-integrity labels on child output returned to a parent. Cedar rejects a
+module that emits `permit`. Phase two proves broker custody and exact token
+scope.
 
 ## Consequences
 
-Tool startup becomes more expensive and platform-specific. Correctness takes
-priority over the provisional 1-to-3 millisecond estimate: the phase-one target
-is less than 5 milliseconds of Linux-reference-adapter overhead per call and less than
-2 percent of an AgentDojo run, measured before pooling is considered. Advisory
-mode retains the previous sub-millisecond decision target but is explicitly
-degraded and provides no resource-confinement claim.
+The claim becomes precise: slangGraph is a reference monitor for the ten
+framework object classes, composed with the host kernel as the monitor for OS
+objects. Interface mediation can authorize a call but cannot bound a vulnerable
+tool; kernel confinement can. Placement analysis supports the trusted-node
+assumption and proves coverage only for the paths and operations in its model.
 
-Profiles, normalizers, path resolution, adapter feature detection, and service-adapter
-authentication become security-critical code. Operators must provision Linux
-hosts with the required LSM, cgroup, namespace, and seccomp support. Portable
-deployments must either select another enforcing adapter or explicitly accept
-advisory classes.
+The architecture has a larger TCB and a stricter deployment contract. It also
+has one vocabulary for trusted and untrusted execution, one auditable dispatch
+path, explicit degradation, and no silent widening during policy evaluation or
+grant lowering.
 
-The architecture gains a defensible distinction between authorization and
-enforcement: interface mediation decides what should happen, while the selected
-host, service, and resource adapters bound what can happen when tool code is
-buggy or hostile.
-
-## Non-goals
-
-This decision does not claim confinement of model final text, domain-level
-network policy without a service adapter or proxy, protection against kernel or adapter
-bugs, or enforcement by a remote service whose API provides no suitable scoping
-mechanism.
+Use `slanggraph` for the package and CLI, slangGraph in prose, and `.slp` for
+grammar files. Do not use the bare name "slang."
 
 ## References
 
-- Xiaolan Zhang, Antony Edwards, and Trent Jaeger. [Using CQUAL for Static
-  Analysis of Authorization Hook Placement](https://www.usenix.org/legacy/event/sec02/full_papers/zhang/zhang_html/).
-  11th USENIX Security Symposium, pages 33-48, 2002.
-- Trent Jaeger, Antony Edwards, and Xiaolan Zhang. [Consistency Analysis of
+- SELinux Project, [Implementing SELinux-aware applications and object
+  managers](https://github.com/SELinuxProject/selinux-notebook/blob/main/src/implementing_seaware_apps.md).
+  This documents X, D-Bus, and SE-PostgreSQL as user-space object managers.
+- PostgreSQL, [sepgsql](https://www.postgresql.org/docs/current/sepgsql.html).
+  PostgreSQL describes sepgsql as making PostgreSQL a user-space object manager.
+- Xiaolan Zhang, Antony Edwards, and Trent Jaeger, [Using CQUAL for Static
+  Analysis of Authorization Hook Placement](https://www.usenix.org/legacy/event/sec02/full_papers/zhang/zhang_html/),
+  11th USENIX Security Symposium, pages 33–48, 2002.
+- Trent Jaeger, Antony Edwards, and Xiaolan Zhang, [Consistency Analysis of
   Authorization Hook Placement in the Linux Security Modules
-  Framework](https://research.ibm.com/publications/consistency-analysis-of-authorization-hook-placement-in-the-linux-security-modules-framework).
-  ACM Transactions on Information and System Security 7(2), pages 175-205,
+  Framework](https://research.ibm.com/publications/consistency-analysis-of-authorization-hook-placement-in-the-linux-security-modules-framework),
+  ACM Transactions on Information and System Security 7(2), pages 175–205,
   2004.
-- Linux kernel documentation. [Landlock: unprivileged access
+- Linux kernel documentation, [Landlock: unprivileged access
   control](https://docs.kernel.org/userspace-api/landlock.html).
-- Linux kernel documentation. [Seccomp BPF](https://docs.kernel.org/userspace-api/seccomp_filter.html).
-- Cedar Policy Language Reference Guide. [Authorization](https://docs.cedarpolicy.com/auth/authorization.html).
+- Linux kernel documentation, [Seccomp BPF](https://docs.kernel.org/userspace-api/seccomp_filter.html).
+- Cedar Policy Language Reference Guide,
+  [Authorization](https://docs.cedarpolicy.com/auth/authorization.html).

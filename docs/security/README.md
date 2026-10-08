@@ -1,49 +1,69 @@
-# LangGraph tool security
+# slangGraph security
 
-LangGraph's optional tool-security layer mediates calls that cross `ToolNode` or
-`guarded_tool`, with author DAC, operator policy modules, durable approvals,
-tamper-evident auditing, redacted observability, and optional conservative
-session-wide information-flow enforcement. It is opt-in: omitting `security`
-preserves the existing execution path.
+slangGraph is a layered reference monitor. LangGraph is the user-space object
+manager for ten framework object classes; the host kernel is the monitor for OS
+objects. The two layers compose into the system reference monitor. This is the
+same architectural pattern used by SELinux-aware user-space object managers
+such as X, D-Bus, and sepgsql.
 
-Start with the [10-line HOWTO](HOWTO.md), then use the
-[behavior reference](reference.md) and [complete public API reference](api.md).
-The task-oriented [user guide](users/README.md) covers application integration,
-tool authorization, modules, session flow, operations, and deployment boundaries.
-The [Linux host execution guide](users/linux-host-execution.md) configures the
-working reference adapter for untrusted local Python tools.
-The [Linux enforcement acceptance report](linux-enforcement-acceptance.md)
-freezes its supported contract and maps A1–A8 to mechanisms and focused
-evidence.
-Existing applications should follow the [migration guide](migration.md) and
-[worked patterns](workflows.md). The constructive DAC language is specified by
-the [frozen `.slp` profile grammar](profiles.md). The target path from mandatory
-policy to a platform-neutral grant, exact enforcement obligations, verified host
-evidence, and worker activation is specified in [grant lowering](lowering.md). The [implementation status](status.md)
-separates shipped behavior from the enforcement roadmap. The design rationale is
-recorded in the [`adr/`](adr/) directory. Three runnable examples live in
-[`examples/`](examples/README.md).
+The design is specified by [ADR 0007](adr/0007-kernel-enforced-confinement.md).
+The [implementation status](status.md) distinguishes that target from shipped
+coverage. Start with the [10-line HOWTO](HOWTO.md), then use the
+[behavior reference](reference.md), [public API reference](api.md), and
+[security-boundary guide](users/security-boundary.md). The
+[escape analysis](escape-analysis.md) documents placement checks and trust
+assumptions.
 
-The [security properties and composition boundaries](security-properties.md)
-separate per-call resource access control from classified session scheduling,
-confused-deputy resistance, revocation, and task-intent integrity. Those
-boundaries are part of the security contract, not optional caveats.
+## Scope
 
-## Security boundary
+> An operation is in scope if and only if a hook on the single dispatch path can refuse it.
 
-The decisive check runs inside each physical sync or async tool execution,
-after wrapper dispatch and immediately before argument injection and
-`BaseTool` invocation. A wrapper retry or argument rewrite therefore receives a
-new call index and a new decision. Direct tools can use `guarded_tool`, while
-child graphs can use `delegate` to receive an explicitly reduced principal.
+Shipped defaults do not define scope. In particular, ModelInvocation and Output
+remain in scope even when their default policies attach labels without denying.
 
-Security configuration is code, not model-controlled state. Bind principals in
-`RunnableConfig`; never place credentials, approvals, policy blobs, or audit
-records in graph state or messages.
+| Object class | Operations |
+| --- | --- |
+| Principal | `bind`, `transfer`, `attenuate` |
+| ToolCall | `prepare`, `invoke`, `post` |
+| Dispatch | `subgraph`, `Send`, `parallel_branch`, `subagent`, `nested_agent` |
+| ToolRegistry | `register`, `override` |
+| State | `write`, `restore`, `tool_read`, `model_read`, `store_read`, `store_write` |
+| Approval | `resume` |
+| FrameworkOp | `guard_operation` |
+| ModelInvocation | `invoke` |
+| Output | `emit(destination)` |
+| HostResource | `file`, `socket`, `exec`, `syscalls`, `limits` |
 
-This is not process-wide mandatory access control. Ordinary graph nodes execute
-Python directly and can access files, networks, processes, databases, native
-extensions, and unwrapped tools without crossing a tool hook. Run the
-[escape analysis](escape-analysis.md) in CI. On Linux, route supported untrusted
-tool entry points through `LinuxSandboxExecutor`; use brokers or additional host
-adapters for authority its filesystem-focused backend rejects.
+Every framework operation crosses the hook stack through `HostRouter` as the
+single dispatch path. `ToolNode` and `guarded_tool` call the router; they are not
+independent boundaries. Untrusted nodes and tools run as separate-process units
+of work and use the same mediated channel for framework-object access. Trusted
+operator nodes may run in the coordinator, with placement analysis checking the
+trust assumption.
+
+## Policy and enforcement
+
+The default input is one `.slp` file with `tool`, `principal`, and forbid-only
+`policy` blocks. Cedar is the default hidden mandatory-policy engine; OPA may be
+provided behind `Policy`. Modules return verdicts, forbid policies, and labels
+only, and use `ESCALATE` for approval.
+
+An allowed operation produces a canonical grant. Host enforcement must
+implement each rule exactly or more tightly. A looser lowering denies;
+unsupported classes deny unless explicitly waived, and waived calls are stamped
+`unenforced`. Runtime baseline authority is visible in every grant.
+
+`model_invoke` and `output_emit` ship label-only. Reference
+non-exfiltration, integrity, and compartmentalization policies ship off by
+default. Approval is per call and resume reruns the complete permission chain.
+
+## Boundary
+
+Direct reads by trusted node code, kernel bugs and side channels, unscopable
+remote services, name-based network policy without a proxy, denial of service,
+and the model-provider channel are outside the claim. What a granted tool
+computes is outside the claim; where its result goes remains in scope through
+`tool_call_post` and `output_emit`.
+
+`security=None` is compatibility mode and does not provide the layered
+reference-monitor claim.

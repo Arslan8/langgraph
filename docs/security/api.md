@@ -89,6 +89,33 @@ Modules are independently restrictive. An allow never overrides another deny.
 Malformed return values, exceptions, and timeouts become denials. A transform is
 normalized and checked by DAC again before permission hooks run.
 
+## Framework object manager
+
+These records define the non-tool operations accepted by `HostRouter`. The
+router authorizes an immutable request, binds that exact request into an
+`ObjectAuthorization`, and dispatches it to `ObjectManagerHost` only after an
+allow verdict.
+
+| Name | Contract |
+| --- | --- |
+| `DispatchKind` | Closed set of subgraph, `Send`, parallel-branch, subagent, and nested-agent dispatch forms. |
+| `DispatchRequest` | Parent/child authority-transfer request; every form performs the child-subset check and `cred_transfer`, including identity transfers. |
+| `ToolRegistryRequest` | Static or dynamic tool registration and override request. Dynamic allocation runs `tool_alloc_security`; undeclared tools remain default-deny. |
+| `StateOperation` | Closed set of state write, restore, tool/model/store reads, and store writes. |
+| `StateRequest` | One state or store operation with resource, labels, and optional value or checkpoint data. |
+| `ModelInvocationRequest` | Model invocation input whose labeled context can be stripped before prompt assembly. |
+| `OutputRequest` | Labeled output and destination-clearance request supporting allow, deny, redact, or escalate. |
+| `FrameworkRequest` | Union of all immutable object-manager request records. |
+| `ObjectAuthorization` | Exact request and successful decision passed across the router/host boundary. |
+| `SecurityLabels` | Confidentiality, integrity, and compartment labels attached to state, context, and output. |
+| `LabeledValue` | Immutable value plus `SecurityLabels`. |
+| `ToolObjectDac` | Tool-specific readable state channels and readable/writable store keys. An undeclared tool receives empty sets. |
+| `ObjectManagerPolicy` | Operator configuration for per-tool object DAC and destination clearances. |
+| `StoreResource` | Store key identity with authenticated owner and labels. |
+| `CheckpointEnvelope` | Principal-bound hash-chain checkpoint record with replay sequence and payload digest. |
+| `seal_checkpoint` | Creates a keyed checkpoint envelope bound to its principal, predecessor, and sequence. |
+| `ObjectManagerHost` | Reference host for registry, state, store, checkpoint, model, output, and dispatch effects after router authorization. |
+
 ## Exact grants and enforcement activation
 
 These types implement the platform-neutral enforcement contract. They do not
@@ -109,6 +136,7 @@ TCB component and must pass its platform contract suite.
 | `ObligationKind` | Operation, closed-world complement, bypass prevention, credential custody, authenticated channel, resource limit, or evidence obligation. |
 | `EnforcementObligation` | One exact, independently assigned guarantee with resource conditions and dependency IDs. |
 | `SupportLevel` | Adapter relation `EXACT`, `STRICTER`, or `UNSUPPORTED`. |
+| `RuleEnforcement` | Per-rule receipt relation recorded as exact, tightened, or unsupported with the responsible mechanism. |
 | `SupportAssessment` | One adapter's rule-specific assessment and evidence requirements for one obligation. |
 | `HostAttestation` | Fresh, nonce-bound host statement whose digest is meaningful only after trust-anchor verification. |
 | `HostAttestationVerifier` | Protocol that authenticates a `HostAttestation` against deployment trust anchors. |
@@ -118,6 +146,14 @@ TCB component and must pass its platform contract suite.
 | `HostToolExecutor` | Portable execution bridge used by `ToolNode` and `guarded_tool` after authorization. |
 | `LinuxSandboxExecutor` | Linux implementation that lowers supported filesystem and resource grants into a fresh bubblewrap worker. Before releasing the startup barrier, it verifies the payload process's namespace, capability, seccomp, no-new-privileges, thread, mount-table, credential, and process state. Frames are capped at 1 MiB, response structure is bounded, and termination is confirmed by boot ID, PID, and start time. The defaults name `RLIMIT_AS` as `address_space_bytes` and per-file `RLIMIT_FSIZE` as `file_size_bytes`; profile `memory_bytes` is unsupported. `activation_receipts()` exposes a bounded operational snapshot. |
 | `LinuxToolSpec` | Trusted manifest binding a tool name to an importable entry point and operator-verified primary-source digest. Dependencies and runtime roots are not covered by this digest; they enter `sys.path` only after confinement. |
+| `LinuxCapabilities` | Direct per-boot probe result for Landlock ABI, cgroup v2 delegation and `cgroup.kill`, unprivileged user namespaces, BPF LSM, Landlock audit, and pidfd support. |
+| `probe_landlock_abi` | Calls `landlock_create_ruleset(NULL, 0, LANDLOCK_CREATE_RULESET_VERSION)` and returns the kernel-reported ABI number. |
+| `probe_linux_capabilities` | Runs the direct host capability probes used by checks and execution attestation. |
+| `RuleLowering` | One Landlock grant rule's exact, tightened, or unsupported lowering result. |
+| `LandlockRuleset` | Parent-built Landlock ruleset descriptor and its per-rule lowering results. |
+| `open_path_descriptor` | Resolves a grant path beneath a trusted root with `openat2` and returns an `O_PATH` descriptor. |
+| `build_ruleset` | Builds the complete Landlock ruleset in the trusted parent, including filesystem, execute, and supported port rules. |
+| `LandlockSandboxExecutor` | Namespace-free Linux executor that creates a fresh worker, passes only the ruleset descriptor, closes inherited descriptors, applies `restrict_self`, seccomp and limits, then imports the tool. |
 | `EnforcementAdapter` | Protocol for exact assessment, conservative lowering, worker activation, and activation-evidence verification. |
 | `AdapterPlan` | Opaque native plan digest and the exact obligation IDs assigned to it. |
 | `ObligationAssignment` | One obligation's primary adapter and conservative support relation. |
@@ -142,6 +178,7 @@ to the configured backend.
 | `ForbidCombination` | Rejects combinations such as sensitive reads plus outbound communication. |
 | `PolicyConstraint` | Union of the two accepted forbid-only constraint records. |
 | `MandatoryPolicyBackend` | Replaceable filtering interface used by Cedar or another policy engine. |
+| `CedarPolicyBackend` | Default fail-closed backend. It validates generated policies with the Cedar CLI, creates one ephemeral DAC permit per candidate line, combines them with module/operator forbids, and denies missing engines, diagnostics, timeouts, or malformed decisions. |
 | `TypedPolicyBackend` | Built-in fail-closed reference backend with broad-path subtraction, conservative rejection of unrepresentable differences, aggregate checks, and requirement revalidation. |
 | `PolicyFilterResult` | Filtered no-broader grant, remapped requirement ledger, removals, and fail-closed diagnostics. |
 
@@ -215,6 +252,11 @@ it into `compile()` with audited exceptions is planned, not shipped.
 The profile objects are immutable. Most users call `parse_profiles` and
 `ProfileDocument.evaluate`; policy generators and tests may construct the
 lower-level records directly.
+
+`ProfileSupport` is the per-profile/per-rule result returned by
+`check_profiles`. The `slanggraph check --backend X profiles/` command uses the
+same API and exits nonzero when an unsupported class lacks an explicit
+class-level waiver and reason.
 
 | Name | Contract |
 | --- | --- |

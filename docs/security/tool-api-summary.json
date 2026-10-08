@@ -1,0 +1,89 @@
+{
+  "backend_summary": {
+    "host": {
+      "cases": 5248,
+      "host_dispatches": 1304,
+      "local_dispatches": 0
+    },
+    "host_denied": {
+      "cases": 5248,
+      "host_dispatches": 1350,
+      "local_dispatches": 0
+    },
+    "in_process": {
+      "cases": 5248,
+      "host_dispatches": 0,
+      "local_dispatches": 1304
+    }
+  },
+  "background_error_count": 0,
+  "claim": "Complete installed secured-tool execution API coverage and allow/deny conformance for the enumerated matrix.",
+  "complete": true,
+  "conformance_passed": true,
+  "failure_groups": [],
+  "full_report_sha256": "2f73e4c249eef992adafc70a1465d540ec022e4c7318834e95050918dc016d07",
+  "host_constraint_checks": [
+    {
+      "function": "_GuardedExecutor.invoke",
+      "status": "verified_under_contract"
+    },
+    {
+      "function": "ToolNode._execute_tool_sync",
+      "status": "verified_under_contract"
+    },
+    {
+      "function": "_GuardedExecutor.ainvoke",
+      "status": "verified_under_contract"
+    },
+    {
+      "function": "ToolNode._execute_tool_async",
+      "status": "verified_under_contract"
+    }
+  ],
+  "inventory_complete": true,
+  "reproduce": "cd libs/prebuilt && uv run python -m langgraph.prebuilt.security.tool_api_verifier --output tool-api-report.json",
+  "schema_version": 1,
+  "scope": {
+    "backends": [
+      "in_process",
+      "host",
+      "host_denied"
+    ],
+    "construction_and_inspection": "Inventoried separately; trusted application construction/schema/serialization APIs are not tool-execution entry points.",
+    "factory_parameters": "Identity-preserving adapters and secured fallbacks/alternatives; no replacement executable supplied by untrusted code.",
+    "families": [
+      "guarded_structured",
+      "guarded_simple",
+      "node_structured",
+      "node_simple"
+    ],
+    "host_oracle": "Synthetic host checks exact authorized subject/request/constraints and absence of local fallback, including activation denial; real kernel activation is tested separately.",
+    "limits": [
+      "Finite API conformance, not a proof for all arguments or arbitrary adapter compositions.",
+      "Original unguarded aliases, hostile object mutation, policy semantics and effects inside trusted in-process tools are outside this contract.",
+      "No claim of complete confidentiality, concurrency/lifetime correctness, or publication mediation."
+    ],
+    "modes": [
+      "allow",
+      "deny",
+      "missing_principal",
+      "missing_scope"
+    ]
+  },
+  "source_claims_passed": true,
+  "source_evidence_ready": true,
+  "summary": {
+    "cases": 15744,
+    "failed": 0,
+    "passed": 15744,
+    "surfaces": 72
+  },
+  "unauthorized_execution_errors": 0,
+  "verifier_sha256": "7a3379579e6549f49020e83810135d22d92e43ea8ad6851190d0f106aa4b53e8",
+  "versions": {
+    "langchain-core": "1.6.1",
+    "langgraph-prebuilt": "1.1.0",
+    "python": "3.12.3"
+  },
+  "whole_framework_mac_complete": false
+}

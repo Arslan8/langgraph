@@ -80,6 +80,8 @@ def test_memory_observer_records_each_invoked_policy_hook() -> None:
     assert result["messages"][0].content == "do-not-log"
     events = observer.events()
     assert [(event.stage, event.module) for event in events] == [
+        ("cred_transfer", "cap"),
+        ("dispatch", "object_manager"),
         ("prepare", "dac_initial"),
         ("prepare", "dac_final"),
         ("permission", "dac"),
@@ -88,8 +90,9 @@ def test_memory_observer_records_each_invoked_policy_hook() -> None:
     assert all(event.verdict is Verdict.ALLOW for event in events)
     assert all(event.latency_ms >= 0 for event in events)
     assert all("do-not-log" not in repr(event) for event in events)
-    assert sum(observer.counters().values()) == 4
+    assert sum(observer.counters().values()) == 6
     assert [(record.stage, record.module) for record in audit.records()] == [
+        ("dispatch", "object_manager"),
         ("prepare", "dac_initial"),
         ("prepare", "dac_final"),
         ("permission", "dac"),
@@ -112,7 +115,19 @@ def test_logging_observer_emits_structured_redacted_record(caplog) -> None:
     with caplog.at_level(logging.INFO, logger="langgraph.security"):
         _invoke(observer)
     assert caplog.records
-    assert caplog.records[0].security["module"] == "dac_initial"
+    assert caplog.records[0].security == {
+        "stage": "cred_transfer",
+        "module": "cap",
+        "verdict": "allow",
+        "reason": "cap:allow",
+        "latency_ms": caplog.records[0].security["latency_ms"],
+        "user_id": "alice",
+        "tool_name": None,
+        "call_index": None,
+        "args_hash": "",
+        "session_id": "session",
+        "outcome": None,
+    }
     assert "do-not-log" not in caplog.text
 
 

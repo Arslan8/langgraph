@@ -1,102 +1,109 @@
-# Escape analysis
+# Escape and placement analysis
 
-For authorization-state tracking and the explicit hook-coverage inventory, see
-[bounded mediation analysis](mediation-analysis.md). The two analyses answer
-different questions; neither alone proves process-wide complete mediation.
+Escape analysis checks the trust assumptions of the layered reference monitor.
+It is not itself a security boundary. The framework boundary is `HostRouter`;
+the host boundary is the kernel or selected external enforcer.
 
-## Result
+> An operation is in scope if and only if a hook on the single dispatch path can refuse it.
 
-The current security hooks do not form a process-wide mandatory access-control
-boundary. They completely mediate a narrower event: a tool call that crosses a
-configured `ToolNode` or `guarded_tool`. Python executed as an ordinary graph
-node remains part of the trusted computing base.
+The analyzer must reject every untrusted-input-to-effect path that cannot be
+placed on an operation in the ten-class model. A reviewed exception has a
+narrow fingerprint, owner, and non-empty reason and is included in the graph's
+security fingerprint and compile audit.
 
-The source analyzer makes that distinction enforceable in review. It starts
-taint at graph callback parameters, follows local assignment and helper calls,
-and reports any known or unresolved path that does not cross a mediated tool
-boundary. It also checks whether tool bodies reach effects omitted from their
-`@effects` declarations.
+The scope inventory is:
 
-## Sources, boundaries, and sinks
+| Class | Operations |
+| --- | --- |
+| Principal | `bind`, `transfer`, `attenuate` |
+| ToolCall | `prepare`, `invoke`, `post` |
+| Dispatch | `subgraph`, `Send`, `parallel_branch`, `subagent`, `nested_agent` |
+| ToolRegistry | `register`, `override` |
+| State | `write`, `restore`, `tool_read`, `model_read`, `store_read`, `store_write` |
+| Approval | `resume` |
+| FrameworkOp | `guard_operation` |
+| ModelInvocation | `invoke` |
+| Output | `emit(destination)` |
+| HostResource | `file`, `socket`, `exec`, `syscalls`, `limits` |
 
-The analysis treats graph state, messages, tool arguments, callback parameters,
-model output, and values derived from them as tainted. `ToolNode` and
-`guarded_tool` are recognized mediation boundaries. A declaration is metadata,
-not a sanitizer: the analyzer still compares a tool body with its declared
-effects.
+## Sources and effects
 
-Reported sinks include:
+Untrusted sources include messages, model proposals and output, graph state,
+tool results, store values from other threads, checkpoint content, imported
+components, runtime registrations, approval input, and values derived from any
+of them.
 
-- direct `invoke`, `ainvoke`, `run`, or `arun` calls;
-- filesystem reads, writes, renames, permissions, and deletion;
-- process creation and shell execution;
-- sockets, HTTP clients, mail, and other network clients;
-- database execution;
-- `eval`, `exec`, compilation, and dynamic imports;
-- unsafe deserialization and native-code interfaces; and
-- a callable selected from tainted state or an unresolved dependency call that
-  receives tainted data.
+Security-relevant effects include tool dispatch, state and store access,
+checkpoint restore, model prompt assembly, output emission, dynamic registry
+changes, child dispatch, filesystem and network access, process execution,
+syscalls, and resource consumption.
 
-An unresolved callback is itself a finding. The analyzer never converts "could
-not inspect" into "safe."
+Declarations and labels are metadata, not sanitizers. An unresolved callback or
+dependency is a finding; inability to inspect is never converted into safety.
 
-## Confirmed framework escape points
+## Required cover
 
-The audit of LangGraph core and prebuilt identifies these architectural escape
-surfaces:
+| Path | Mediated operation |
+| --- | --- |
+| Model proposes a call | ToolCall `prepare` and `invoke` |
+| Proposal arrives via subgraph, `Send`, or subagent | Dispatch and child-subset check |
+| Injected content changes an argument | ToolCall after final normalization |
+| Injected content lands in state and is read later | State `write` and `state_read` |
+| Tool result carries a secret into context | ToolCall `post`, State `write`, ModelInvocation `invoke` |
+| Another thread's data arrives via store | State `store_read` on an owned, labeled key |
+| Checkpoint is tampered with or replayed | State `restore`, hash-chain and principal verification |
+| Runtime tool has no profile | ToolRegistry `register` and undeclared inference |
+| Human approves | Approval `resume`, then full permission chain |
+| Tool touches OS | HostResource grant enforcement |
+| Output goes to lower clearance | Output `emit(destination)` |
+| Child output returns to parent | Output `emit` and parent State `write` with labels |
 
-1. `RunnableCallable` invokes arbitrary node functions in-process. Those
-   functions receive graph-controlled state and can call any Python capability.
-2. `StateGraph.add_node`, conditional edges, error handlers, pre-model hooks,
-   and post-model hooks all accept arbitrary callables.
-3. `create_react_agent` compiles its internal graph without forwarding a
-   `SecurityConfig`; model and structured-output runnables are invoked directly.
-4. A tool object placed in `ToolNode` can remain reachable through its original
-   Python alias and be invoked outside that node.
-5. `guarded_tool` protects the wrapper, not other aliases to the original tool.
-6. After a tool is allowed, its implementation can perform effects or access
-   resources omitted from its descriptor. Hooks do not interpose on syscalls.
-7. Dynamic middleware, runtime-created tools, opaque runnables, and dynamically
-   selected callbacks cannot always be enumerated before execution.
-8. Subgraphs invoked without `delegate` can receive ambient configuration or be
-   called directly through another retained reference.
-9. Threads, tasks, callbacks, subprocesses, and work scheduled by an allowed
-   call can continue after post hooks return.
-10. Policy modules, normalizers, observers, audit sinks, model clients, and
-    dependency code execute with the host process's authority and are trusted.
+## Trust modes
 
-These are not all equivalent vulnerabilities. They are the points where the
-claim changes from "the hook mediates this tool invocation" to "trusted Python
-must behave." Every application must either remove, review, or confine each
-reachable point.
+Operator-authored nodes are trusted by default. Imported nodes are untrusted by
+default. Promotion is audited like a DAC override.
 
-## CI usage
+Trusted code runs in the coordinator and is assumed to honor hooks. Placement
+analysis checks that assumption by finding direct effects, retained aliases,
+unresolved calls, dynamic selection, and framework-object access that does not
+reach `HostRouter`. Reads directly performed by trusted node code are outside
+scope and must be reviewed as TCB behavior.
 
-Run the analyzer over application source and exclude only generated or vendored
-trees:
+Untrusted code cannot run in the coordinator. It is dispatched as a separate
+process through `HostRouter`; framework-object access returns over the same
+mediated channel used by tools. Its isolation, not placement analysis, is the
+security boundary.
+
+## Findings and compile behavior
+
+The compile gate reports at least:
+
+- direct invocation of a tool or node alias outside `HostRouter`;
+- subgraph, `Send`, branch, subagent, or nested-agent dispatch without transfer
+  and subset checks;
+- direct state, store, checkpoint, model, output, or registry operations;
+- untrusted code selected for in-process execution;
+- resource effects absent from the profile or grant;
+- background work or descendants that outlive their confinement lease;
+- reflection, native code, dynamic imports, or dependencies that cannot be
+  resolved; and
+- any path whose sink cannot be assigned to a refusing hook.
+
+All 56 existing findings must be removed or individually waived with reasons
+before the target complete-mediation claim is enabled.
+
+## CI use
+
+The existing analyzer remains a discovery tool while the compile gate is built:
 
 ```bash
 langgraph-security-taint src --exclude src/generated
 langgraph-security-taint src --json > taint-report.json
 ```
 
-The command exits nonzero when it finds an escape or cannot parse an input. JSON
-findings include a fingerprint based on path, function, kind, and symbol so a
-review system can compare results without relying on line numbers.
+Do not use a blanket baseline. Compare stable fingerprints and fail on every
+new or unresolved path. Target compilation fails on any unplaceable path.
 
-Do not create a blanket baseline that silently accepts current findings. Record
-an owner and rationale for each reviewed fingerprint, and fail CI when a new
-fingerprint appears.
-
-## What closes the boundary
-
-Static analysis is a discovery and review control. It cannot make dynamic Python
-non-bypassable. A deployment that requires actual MAC must also run untrusted
-nodes and tools in a separate security domain with deny-by-default filesystem,
-network, process, IPC, and credential access. The host should expose only a
-small capability broker; the broker applies the same principal, descriptor,
-resource normalization, and policy decision immediately before performing each
-operation.
-
-Until that confinement exists, the accurate guarantee is: configured tool
-entry points are mediated, while arbitrary Python code is trusted.
+The placement method follows Zhang, Edwards, and Jaeger's static verification
+of authorization-hook placement and Jaeger, Edwards, and Zhang's consistency
+analysis. It supports the trust argument; it does not replace enforcement.
