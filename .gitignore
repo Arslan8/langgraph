@@ -109,3 +109,4 @@ node_modules/
 .worktrees/
 # Local security acceptance report (CI uploads it separately).
 /libs/prebuilt/security-verification-report.json
+/libs/prebuilt/security-permutation-report.json

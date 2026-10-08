@@ -292,6 +292,12 @@ def _normalize_domain(value: Any) -> str:
     _reject_control_chars(raw, "domain")
     if not raw:
         raise ValueError("domain must be non-empty")
+    # Accept canonical IP keys as input as well as URL host spellings. In
+    # particular, a compressed IPv6 result must not be reparsed as host:port.
+    try:
+        return ipaddress.ip_address(raw).compressed.lower()
+    except ValueError:
+        pass
     parsed = urlsplit(raw if "://" in raw or raw.startswith("//") else f"//{raw}")
     try:
         host = parsed.hostname
@@ -300,6 +306,10 @@ def _normalize_domain(value: Any) -> str:
         raise ValueError("domain has an invalid port or host") from exc
     if host is None or (parsed.path not in {"", "/"} and "://" not in raw):
         raise ValueError("domain does not contain a valid host")
+    if any(char.isspace() for char in host):
+        # URL parsing and the stdlib IDNA codec can retain host whitespace.
+        # Reject it before it becomes a policy key that changes on reparse.
+        raise ValueError("domain host must not contain whitespace")
     host = host.rstrip(".")
     if not host:
         raise ValueError("domain must be non-empty")
@@ -307,12 +317,17 @@ def _normalize_domain(value: Any) -> str:
         return ipaddress.ip_address(host).compressed.lower()
     except ValueError:
         try:
-            labels = [label.encode("idna").decode("ascii") for label in host.split(".")]
+            normalized = host.encode("idna").decode("ascii").lower().rstrip(".")
         except UnicodeError as exc:
             raise ValueError("domain is not valid IDNA") from exc
+        # IDNA also maps Unicode label separators and may introduce ASCII
+        # whitespace. Validate the resulting key, not only the original host.
+        _reject_control_chars(normalized, "domain")
+        if any(char.isspace() for char in normalized):
+            raise ValueError("domain host must not contain whitespace")
+        labels = normalized.split(".")
         if any(not label or len(label) > 63 for label in labels):
             raise ValueError("domain contains an invalid label")
-        normalized = ".".join(labels).lower()
         if len(normalized) > 253:
             raise ValueError("domain is too long")
         return normalized

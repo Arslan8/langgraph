@@ -1,16 +1,21 @@
-.PHONY: all format lint type test test-fast test_watch integration_tests spell_check spell_fix benchmark profile security-verify security-verify-complete
+.PHONY: all format lint type test test-fast test_watch integration_tests spell_check spell_fix benchmark profile security-verify security-verify-complete security-verify-permutations
 
 # Default target executed when no arguments are given to make.
 all: help
 
-# Fast source-only repair queue. Exit zero covers the implemented acceptance
-# checks, not system completeness. Keep the stronger proof gate explicit.
+# Source-only verification and repair queue. Missing proof evidence fails the
+# default command; the older complete target remains an equivalent alias.
 SECURITY_REPORT ?= security-verification-report.json
 security-verify:
 	uv run python -m langgraph.prebuilt.security.developer_verification --output "$(SECURITY_REPORT)"
 
 security-verify-complete:
 	uv run python -m langgraph.prebuilt.security.developer_verification --require-complete --output "$(SECURITY_REPORT)"
+
+# Finite regression evidence, separate from the system-proof acceptance gate.
+SECURITY_PERMUTATION_REPORT ?= security-permutation-report.json
+security-verify-permutations:
+	uv run python -m langgraph.prebuilt.security.permutation_verification --output "$(SECURITY_PERMUTATION_REPORT)"
 
 ######################
 # TESTING AND COVERAGE

@@ -25,7 +25,8 @@ def evidence():
 
 def test_clear_regressions_do_not_prove_completeness(evidence):
     report = gate.developer_report(evidence)
-    assert report["acceptance_passed"]
+    assert report["regression_checks_passed"]
+    assert not report["acceptance_passed"]
     assert not report["complete"]
     assert {item["rule"] for item in report["proof_gaps"]} == {
         "SGV901",
@@ -68,13 +69,29 @@ def test_comparison_only_tracks_tasks_never_reuses_pass_evidence(evidence):
         gate.compare_reports(current, {"complete": True})
 
 
-@pytest.mark.parametrize("strict,expected", [(False, 0), (True, 1)])
+@pytest.mark.parametrize("strict,expected", [(False, 1), (True, 1)])
 def test_cli_exit_contract_and_json(monkeypatch, tmp_path, evidence, strict, expected):
     monkeypatch.setattr(gate, "verify_layers", lambda repo: evidence)
     output = tmp_path / "report.json"
     args = ["--output", str(output)] + (["--require-complete"] if strict else [])
     assert gate.main(args) == expected
     assert json.loads(output.read_text())["complete"] is False
+
+
+def test_forged_top_level_success_cannot_hide_missing_proofs(evidence):
+    evidence["complete"] = True
+    report = gate.developer_report(evidence)
+    assert not report["acceptance_passed"]
+    assert not report["complete"]
+
+
+def test_schema_one_comparison_does_not_preserve_old_acceptance(evidence):
+    old = gate.developer_report(evidence)
+    old["schema_version"] = 1
+    old["acceptance_passed"] = True
+    current = gate.developer_report(evidence)
+    assert not gate.compare_reports(current, old)["new"]
+    assert not current["acceptance_passed"]
 
 
 def test_cli_invalid_comparison_is_error_not_success(monkeypatch, tmp_path, evidence):

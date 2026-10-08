@@ -1,0 +1,86 @@
+{
+  "checker_sha256": "d47eb46bb60ef3daed7a40f3124256a0d8f84944c81da35cded6bcd977466864",
+  "kind": "non-bypassability-permutation-tests",
+  "runtime_denial": {
+    "apis": [
+      "__call__",
+      "adispatch",
+      "ainvoke",
+      "ainvoke_from",
+      "amodel_invoke",
+      "aoutput_emit",
+      "aregister",
+      "aresume",
+      "aroute",
+      "arun",
+      "astate",
+      "dispatch",
+      "invoke",
+      "invoke_from",
+      "model_invoke",
+      "output_emit",
+      "register",
+      "resume",
+      "route",
+      "run",
+      "state"
+    ],
+    "case_ids_sha256": "73dfb61fba1688256c7fda432e11ddc0f25f853424c4155c9dc966080bc64195",
+    "cases": 2444,
+    "claim": "Every combination in the declared router matrix that contains a non-ALLOW decision produces zero observed terminal host effects and preserves original authorization argument identities. Synthetic observers do not prove adapter or kernel integration.",
+    "failures": [],
+    "passed": true,
+    "request_variants": 21,
+    "router_runtime_binding": {
+      "issues": [],
+      "python_implementation": "CPython",
+      "source_sha256": "95111c517dfedb354daaa7b16a012478432c0a437cf993c941a677fe14c3dd94",
+      "verified": true
+    },
+    "unique_case_ids": true,
+    "verdicts": [
+      "allow",
+      "deny",
+      "transform",
+      "redact",
+      "escalate"
+    ]
+  },
+  "schema_version": 1,
+  "source_bindings": {
+    "case_ids_sha256": "c506f6c3ae7801803a882cbc031efc135d9ad1d577e95606c4b1f8449f0f11dd",
+    "cases": 28800,
+    "claim": "All combinations of these finite source dimensions; unsupported analysis fails the test, including for negative fixtures.",
+    "dimensions": {
+      "authorization_permutations": 24,
+      "binding_slots": [
+        "principal",
+        "resource",
+        "operation",
+        "call"
+      ],
+      "effect_permutations": 24,
+      "forms": [
+        "direct",
+        "aliases",
+        "helper",
+        "inherited",
+        "branch"
+      ],
+      "guards": [
+        "allow_only",
+        "missing",
+        "inverted",
+        "partial",
+        "deny_only"
+      ],
+      "modes": 2
+    },
+    "failures": [],
+    "passed": true,
+    "unique_case_ids": true
+  },
+  "suite_passed": true,
+  "system_complete": false,
+  "transfer_engine_sha256": "d6ab8124873e33771ccf7ab8222f3af6fb1dda9b6ad753d7c97a8380052aabdb"
+}

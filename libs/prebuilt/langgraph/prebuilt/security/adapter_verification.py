@@ -57,6 +57,16 @@ RULES = (
         "Mediate history and administrative effects, or enforce a separate explicit trusted-administrator admission boundary. A comment declaring trust is not admission.",
     ),
     Rule(
+        "SGV107",
+        "Backing-store read results returned directly",
+        "Bind read authorization to authoritative backing values, owners, and labels, then return the effective read results. Authorizing an input GetOp with a placeholder value is insufficient.",
+    ),
+    Rule(
+        "SGV108",
+        "Checkpoint history yields unverified backing tuples",
+        "Authenticate and principal-bind every history tuple and its pending writes before publication, and apply effective read values. Use non-consuming verification so history reads do not consume restore replay state.",
+    ),
+    Rule(
         "SGV190",
         "Required adapter source is unavailable or unresolved",
         "Restore the required source/method or update this check with a source-only regression test for the new boundary; do not mark missing analysis as passed.",
@@ -425,6 +435,65 @@ def check_adapters(sources: dict[str, str]) -> dict[str, Any]:
                     + ", ".join(effects),
                     unresolved=not known,
                 )
+
+    # Narrow review patterns: routing query arguments does not establish that
+    # the backing results are authenticated or transformed. Indirect returns
+    # still require the separate, unfinished composition proof.
+    for owner in ("MediatedStore", "MediatedCheckpointer"):
+        if owner not in classes:
+            continue
+        path, cls = classes[owner]
+        for member in cls.body:
+            if not isinstance(member, (ast.FunctionDef, ast.AsyncFunctionDef)):
+                continue
+            for node in _nodes(member):
+                if owner == "MediatedStore" and isinstance(node, ast.Return):
+                    call = _call(node.value) if node.value is not None else None
+                    if call is not None and ast.unparse(call.func) in {
+                        "self._store.batch",
+                        "self._store.abatch",
+                    }:
+                        emit(
+                            "SGV107",
+                            path,
+                            node,
+                            f"{owner}.{member.name}",
+                            "Backing batch results are returned directly; effective read values and backing ownership need mediation.",
+                        )
+                if owner != "MediatedCheckpointer":
+                    continue
+                if isinstance(node, ast.YieldFrom):
+                    call = _call(node.value)
+                    if call is not None and ast.unparse(call.func) == "self.inner.list":
+                        emit(
+                            "SGV108",
+                            path,
+                            node,
+                            f"{owner}.{member.name}",
+                            "History delegates raw tuples after authorizing query options only.",
+                        )
+                elif isinstance(node, (ast.For, ast.AsyncFor)):
+                    call = _call(node.iter)
+                    if call is None or ast.unparse(call.func) not in {
+                        "self.inner.list",
+                        "self.inner.alist",
+                    }:
+                        continue
+                    for statement in node.body:
+                        for child in _nodes(statement):
+                            if (
+                                isinstance(child, ast.Yield)
+                                and isinstance(child.value, ast.Name)
+                                and isinstance(node.target, ast.Name)
+                                and child.value.id == node.target.id
+                            ):
+                                emit(
+                                    "SGV108",
+                                    path,
+                                    child,
+                                    f"{owner}.{member.name}",
+                                    "History yields the backing tuple directly without per-tuple verification.",
+                                )
 
     serialized = sorted(
         (item.to_dict() for item in diagnostics),

@@ -170,6 +170,23 @@ def router_spec(source: str) -> VerificationSpec:
         operations=tuple(operations),
         requirements=requirements,
         async_terminals=tuple(asynchronous),
+        entry_bindings={
+            f"{_CLASS}.{name}": {
+                target: tuple(
+                    "arg:" + str(positions[value.removeprefix("input:")])
+                    for value in values
+                )
+                for target, values in _entry_protocol(
+                    name, kind, "a" if name.startswith("a") else ""
+                ).items()
+            }
+            for name, kind in _ENTRY_KINDS.items()
+            for positions in [
+                {"origin": 1, "parent": 2, "child": 3, "call": 4}
+                if kind == "cross_tool"
+                else {"principal": 1, "call": 2, "request": 2, "approval": 3}
+            ]
+        },
     )
 
 

@@ -17,6 +17,7 @@ from typing import Any
 
 from langgraph.prebuilt.security.adapter_verification import check_adapters
 from langgraph.prebuilt.security.boundary_verification import verify_host_router
+from langgraph.prebuilt.security.publication_verification import verify_publications
 from langgraph.prebuilt.security.taint import analyze_source, apply_waivers
 
 # The protected operation universe is independent of which hooks exist today.
@@ -150,12 +151,12 @@ def inventory_sources(sources: dict[str, str]) -> dict[str, Any]:
             continue
         if path == _SECURITY + "objects.py":
             objects = tree
-        # Keep the detailed adapter inventory small; all supplied files are hashed.
-        if path in _REQUIRED:
-            sites = _Sites(path)
-            sites.visit(tree)
-            methods.extend(sites.methods)
-            calls.extend(sites.calls)
+        # Index every supplied definition, including new files. A fixed list of
+        # familiar adapter filenames must not become the coverage denominator.
+        sites = _Sites(path)
+        sites.visit(tree)
+        methods.extend(sites.methods)
+        calls.extend(sites.calls)
     if objects is not None:
         classes = {
             node.name: node for node in objects.body if isinstance(node, ast.ClassDef)
@@ -204,6 +205,7 @@ def verify_layers(repo: Path) -> dict[str, Any]:
     }
     inventory = inventory_sources(sources)
     adapters = check_adapters(sources)
+    publications = verify_publications(sources)
     router = verify_host_router()
     router_path = _SECURITY + "host_router.py"
     if (
@@ -225,12 +227,14 @@ def verify_layers(repo: Path) -> dict[str, Any]:
         for name, values in OPERATIONS.items()
         for operation in values
     ]
+    ledger = obligation_ledger(inventory, publications, router)
     return {
         "schema_version": 2,
         "complete": bool(
             router["complete"]
             and inventory["path_cover_proved"]
             and adapters["proof"]
+            and publications["complete"]
             and adapters["checks_passed"]
             and not inventory["issues"]
             and not escapes.parse_errors
@@ -242,6 +246,8 @@ def verify_layers(repo: Path) -> dict[str, Any]:
         "router": router,
         "placement": inventory,
         "adapters": adapters,
+        "publications": publications,
+        "obligations": ledger,
         "escape_discovery": {
             "findings": len(escapes.findings),
             "waived": len(disposition.waived),
@@ -274,6 +280,7 @@ def verify_layers(repo: Path) -> dict[str, Any]:
             "operations": len(operations),
             "router": router["summary"],
             "source_files": len(sources),
+            "declared_api_obligations": len(ledger),
             "route_candidates": sum(
                 site["kind"] == "route_candidate"
                 for site in inventory["call_candidates"]
@@ -287,6 +294,55 @@ def verify_layers(repo: Path) -> dict[str, Any]:
     }
 
 
+def obligation_ledger(
+    inventory: dict[str, Any], publications: dict[str, Any], router: dict[str, Any]
+) -> list[dict[str, Any]]:
+    """Account for every declaration without promoting partial proofs.
+
+    The ledger is a conservative superset of APIs, including private and nested
+    functions. Imported/inherited surfaces additionally live in the transfer
+    report; unresolved bases prevent its closure. A discovered declaration is
+    never silently accepted because no spelling-based finding mentions it.
+    """
+    flows = {entry["entry"]: entry for entry in publications["entries"]}
+    routed = {
+        entry["entry"]: entry
+        for entry in router.get("source_proof", {}).get("entries", [])
+    }
+    ledger = []
+    for site in inventory["declared_methods"]:
+        parts = list(Path(site["path"]).with_suffix("").parts[2:])
+        if parts[-1] == "__init__":
+            parts.pop()
+        symbol = ".".join([*parts, site["symbol"]])
+        source_hash = inventory["source_sha256"][site["path"]]
+        flow = flows.get(symbol)
+        route = routed.get(symbol)
+        ledger.append(
+            {
+                **site,
+                "qualified_symbol": symbol,
+                "source_sha256": source_hash,
+                "fingerprint": hashlib.sha256(
+                    f"{site['path']}\0{site['symbol']}\0{source_hash}".encode()
+                ).hexdigest(),
+                "owner": "verifier",
+                "status": "unresolved",
+                "router_protocol": route["status"]
+                if route and router["complete"]
+                else "not_proved",
+                "publication_transfer": flow["status"] if flow else "not_analyzed",
+                "publication_model_closed": bool(publications["complete"]),
+                "remaining": [
+                    "placement and refusing-route dominance",
+                    "authoritative principal/resource/label binding",
+                    "effect and host composition",
+                ],
+            }
+        )
+    return ledger
+
+
 def _main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument(
@@ -296,7 +352,7 @@ def _main() -> int:
     parser.add_argument(
         "--require-complete",
         action="store_true",
-        help="Fail unless system completeness is established; currently unresolved.",
+        help="Compatibility alias; missing system proof now fails by default.",
     )
     args = parser.parse_args()
     report = verify_layers(args.repo.resolve())
@@ -312,7 +368,7 @@ def _main() -> int:
         or report["escape_discovery"]["errors"]
         or report["escape_discovery"]["unwaived"]
     )
-    return 1 if invalid or (args.require_complete and not report["complete"]) else 0
+    return 1 if invalid or not report["complete"] else 0
 
 
 if __name__ == "__main__":

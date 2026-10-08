@@ -8,6 +8,11 @@ through an exact-decision bridge; they are callers, not excluded peer
 boundaries. Framework placement and trusted in-process compatibility are
 tracked below and do not yet carry a system-wide complete-mediation claim.
 
+The latest source review is recorded in [the October 8 recheck](#october-8-recheck-of-4ad6c95c).
+The earlier validation results below are historical and do not supersede it.
+The subsequent [verifier hardening](#verifier-hardening-after-the-recheck) changes
+the default acceptance contract and adds source-bound publication obligations.
+
 Generate the result from `libs/prebuilt`:
 
 ```sh
@@ -245,8 +250,8 @@ Developers can now run `make security-verify` in `libs/prebuilt` to obtain
 source-located regression findings for these review patterns, router failures,
 and waiver problems. The [developer workflow](source-verification.md#developer-acceptance-workflow)
 documents rule IDs, report comparison, extension tests, and the separate strict
-system gate. The current developer acceptance run has no implementation-owned
-findings. The verifier's three unfinished proof areas remain explicitly assigned
+system gate. The acceptance run before the October 8 checker extension had no
+implementation-owned findings. The verifier's three unfinished proof areas remain explicitly assigned
 to the verifier in the output, so the acceptance pass is not a system proof.
 
 Validation of this verification update:
@@ -271,3 +276,94 @@ The layered `--require-complete` gate fails intentionally while the placement,
 adapter-composition, and host-isolation proofs are absent. Its inventory hashes
 149 Python files and lists 70 route candidates. Candidate counts are not a
 coverage percentage or an exhaustive count of protected effects.
+
+## October 8 recheck of `4ad6c95c`
+
+The original developer acceptance checks pass on `4ad6c95c`, including the
+21-entry router certificate. Source review still finds two incomplete read
+adapters. The checker now reports both as `SGV107` and `SGV108`, with separate
+sync/async diagnostics. The [fresh developer report](developer-verification-report.json)
+has four implementation findings and three verifier-owned proof gaps. Both
+`make security-verify` and `make security-verify-complete` fail on this snapshot.
+
+1. **Backing-store read results bypass effective-value mediation.**
+   `MediatedStore.batch` and `abatch` return backing results directly
+   (`object_manager.py:453,461`). `_authorize` supplies `None` for `GetOp`, while
+   `_effective_store_operation` only applies routed values to `PutOp`.
+   `ObjectManagerHost` consults its separate store metadata and returns `None`
+   when the resource is absent there; that does not authenticate ownership or
+   labels of an existing backing-store item. The write transformation fix is
+   present, but read transformations cannot affect the returned backing value.
+   Bind authorization to authoritative backing ownership/labels and return the
+   effective read value; reject unknown ownership when it cannot be established.
+2. **Checkpoint history does not verify returned tuples.**
+   `MediatedCheckpointer.list` and `alist` authorize query options, then yield
+   backing tuples directly (`checkpoint_security.py:78,112`). Unlike the
+   `get_tuple` path, these paths do not authenticate the checkpoint envelope,
+   principal/session binding, or pending writes. Authenticate each history tuple
+   before publishing it and apply effective read results. This requires a
+   non-consuming verification operation: calling the existing restore verifier
+   directly would also consume replay state.
+
+These are source-review findings, not executed bypass demonstrations. Added
+regression fixtures are parsed as source and never executed. The new rules are
+narrow review patterns; clearing them is not a composition proof. Host MAC
+correctness remains an assumption and does not establish these application-level
+ownership, integrity, and value-propagation properties.
+
+Recheck validation:
+
+- Router: 21/21 entries verified.
+- Tool API conformance: 15,744/15,744 cases across 72 surfaces pass, with no
+  background errors. This is the declared conformance matrix, not all possible
+  application executions or a system completeness result.
+- Focused verifier regressions, including the new source fixtures: 83 pass.
+- Full `libs/prebuilt` suite: 1,827 tests pass. That run collected before the
+  five new parsed-source cases were added; those cases passed in the focused run.
+- `make format` and `make lint` pass in `libs/prebuilt`.
+- Strict mypy over the security package reports 29 errors in seven implementation
+  files; strict mypy on the changed adapter checker passes. The normal lint
+  target uses `ty`, which passes.
+
+The strict gate continues to report `SGV901` (placement proof), `SGV902`
+(adapter-composition proof), and `SGV903` (host adapter/isolation composition
+evidence). These are verifier-owned obligations, not requests to re-prove the
+assumed security of Linux MAC.
+
+## Verifier hardening after the recheck
+
+The default developer command now fails unless system verification is complete;
+`security-verify-complete` is an equivalent compatibility target. Schema 2
+reports known regression status separately. A clean pattern scan, a missing
+model, an unsupported source operation, or an exhausted analysis budget can no
+longer produce an acceptance pass.
+
+The shared transfer engine now checks exact return-value grants, principal and
+resource bindings, helper/alias propagation, conditional exits, inherited APIs,
+and exception publication within its supported language and explicit primitive
+contracts. Source-only tests include valid contracts as well as rejected and
+unresolved candidates. Ordinary helpers are analyzed rather than trusted by name.
+
+The repository report includes 2,190 source-bound declaration obligations across
+the entire supplied source snapshot, including newly added files. This is a
+conservative declaration inventory that includes helpers and verifier code, not
+a public-API count or completeness percentage. Publication transfer analysis
+covers 49 discovered adapter methods: 10 have locally verified results and 39
+are unresolved. Its source model is not closed, so the 10 local results do not
+constitute an adapter proof. The four implementation diagnostics from the recheck
+remain separate from this verifier-owned work.
+
+Router calls are deliberately not modeled as primitives that always authorize
+their returned values: they may return escalation objects. Modeling that result
+protocol and receiver binding remains necessary, alongside authoritative
+ownership/integrity, placement, and host-adapter composition. The new engine can
+prove supported publication contracts, but this repository's system proof is
+still incomplete. The verifier changes do not repair production adapters.
+
+Validation: `make format` and `make lint` pass; strict mypy passes for all four
+changed verifier modules. The full prebuilt run passes 1,866 tests. The final
+focused verification run passes 926 tests, including two added after the full
+run collected tests. The router certificate still verifies 21/21 entries.
+Both default and compatibility completeness commands return failure as required
+for the current incomplete evidence. The fresh schema 2
+[report](developer-verification-report.json) contains the per-entry details.

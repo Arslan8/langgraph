@@ -1,8 +1,8 @@
 """Run the developer acceptance checks and print an actionable repair queue.
 
-Default success means the implemented regression checks passed. Use
---require-complete for the stronger system-proof gate. Proof gaps are always
-reported, even when they do not fail the default acceptance gate.
+Default success requires system verification. Regression-pattern absence is
+reported separately and never turns missing evidence into an acceptance pass.
+--require-complete remains a compatibility alias for the default behavior.
 """
 
 from __future__ import annotations
@@ -119,13 +119,15 @@ def developer_report(evidence: dict[str, Any]) -> dict[str, Any]:
                 "Extend the placement checker to prove all effect paths, supported shapes, inherited APIs, callbacks and exceptional exits. Regression-pattern absence is insufficient.",
             )
         )
-    if not evidence["adapters"]["proof"]:
+    if not evidence["adapters"]["proof"] or not evidence.get("publications", {}).get(
+        "complete", False
+    ):
         gaps.append(
             _task(
                 "SGV902",
                 "verifier",
                 "Adapter composition proof is not implemented",
-                "Prove effective-value propagation, authoritative identity and labels, approval semantics, and effect atomicity. The adapter checks currently detect review patterns only.",
+                "Resolve source-bound API obligations and publication transfer issues in evidence.obligations and evidence.publications. Prove authoritative identity, labels, approval semantics and effect atomicity; passing review patterns is insufficient.",
             )
         )
     # The router explicitly assumes these adapter properties. They are not
@@ -138,11 +140,13 @@ def developer_report(evidence: dict[str, Any]) -> dict[str, Any]:
             "Bind confinement activation, worker-channel identity and lifetime to the exact request. Trust MAC correctness; do not infer adapter correctness from that premise.",
         )
     )
+    complete = bool(evidence["complete"] and not tasks and not gaps)
     return {
-        "schema_version": 1,
+        "schema_version": 2,
         "kind": "slanggraph-developer-verification",
-        "acceptance_passed": not tasks,
-        "complete": evidence["complete"] and not tasks and not gaps,
+        "regression_checks_passed": not tasks,
+        "acceptance_passed": complete,
+        "complete": complete,
         "tasks": sorted(
             tasks,
             key=lambda item: (
@@ -160,6 +164,13 @@ def developer_report(evidence: dict[str, Any]) -> dict[str, Any]:
             "verifier_tasks": sum(task["owner"] == "verifier" for task in tasks)
             + len(gaps),
             "router": router["summary"],
+            "declared_api_obligations": len(evidence.get("obligations", [])),
+            "publication_model_closed": evidence.get("publications", {}).get(
+                "complete", False
+            ),
+            "publication_analysis": evidence.get("publications", {})
+            .get("proof", {})
+            .get("summary", {}),
         },
         "evidence": evidence,
         "checker_sha256": hashlib.sha256(Path(__file__).read_bytes()).hexdigest(),
@@ -170,12 +181,11 @@ def compare_reports(
     current: dict[str, Any], previous: dict[str, Any]
 ) -> dict[str, list[str]]:
     """Compare task identities only; the previous report never grants approval."""
-    if (
-        previous.get("kind") != "slanggraph-developer-verification"
-        or previous.get("schema_version") != 1
-    ):
+    if previous.get("kind") != "slanggraph-developer-verification" or previous.get(
+        "schema_version"
+    ) not in {1, 2}:
         raise ValueError(
-            "comparison file must be a developer-verification report (schema 1)"
+            "comparison file must be a developer-verification report (schema 1 or 2)"
         )
     before = {item["fingerprint"] for item in previous["tasks"]}
     after = {item["fingerprint"] for item in current["tasks"]}
@@ -192,6 +202,9 @@ def render_text(report: dict[str, Any]) -> str:
     lines = [
         f"Router: {router['verified']}/{router['discovered']} verified.",
         f"Acceptance: {'PASS' if report['acceptance_passed'] else 'FAIL'}. System completeness: {'PROVED' if report['complete'] else 'NOT ESTABLISHED'}.",
+        f"Known regression checks: {'PASS' if report['regression_checks_passed'] else 'FAIL'} (not a proof).",
+        f"Declared definition obligations: {summary['declared_api_obligations']}; conditional publication entry results: {summary['publication_analysis']}.",
+        f"Publication source model closed: {summary['publication_model_closed']} (entry results alone do not establish closure).",
     ]
     for rule in sorted({task["rule"] for task in report["tasks"]}):
         tasks = [task for task in report["tasks"] if task["rule"] == rule]
@@ -203,7 +216,9 @@ def render_text(report: dict[str, Any]) -> str:
             lines.append(f"  [{task['owner']}] {location} {task['message']}")
         for fix in dict.fromkeys(task["fix"] for task in tasks):
             lines.append(f"  Fix: {fix}")
-    lines.append("\nVerifier-owned proof work (not an implementation pass/fail):")
+    lines.append(
+        "\nVerifier-owned proof work (blocks acceptance; not assigned to implementation authors):"
+    )
     for gap in report["proof_gaps"]:
         lines.extend((f"  {gap['rule']}: {gap['message']}", f"  Next: {gap['fix']}"))
     if "comparison" in report:
@@ -214,7 +229,7 @@ def render_text(report: dict[str, Any]) -> str:
             )
         )
     lines.append(
-        "\nPassing acceptance checks is not a completeness certificate. JSON includes source hashes and raw evidence."
+        "\nAcceptance requires all proof obligations. Unknown analysis, missing evidence and budget exhaustion cannot pass. JSON includes the source-bound API ledger and raw evidence."
     )
     return "\n".join(lines) + "\n"
 
@@ -233,7 +248,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     parser.add_argument(
         "--require-complete",
         action="store_true",
-        help="also fail for outstanding system-proof work",
+        help="compatibility alias; outstanding system-proof work fails by default",
     )
     parser.add_argument(
         "--list-checks",
@@ -260,12 +275,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         print(f"SGV190: Verification input/report error: {exc}")
         return 2
     print(render_text(report), end="")
-    return (
-        0
-        if report["acceptance_passed"]
-        and (not args.require_complete or report["complete"])
-        else 1
-    )
+    return 0 if report["complete"] else 1
 
 
 if __name__ == "__main__":

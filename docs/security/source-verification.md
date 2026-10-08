@@ -8,13 +8,19 @@ From `libs/prebuilt`, run:
 make security-verify
 ```
 
-This fast source-only command recomputes the router proof and adapter checks,
+This source-only command recomputes the router proof and adapter checks,
 prints an actionable repair queue, and writes `security-verification-report.json`.
 Each finding has a stable rule ID, source location, structural fingerprint,
 owner, and fix guidance. It does not execute source candidates or tool bodies.
-Exit 0 means the implemented acceptance checks passed, 1 means findings remain,
-and the Python CLI uses exit 2 for an invalid input/report. Make may map a failed
+Exit 0 now requires complete verification. Findings, missing proof evidence,
+unsupported analysis and exhausted analysis budgets all prevent acceptance.
+The Python CLI uses exit 1 for an incomplete result and exit 2 for an invalid input/report. Make may map a failed
 subcommand to its own exit code.
+
+Schema 2 separates `regression_checks_passed` from `acceptance_passed`.
+`acceptance_passed` equals `complete`; clearing the known patterns no longer
+produces a successful exit. Schema 1 reports remain usable for fingerprint
+comparison, never for importing their earlier acceptance decision.
 
 To compare iterations without treating an old report as authority:
 
@@ -38,6 +44,8 @@ running analysis.
 | `SGV104` | Mediate callback publication as well as normal stream yields. |
 | `SGV105` | Bind stored state to invocation identity, not just channel names. |
 | `SGV106` | Place checkpoint history, writes, and administrative effects. |
+| `SGV107` | Bind backing-store read results to authoritative ownership and effective values. |
+| `SGV108` | Authenticate and principal-bind checkpoint history tuples before publication. |
 | `SGV190` | Restore missing/unresolved analyzer inputs or update its model. |
 | `SGV201` | Restore the router's required protocol and exact identity bindings. |
 | `SGV301` / `SGV302` | Resolve escape findings and stale/malformed waivers. |
@@ -53,14 +61,14 @@ an analyzer extension and must not be described as proved.
 The report separates implementation findings from verifier-owned proof work:
 `SGV901` (placement), `SGV902` (adapter composition), and `SGV903` (host adapter
 and isolation evidence). Developers are not asked to waive these gaps. The
-stronger command, used in CI, is:
+older command, used in CI, remains an equivalent alias:
 
 ```sh
 make security-verify-complete
 ```
 
-It also requires system proof closure. Clearing the acceptance findings alone
-does not satisfy it. CI uploads the same JSON repair queue developers get
+Both commands require system proof closure. Clearing the implementation findings
+alone does not satisfy either. CI uploads the same JSON repair queue developers get
 locally. Add checker regressions in `test_adapter_verification.py` and CLI/report
 regressions in `test_developer_verification.py` when extending a rule. Candidate
 fixtures must remain source-only; include both rejected and corrected examples.
@@ -75,15 +83,112 @@ uv run python -m langgraph.prebuilt.security.layered_verification \
   --require-complete --output layered-verification-report.json
 ```
 
-This lower-level evidence command reruns the router proof, inventories the independent ten-class/28-operation
+This lower-level evidence command reruns the router proof, inventories the independent ten-class/30-operation
 contract, checks request/operation declaration drift, records adapter call-site
 candidates and source hashes, runs adapter regressions, and checks escape-waiver disposition. The
 [recorded report](layered-verification-report.json) separates these results.
 Candidate discovery is syntactic, not an alias, inheritance, or dominance
 analysis. It cannot establish placement completeness. The system gate therefore
 remains nonzero until a placement and composition proof is implemented and
-discharges the remaining obligations. Omitting `--require-complete` checks
-evidence consistency and implemented regressions only; exit zero then is not a system certificate.
+discharges the remaining obligations. Omitting `--require-complete` now has the
+same fail-closed behavior.
+
+## API ledger and publication transfer analysis
+
+The [agreed non-bypassability scope and permutation matrix](../../verifier/docs/README.md)
+defines the assignment. `make security-verify-permutations` runs the finite
+denial/binding regression matrices and writes a separate test-evidence report.
+It does not turn incomplete system verification into acceptance.
+
+`evidence.obligations` records every function/method declaration in the supplied
+repository snapshot, including private/nested definitions and new source files.
+Each row binds its location and symbol to the source digest and records partial
+router/publication evidence separately from outstanding composition obligations.
+This deliberately includes helpers and verifier code: the declaration count is
+a conservative inventory, not a number of public APIs or a coverage percentage.
+Inherited APIs appear additionally in the publication engine's surface inventory;
+unresolved bases and dynamic behavior prevent closure. Static discovery does not
+establish that arbitrary runtime-generated methods have been enumerated.
+
+`evidence.publications.proof` uses the existing interprocedural transfer engine
+for `MediatedStore`, `MediatedCheckpointer` and `OutputMediator`. It follows
+supported helper bodies, aliases, inherited methods and branches, with per-entry
+steps, call graphs, publication bindings and unsupported-source diagnostics.
+Source dependencies and package initializers are discovered without importing
+candidate code. A verified entry under an incomplete source model does not
+establish an adapter proof. Ordinary helper names never establish authority.
+
+The transfer engine now supports explicit publication contracts:
+
+- `ReadSource(target)` supplies a fresh opaque data identity and no permission.
+  It models acquisition for this property only. It does not prove authorization
+  of the read itself or side effects; those need `Operation` contracts.
+- `return_requirements` requires a fresh matching grant for the exact API result
+  on every modeled normal exit. Selectors include the receiver as positional
+  argument zero for ordinary methods. Principal/resource bindings can be required
+  alongside `result:`. The contract applies to newly discovered and inherited
+  APIs as well as the original surface.
+- `refusing_authorizers` is an explicit trusted primitive contract for functions
+  whose normal return already establishes authorization. It is never inferred
+  from a function's spelling or a successful example. Primitive failure payloads
+  must not publish protected data. Dynamic exception publication stays unresolved.
+- `allow_none_return`, false by default, can explicitly treat a statically known
+  `None` as an unprotected absence marker. The repository data-propagation model
+  enables this for constructor completion and empty results; it does not exempt
+  any call/effect from analysis or authorize publication of other values.
+
+`VerificationSpec.entry_bindings` separately specifies the original entry
+arguments required at each authorizer. It applies through aliases and helper
+calls and is checked even when authorization and effect agree with each other.
+Selectors use the original entry's argument order, including `self` at zero for
+instance methods and keyword-only arguments after positional arguments. Enabling
+this contract requires every discovered entry to have a contract; stale or
+unclassified entries remain unresolved. `authorizations` records both actual and
+expected arguments with an `entry_bound` result.
+
+The engine models field-only native `typing.NamedTuple` and
+`typing_extensions.NamedTuple` declarations with postponed annotations and
+immutable literal defaults. Constructor positional/keyword binding, field and
+tuple projections, `_replace`, and `_asdict` preserve the actual value identities.
+Replacement creates a new record; dictionary conversion detaches its top-level
+mapping. Both retain dependencies on nested mutable values, so changing an
+authorized record's nested data invalidates its pending or established grant.
+Native invalid constructor arguments and immutable-field writes stop the normal
+continuation; enclosing exception handlers are still analyzed.
+Configured effect contracts take precedence over native generated-method
+handling. Publishing a supported data-only record still requires the declared
+grant for that exact record; executable capabilities inside its fields cannot
+escape by being wrapped in a tuple. Records with explicitly effectful methods
+remain capability-bearing objects.
+
+This model covers the source declarations of `CheckpointTuple`, `GetOp`,
+`PutOp`, `SearchOp`, `MatchCondition`, and `ListNamespacesOp`. It does not infer
+that arbitrary API inputs have those shapes from their annotations. Custom
+record methods, subclasses, effectful defaults and unmodeled generated members
+remain unresolved. Selecting a record itself as an API surface also requires
+generated-method verification. These contracts and source-only binding
+permutations are exercised in `test_verification_named_tuples.py` and
+`test_verification_named_tuple_publication.py`.
+
+Immediate synchronous generator expressions supplied as the sole argument to
+resolved native `tuple` or `list` consumers use the finite comprehension model.
+This preserves callee/first-iterable evaluation order, local target bindings,
+filters, exceptions and fresh authority for each iteration. Deferred generators,
+unknown consumers, async generators, assignment expressions, later call arguments
+and unknown or mutating iterables remain unresolved. The source-only matrix in
+`test_verification_generators.py` covers 576 combinations plus ordering, alias,
+exception and unsupported-shape regressions. An effect-free entry can be locally
+verified while the existing whole-spec gate remains incomplete because no
+dispatch obligation was reached; these are different report fields.
+
+The repository analysis intentionally does **not** declare router calls as
+refusing-return authorizers: they can return escalation objects. Correct receiver
+binding and that result protocol still need a model. Ownership, integrity,
+pending-write authentication and host composition also remain separate obligations.
+The generic engine can prove supported publication contracts; the current
+repository adapter composition is not yet proved. See the source-only positive
+and negative fixtures in `test_verification_publication.py` and
+`test_publication_verification.py` for extension tests.
 
 CI uses the developer command's strict gate and separately runs Tool API conformance. The router
 proof requires the correct authorization protocol for each entry and the

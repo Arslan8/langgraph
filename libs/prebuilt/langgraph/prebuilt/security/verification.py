@@ -73,6 +73,18 @@ class Requirement:
     bindings: tuple[str, ...]
 
 
+@dataclass(frozen=True)
+class ReadSource:
+    """A trusted inert-data read; returning data grants no publication authority.
+
+    Failures must carry no protected payload. This models data acquisition only.
+    Access control on the read itself must
+    be modeled as an Operation instead when acquiring it is a protected effect.
+    """
+
+    target: str
+
+
 def _valid_selector(selector: str, *, result: bool) -> bool:
     kind, colon, path = selector.partition(":")
     parts = path.split(".")
@@ -106,10 +118,23 @@ class VerificationSpec:
     max_paths: int = 512
     max_depth: int = 32
     package_modules: tuple[str, ...] = ()
+    read_sources: tuple[ReadSource, ...] = ()
+    return_requirements: tuple[Requirement, ...] = ()
+    refusing_authorizers: tuple[str, ...] = ()
+    allow_none_return: bool = False
+    entry_bindings: dict[str, dict[str, tuple[str, ...]]] = field(default_factory=dict)
 
     def __post_init__(self) -> None:
-        if not self.sources or not self.surfaces or not self.operations:
-            raise ValueError("sources, surfaces and operations are required")
+        if type(self.allow_none_return) is not bool:
+            raise ValueError("allow_none_return must be a boolean")
+        if (
+            not self.sources
+            or not self.surfaces
+            or not (self.operations or self.return_requirements)
+        ):
+            raise ValueError(
+                "sources, surfaces and effect or return obligations are required"
+            )
         if min(self.max_steps, self.max_paths, self.max_depth) < 1:
             raise ValueError("analysis budgets must be positive")
         if (
@@ -121,11 +146,14 @@ class VerificationSpec:
             *self.authorizers,
             *self.operations,
         )
-        if len({item.target for item in terminals}) != len(terminals):
+        targets = [item.target for item in (*terminals, *self.read_sources)]
+        if any(not target for target in targets) or len(set(targets)) != len(targets):
             raise ValueError("terminal targets must be distinct")
-        if set(self.async_terminals) - {item.target for item in terminals}:
+        if set(self.async_terminals) - set(targets):
             raise ValueError("async terminals must name declared terminal contracts")
-        if set(self.terminal_parameters) - {item.target for item in terminals}:
+        if set(self.refusing_authorizers) - {item.target for item in self.authorizers}:
+            raise ValueError("refusing terminals must name authorizer contracts")
+        if set(self.terminal_parameters) - set(targets):
             raise ValueError("terminal parameter models must name declared terminals")
         if any(
             not names
@@ -166,6 +194,33 @@ class VerificationSpec:
             for item in self.authorizers
         ):
             raise ValueError("authorizer decision selectors must be attribute paths")
+        for requirement in self.return_requirements:
+            if (
+                not requirement.permission
+                or not requirement.bindings
+                or "result:" not in requirement.bindings
+                or any(
+                    not _valid_selector(selector, result=True)
+                    for selector in requirement.bindings
+                )
+            ):
+                raise ValueError(
+                    "return obligations must bind the exact returned result"
+                )
+        for entry, protocols in self.entry_bindings.items():
+            if not entry or not protocols:
+                raise ValueError("entry binding contracts must be nonempty")
+            for target, selectors in protocols.items():
+                if (
+                    target not in {item.target for item in self.authorizers}
+                    or not selectors
+                    or any(
+                        not _valid_selector(item, result=False) for item in selectors
+                    )
+                ):
+                    raise ValueError(
+                        "entry bindings must select original arguments for declared authorizers"
+                    )
 
 
 @dataclass
@@ -346,6 +401,7 @@ class _Program:
         self.functions: dict[str, _Info] = {}
         self.classes: dict[str, ast.ClassDef] = {}
         self.records: dict[str, _Record] = {}
+        self.named_tuples: dict[str, tuple[tuple[str, ast.expr | None], ...]] = {}
         self.typed_dicts: set[str] = set()
         self.context_variables: dict[str, ast.Constant | None] = {}
         self.constants: dict[str, ast.Constant] = {}
@@ -354,9 +410,11 @@ class _Program:
         self.binding_lines: dict[tuple[str, str], int] = {}
         self.postponed_modules: set[str] = set()
         self.issues: list[dict[str, Any]] = []
-        self.terminals = {item.target for item in spec.authorizers} | {
-            item.target for item in spec.operations
-        }
+        self.terminals = (
+            {item.target for item in spec.authorizers}
+            | {item.target for item in spec.operations}
+            | {item.target for item in spec.read_sources}
+        )
         self.lazy_exports: dict[tuple[str, str], str | None] = {}
         self.export_evidence: list[dict[str, Any]] = []
         self.import_bindings: list[tuple[str, str]] = []
@@ -595,6 +653,9 @@ class _Program:
             record = self.record_model(owner, node)
             if record is not None:
                 self.records[owner] = record
+            named_tuple = self.named_tuple_model(owner, node)
+            if named_tuple is not None:
+                self.named_tuples[owner] = named_tuple
         for owner in self.classes:
             self.typed_dict_model(owner)
         # Every class body executes when its module is loaded, even when no API
@@ -760,6 +821,55 @@ class _Program:
                 return None
             kind = target.removeprefix("builtins.")
         return kind
+
+    def named_tuple_model(
+        self, owner: str, node: ast.ClassDef
+    ) -> tuple[tuple[str, ast.expr | None], ...] | None:
+        """Recognize native field-only NamedTuple declarations without execution.
+
+        Postponed annotations do not validate or coerce field values. Custom
+        methods, descriptors, nonliteral defaults and subclass layouts stay
+        unresolved; accepting the name of a base is not enough.
+        """
+        module = owner.rsplit(".", 1)[0]
+        if (
+            node.decorator_list
+            or node.keywords
+            or len(node.bases) != 1
+            or module not in self.postponed_modules
+            or not isinstance(node.bases[0], (ast.Name, ast.Attribute))
+        ):
+            return None
+        spelling = ast.unparse(node.bases[0])
+        base = self.qualify(module, spelling)
+        if (
+            base not in {"typing.NamedTuple", "typing_extensions.NamedTuple"}
+            or base in self.terminals
+            or base
+            in (self.functions.keys() | self.classes.keys() | self.constants.keys())
+            or self.binding_lines.get((module, spelling.split(".", 1)[0]), 0)
+            >= node.lineno
+        ):
+            return None
+        fields: list[tuple[str, ast.expr | None]] = []
+        optional = False
+        for member in node.body:
+            if isinstance(member, ast.AnnAssign):
+                if (
+                    not isinstance(member.target, ast.Name)
+                    or member.target.id.startswith("_")
+                    or any(name == member.target.id for name, _ in fields)
+                    or (member.value is not None and not _literal_default(member.value))
+                    or (member.value is None and optional)
+                ):
+                    return None
+                optional = optional or member.value is not None
+                fields.append((member.target.id, member.value))
+            elif not isinstance(member, ast.Pass) and not (
+                isinstance(member, ast.Expr) and isinstance(member.value, ast.Constant)
+            ):
+                return None
+        return tuple(fields)
 
     def record_model(self, owner: str, node: ast.ClassDef) -> _Record | None:
         """Recognize the supported standard dataclass constructor semantics."""
@@ -1064,6 +1174,8 @@ class _Program:
         """Compute native C3 order only for statically named source bases."""
         if owner in {"object", "builtins.object"}:
             return ("object",)
+        if owner in self.named_tuples:
+            return (owner, "tuple", "object")
         if owner in self.mro_cache:
             return self.mro_cache[owner]
         if owner in trail or owner not in self.classes or owner in self.typed_dicts:
@@ -1119,7 +1231,7 @@ class _Program:
     def methods(self, owner: str, trail: tuple[str, ...] = ()) -> dict[str, str]:
         if owner in self.method_cache:
             return self.method_cache[owner]
-        if owner in self.typed_dicts:
+        if owner in self.typed_dicts or owner in self.named_tuples:
             self.method_cache[owner] = {}
             return {}
         if owner in trail or owner not in self.classes:
@@ -1159,6 +1271,14 @@ class _Program:
                         "module": module,
                         "line": node.lineno,
                         "reason": "dataclass inheritance requires a generated-method model",
+                    }
+                )
+            if name in self.named_tuples:
+                self.issues.append(
+                    {
+                        "module": module,
+                        "line": node.lineno,
+                        "reason": "NamedTuple subclass requires a layout and protocol model",
                     }
                 )
             if name not in {"object", "builtins.object"}:
@@ -1227,6 +1347,8 @@ class _Program:
             return None
         if name in _TYPE_BASES:
             bases = _TYPE_BASES[name]
+        elif name in self.named_tuples:
+            bases = ("tuple",)
         elif name in self.classes:
             node = self.classes[name]
             if node.keywords or (node.decorator_list and name not in self.records):
@@ -1274,6 +1396,14 @@ class _Program:
                     "module": name,
                     "line": 0,
                     "reason": "TypedDict API surface requires native dictionary method verification",
+                }
+            )
+        for name in selected & self.named_tuples.keys():
+            self.issues.append(
+                {
+                    "module": name,
+                    "line": 0,
+                    "reason": "NamedTuple API surface requires generated-method verification",
                 }
             )
         return {name: self.methods(name) for name in sorted(selected)}
@@ -1783,9 +1913,12 @@ class _Engine:
         self.entry, self.owner = entry, owner
         self.authorizers = {item.target: item for item in self.spec.authorizers}
         self.operations = {item.target: item for item in self.spec.operations}
+        self.read_sources = {item.target for item in self.spec.read_sources}
         self.issues: list[dict[str, Any]] = []
         self.dispatches: list[dict[str, Any]] = []
         self.authorizations: list[dict[str, Any]] = []
+        self.publications: list[dict[str, Any]] = []
+        self.entry_arguments: list[str] = []
         self.edges: set[tuple[str, str]] = set()
         self.visited: set[str] = set()
         self.calls: set[tuple[str, int, int]] = set()
@@ -2589,6 +2722,20 @@ class _Engine:
                     if node.attr in child.fields[value]:
                         results.append((child, child.fields[value][node.attr]))
                         continue
+                    if child.objects[value] in self.program.named_tuples:
+                        if node.attr in {"_replace", "_asdict"}:
+                            terminal = f"{child.objects[value]}.{node.attr}"
+                            token = (
+                                f"object-bound:{value}|{terminal}"
+                                if terminal in self.program.terminals
+                                else f"named-tuple-method:{value}|{node.attr}"
+                            )
+                            child.contents[token] = (value,)
+                            results.append((child, token))
+                        else:
+                            self.issue(node, "NamedTuple attribute requires a model")
+                            results.append((child, "unknown:named-tuple-attribute"))
+                        continue
                     record = self.program.records.get(child.objects[value])
                     if record is not None and not record.slots:
                         default = dict(record.fields).get(node.attr)
@@ -2793,23 +2940,29 @@ class _Engine:
                                     )
                                 results.append((projected, item))
                     continue
-                if (
-                    value not in current.tuples
-                    or not isinstance(node.slice, ast.Constant)
-                    or type(node.slice.value) is not int
-                ):
+                if value not in current.tuples:
                     self.issue(
                         node, "subscript requires a known tuple and constant index"
                     )
                     results.append((current, "unknown:subscript"))
                 else:
-                    tuple_items = current.tuples[value]
-                    index = node.slice.value
-                    if -len(tuple_items) <= index < len(tuple_items):
-                        results.append((current, tuple_items[index]))
-                    else:
-                        current.exit = "raise"
-                        results.append((current, "unknown:exception"))
+                    for child, index in self.list_key(node.slice, current, info):
+                        if index is None or child.exit != "normal":
+                            results.append((child, "unknown:subscript"))
+                            continue
+                        try:
+                            selected_tuple = child.tuples[value][index]
+                        except (IndexError, ValueError):
+                            child.exit, child.result = "raise", "constant:None"
+                            results.append((child, "unknown:exception"))
+                        else:
+                            if isinstance(selected_tuple, tuple):
+                                self.serial += 1
+                                tuple_projection = f"tuple:{self.serial}"
+                                child.tuples[tuple_projection] = selected_tuple
+                            else:
+                                tuple_projection = selected_tuple
+                            results.append((child, tuple_projection))
             return results
         if isinstance(node, ast.IfExp):
             return [
@@ -2873,7 +3026,28 @@ class _Engine:
             expanded = []
             for current, callee, args, kwargs, tail in evaluated:
                 expression = arg.value if isinstance(arg, ast.Starred) else arg
-                for child, value in self.expr(expression, current, info):
+                if (
+                    isinstance(arg, ast.GeneratorExp)
+                    and callee in {"builtin:tuple", "builtin:list"}
+                    and len(node.args) == 1
+                    and not node.keywords
+                    and not any(isinstance(part, ast.Await) for part in ast.walk(arg))
+                ):
+                    # The callee has already been resolved, and there are no
+                    # later arguments that could change a captured variable
+                    # before consumption. Native list/tuple exhaust this
+                    # synchronous generator immediately. Reuse the finite
+                    # comprehension transfer, preserving first-iterable scope,
+                    # filter order, exceptions and per-iteration grants.
+                    # Deferred generators and arbitrary consumers need a
+                    # separate suspension/closure model; never eagerly run them.
+                    eager = ast.copy_location(
+                        ast.ListComp(elt=arg.elt, generators=arg.generators), arg
+                    )
+                    outcomes = self.comprehension(eager, current, info)
+                else:
+                    outcomes = self.expr(expression, current, info)
+                for child, value in outcomes:
                     if isinstance(arg, ast.Starred):
                         if value in child.lists:
                             extra = self.sequence_values(value, child, arg) or ()
@@ -2954,7 +3128,16 @@ class _Engine:
                 current.objects[instance] = target
                 current.fields[instance] = {}
                 initializer = methods.get("__init__")
-                if target in self.program.records:
+                if target in self.program.named_tuples:
+                    result.append(
+                        (
+                            current,
+                            self.construct_named_tuple(
+                                target, instance, args, kwargs, current
+                            ),
+                        )
+                    )
+                elif target in self.program.records:
                     result.extend(
                         self.construct_record(
                             target, instance, args, kwargs, current, node
@@ -3083,7 +3266,7 @@ class _Engine:
                         token = f"tuple:{self.serial}"
                         current.tuples[token] = ()
                         result.append((current, token))
-                    elif args[0] in current.tuples:
+                    elif args[0] in current.tuples and args[0] not in current.objects:
                         result.append((current, args[0]))
                     else:
                         converted = self.sequence_values(args[0], current, node)
@@ -3127,6 +3310,8 @@ class _Engine:
                         )
                     elif receiver in current.unknown_objects:
                         self.issue(node, "exceptional object setter is unresolved")
+                    elif current.objects[receiver] in self.program.named_tuples:
+                        current.exit, current.result = "raise", "constant:None"
                     else:
                         current.revoke(receiver)
                         current.fields[receiver][field_name] = value
@@ -3136,6 +3321,19 @@ class _Engine:
                         node, "builtin data operation requires an argument model"
                     )
                     result.append((current, "unknown:builtin"))
+                continue
+            if kind == "named-tuple-method":
+                if awaited:
+                    self.issue(node, "NamedTuple methods cannot be awaited")
+                receiver, method = target.split("|", 1)
+                result.append(
+                    (
+                        current,
+                        self.named_tuple_method(
+                            receiver, method, args, kwargs, current, node
+                        ),
+                    )
+                )
                 continue
             if kind == "list-method":
                 if awaited:
@@ -3262,10 +3460,9 @@ class _Engine:
                 result.append((current, "unknown:call"))
                 continue
             self.edges.add((self.stack[-1], target))
-            if target in self.authorizers or target in self.operations:
+            if target in self.program.terminals:
                 if awaited != (target in self.spec.async_terminals):
                     self.issue(node, "terminal await mode does not match its contract")
-                primitive = self.authorizers.get(target) or self.operations[target]
                 self.serial += 1
                 token = f"result:{self.serial}"
                 if kwargs or target in self.spec.terminal_parameters:
@@ -3287,11 +3484,35 @@ class _Engine:
                     named = dict(zip(parameters, args))
                     named.update(kwargs)
                     args = [named.get(name, "missing:argument") for name in parameters]
+                if target in self.read_sources:
+                    # A fresh opaque identity, never a grant. Keeping each read
+                    # distinct prevents authorizing a placeholder/earlier value.
+                    result.append((current, token))
+                    continue
+                primitive = self.authorizers.get(target) or self.operations[target]
                 binding = self.binding(
                     primitive.permission, primitive.bindings, args, token, node
                 )
                 if target in self.authorizers:
                     primitive = self.authorizers[target]
+                    entry_name = (
+                        f"{self.owner}.{self.program.functions[self.entry].node.name}"
+                    )
+                    protocols = self.spec.entry_bindings.get(entry_name, {})
+                    expected = None
+                    if self.spec.entry_bindings:
+                        selectors = protocols.get(target)
+                        if selectors is None:
+                            self.issue(
+                                node,
+                                "authorizer lacks an original-entry binding contract",
+                            )
+                        else:
+                            expected = list(
+                                self.binding(
+                                    "entry", selectors, self.entry_arguments, "", node
+                                )[1:]
+                            )
                     self.authorizations.append(
                         {
                             "function": self.stack[-1],
@@ -3300,6 +3521,8 @@ class _Engine:
                             "arguments": list(args),
                             "bindings": list(binding),
                             "call_path": list(self.stack),
+                            "expected_entry_arguments": expected,
+                            "entry_bound": expected is None or list(args) == expected,
                         }
                     )
                     decision_token = token + (
@@ -3332,6 +3555,12 @@ class _Engine:
                     current.pending[decision_token] = binding
                     current.decision_scopes[decision_token] = scope
                     current.verdicts[decision_token] = _VERDICTS
+                    if target in self.spec.refusing_authorizers:
+                        # Explicit trusted primitive contract: a normal return
+                        # already means ALLOW; denial raises before returning.
+                        current.pending.pop(decision_token)
+                        current.approved.add(binding)
+                        current.grant_scopes[binding] = scope
                 else:
                     required = [
                         binding,
@@ -3506,6 +3735,7 @@ class _Engine:
                     "class-bound",
                     "mapping-method",
                     "list-method",
+                    "named-tuple-method",
                 }
             ):
                 state.exit, state.result = "raise", "constant:None"
@@ -3522,7 +3752,7 @@ class _Engine:
             return [(state, "unknown:isinstance")]
 
         nominal = state.objects.get(value)
-        if value in state.tuples:
+        if value in state.tuples and nominal is None:
             nominal = "tuple"
         elif value in state.lists:
             nominal = "list"
@@ -3552,6 +3782,78 @@ class _Engine:
         # A positive test does not imply an exact builtin receiver: subclasses
         # may override methods. Preserve identity and leave those calls unknown.
         return [(state, f"instance-test:{value}|{name}")]
+
+    def named_tuple_default(self, default: ast.expr, key: str, state: _State) -> str:
+        """Keep immutable constructor defaults shared across instances."""
+        if isinstance(default, ast.Constant):
+            return "constant:" + repr(default.value)
+        assert isinstance(default, ast.Tuple)
+        state.tuples[key] = tuple(
+            self.named_tuple_default(item, f"{key}|{index}", state)
+            for index, item in enumerate(default.elts)
+        )
+        return key
+
+    def construct_named_tuple(
+        self,
+        owner: str,
+        instance: str,
+        args: list[str],
+        kwargs: dict[str, str],
+        state: _State,
+    ) -> str:
+        fields = self.program.named_tuples[owner]
+        names = [name for name, _ in fields]
+        supplied = {**dict(zip(names, args)), **kwargs}
+        if (
+            len(args) > len(names)
+            or any(key not in names or key in names[: len(args)] for key in kwargs)
+            or any(name not in supplied and default is None for name, default in fields)
+        ):
+            state.exit, state.result = "raise", "constant:None"
+            return "unknown:exception"
+        for name, default in fields:
+            if name in supplied:
+                value = supplied[name]
+            else:
+                assert default is not None
+                value = self.named_tuple_default(
+                    default, f"named-tuple-default:{owner}|{name}", state
+                )
+            state.fields[instance][name] = value
+        state.tuples[instance] = tuple(state.fields[instance][name] for name in names)
+        return instance
+
+    def named_tuple_method(
+        self,
+        receiver: str,
+        method: str,
+        args: list[str],
+        kwargs: dict[str, str],
+        state: _State,
+        node: ast.Call,
+    ) -> str:
+        if receiver in state.unknown_objects:
+            self.issue(node, "exceptional NamedTuple contents require an alias model")
+            return "unknown:named-tuple"
+        owner = state.objects[receiver]
+        fields = state.fields[receiver]
+        if (
+            args
+            or (method == "_asdict" and kwargs)
+            or any(name not in fields for name in kwargs)
+        ):
+            state.exit, state.result = "raise", "constant:None"
+            return "unknown:exception"
+        if method == "_asdict":
+            return self.mapping(state, dict(fields))
+        self.serial += 1
+        instance = f"object:{self.serial}"
+        state.objects[instance] = owner
+        state.fields[instance] = {}
+        return self.construct_named_tuple(
+            owner, instance, [], {**fields, **kwargs}, state
+        )
 
     def construct_record(
         self,
@@ -3662,6 +3964,7 @@ class _Engine:
                     "builtin:",
                     "mapping-method:",
                     "list-method:",
+                    "named-tuple-method:",
                     "mapping-constructor:",
                     "exception:",
                 )
@@ -4008,6 +4311,12 @@ class _Engine:
         elif isinstance(target, ast.Subscript):
             results = []
             for current, receiver in self.expr(target.value, state, info):
+                if receiver in current.tuples:
+                    for child, _ in self.expr(target.slice, current, info):
+                        if child.exit == "normal":
+                            child.exit, child.result = "raise", "constant:None"
+                        results.append(child)
+                    continue
                 if receiver in current.lists:
                     for child, index in self.list_key(target.slice, current, info):
                         if child.exit != "normal" or index is None:
@@ -4077,6 +4386,8 @@ class _Engine:
                     self.issue(target, "object mutation requires a known receiver")
                 elif receiver in child.unknown_objects:
                     self.issue(target, "exceptional object mutation is unresolved")
+                elif child.objects[receiver] in self.program.named_tuples:
+                    child.exit, child.result = "raise", "constant:None"
                 elif (
                     child.objects[receiver] in self.program.records
                     and self.program.records[child.objects[receiver]].frozen
@@ -4208,6 +4519,10 @@ class _Engine:
                 remaining.append(state)
                 continue
             self.settled_exceptions += 1
+            if self.spec.return_requirements and not self.inert_refusal(
+                state.result, state
+            ):
+                self.issue(node, "exception publication requires a data-flow model")
             if self.escapes(state.result, state):
                 self.issue(
                     node,
@@ -4609,6 +4924,12 @@ class _Engine:
                 "class:" if method_kind == "classmethod" else "instance:"
             ) + self.owner
         kwargs = {arg.arg: "input:" + arg.arg for arg in node.args.kwonlyargs}
+        self.entry_arguments = [*args, *kwargs.values()]
+        if (
+            self.spec.entry_bindings
+            and f"{self.owner}.{node.name}" not in self.spec.entry_bindings
+        ):
+            self.issue(node, "discovered API lacks an original-entry binding contract")
         try:
             initial = _State()
             for name, default in self.program.context_variables.items():
@@ -4628,6 +4949,33 @@ class _Engine:
                         node,
                         "executable, receiver or unresolved capability escapes through API exit",
                     )
+                if self.spec.return_requirements:
+                    if outcome.exit == "raise":
+                        if not self.inert_refusal(exposed, outcome):
+                            self.issue(
+                                node, "exception publication requires a data-flow model"
+                            )
+                    else:
+                        if self.spec.allow_none_return and value == "constant:None":
+                            continue
+                        for requirement in self.spec.return_requirements:
+                            fact = self.binding(
+                                requirement.permission,
+                                requirement.bindings,
+                                [*args, *kwargs.values()],
+                                value,
+                                node,
+                            )
+                            self.publications.append(
+                                {
+                                    "function": self.entry,
+                                    "line": node.lineno,
+                                    "permission": requirement.permission,
+                                    "bindings": list(fact[1:]),
+                                    "authorized": fact in outcome.approved,
+                                }
+                            )
+                            outcome.approved.discard(fact)
         except _Limit as exc:
             self.issue(node, str(exc))
         for name in sorted(self.visited):
@@ -4649,7 +4997,11 @@ class _Engine:
             "unresolved"
             if self.issues
             else "violated"
-            if any(not site["authorized"] for site in self.dispatches)
+            if any(
+                not site["authorized"]
+                for site in (*self.dispatches, *self.publications)
+            )
+            or any(not site["entry_bound"] for site in self.authorizations)
             else "verified"
         )
         return {
@@ -4659,11 +5011,20 @@ class _Engine:
             "issues": self.issues,
             "dispatches": self.dispatches,
             "authorizations": self.authorizations,
+            "publications": self.publications,
             "visited_functions": sorted(self.visited),
             "call_graph": [{"caller": a, "callee": b} for a, b in sorted(self.edges)],
             "steps": self.steps,
             "settled_exceptions": self.settled_exceptions,
         }
+
+    def inert_refusal(self, value: str, state: _State) -> bool:
+        """Only literal exception payloads may leave without a read grant."""
+        if not value.startswith("exception-value:"):
+            return False
+        return all(
+            item.startswith("constant:") for item in state.contents.get(value, ())
+        )
 
     def escapes(self, token: str, state: _State) -> bool:
         pending, seen = [token], set()
@@ -4673,8 +5034,17 @@ class _Engine:
             if value in seen:
                 continue
             seen.add(value)
+            owner = state.objects.get(value)
+            native_data_record = (
+                owner is not None
+                and owner in self.program.named_tuples
+                and not any(
+                    target.startswith(owner + ".") for target in self.program.terminals
+                )
+            )
             if (
-                value in state.objects
+                (value in state.objects and not native_data_record)
+                or value in state.unknown_objects
                 or value in state.locks
                 or value in state.unknown_mappings
                 or value in state.unknown_lists
@@ -4694,6 +5064,7 @@ class _Engine:
                         "exception-local:",
                         "mapping-method:",
                         "list-method:",
+                        "named-tuple-method:",
                         "mapping-constructor:",
                         "builtin:",
                         "context-method:",
@@ -4714,27 +5085,45 @@ def verify(spec: VerificationSpec) -> dict[str, Any]:
     """Verify all discovered APIs and emit unresolved/violating call paths."""
     program = _Program(spec)
     surfaces = program.surfaces()
+    discovered_entries = {
+        f"{owner}.{program.functions[method].node.name}"
+        for owner, methods in surfaces.items()
+        for method in methods.values()
+    }
+    for missing in sorted(spec.entry_bindings.keys() - discovered_entries):
+        program.issues.append(
+            {
+                "module": missing,
+                "line": 0,
+                "reason": "entry binding contract names an undiscovered API",
+            }
+        )
     entries = [
         _Engine(program, method, owner).run()
         for owner, methods in surfaces.items()
         for method in methods.values()
     ]
     dispatch_count = sum(len(entry["dispatches"]) for entry in entries)
+    publication_count = sum(len(entry["publications"]) for entry in entries)
     complete = (
         bool(entries)
-        and dispatch_count > 0
+        and (dispatch_count > 0 or bool(spec.return_requirements))
         and not program.issues
         and all(entry["status"] == "verified" for entry in entries)
     )
     return {
         "schema_version": 1,
-        "property": "Every reachable terminal dispatch on every modelled path consumes a fresh ALLOW decision for identical principal/request bindings.",
+        "property": "Every reachable terminal dispatch and every declared API-return obligation on every modelled path consumes a fresh ALLOW decision for identical bindings.",
         "complete": complete,
         "scope": "Closed-world supported Python subset under explicit terminal and object-model contracts; not arbitrary Python or policy semantics.",
         "assumptions": [
+            "When explicitly configured by allow_none_return, a statically known None return is an unprotected absence marker; effect obligations are still checked. No other value is exempted.",
+            "Explicit refusing-authorizer primitives return only after enforcing authorization; every denial raises. This is a trusted primitive contract, never inferred from a helper's name.",
+            "ReadSource primitives return fresh inert data without granting authority; acquisition-side permissions require separate Operation contracts. For publication proofs, trusted primitive failures carry no protected payload. Return obligations apply to every discovered entry and bind the exact result; literal refusals contain no protected payload.",
             "Authorizer primitives authenticate inputs and return the declared Decision for exactly their bound arguments.",
             "Operation primitives are the complete terminal effect boundary in the supplied source universe.",
             "Imports, builtin data operations, standard dataclass construction, native method binding, override metadata, builtin exceptions and Verdict identity have their declared meanings; custom descriptors and monkeypatching are outside the model.",
+            "Field-only typing/typing_extensions NamedTuple classes with postponed annotations and immutable literal defaults use native constructors, tuple projections, _replace and _asdict. Nested mutable fields retain alias dependencies. Custom record methods, subclasses, unmodeled generated members and generated API surfaces require additional models; annotations do not establish input shapes.",
             "Standard typing and typing_extensions TYPE_CHECKING is False at runtime; cast returns its val argument unchanged after evaluating and binding all arguments. A cast establishes no runtime type or authorization.",
             "Supported inert TypedDict declarations use the native typing/typing_extensions metaclass: construction produces an ordinary dict without schema validation and isinstance against the declaration raises TypeError. Annotations grant no runtime types or authority.",
             "Native ContextVar get/set/reset operates in one current execution context across direct source calls and awaits. Module variables may contain inherited values; local variables start unset. Task creation, context copying/switching, external context mutation, token context managers and arbitrary context introspection require separate models.",
@@ -4756,6 +5145,14 @@ def verify(spec: VerificationSpec) -> dict[str, Any]:
         "terminals": {
             "authorizers": [vars(item) for item in spec.authorizers],
             "operations": [vars(item) for item in spec.operations],
+            "read_sources": [vars(item) for item in spec.read_sources],
+        },
+        "return_requirements": [vars(item) for item in spec.return_requirements],
+        "refusing_authorizers": list(spec.refusing_authorizers),
+        "allow_none_return": spec.allow_none_return,
+        "entry_bindings": {
+            entry: {target: list(selectors) for target, selectors in protocols.items()}
+            for entry, protocols in spec.entry_bindings.items()
         },
         "async_terminals": list(spec.async_terminals),
         "terminal_parameters": {
@@ -4785,6 +5182,7 @@ def verify(spec: VerificationSpec) -> dict[str, Any]:
             "violated": sum(entry["status"] == "violated" for entry in entries),
             "unresolved": sum(entry["status"] == "unresolved" for entry in entries),
             "dispatch_obligations": dispatch_count,
+            "publication_obligations": publication_count,
         },
     }
 
@@ -4799,6 +5197,11 @@ def load_spec(path: Path) -> VerificationSpec:
         "async_terminals",
         "terminal_parameters",
         "requirements",
+        "read_sources",
+        "return_requirements",
+        "refusing_authorizers",
+        "allow_none_return",
+        "entry_bindings",
         "surfaces",
         "authorizers",
         "operations",
@@ -4835,6 +5238,12 @@ def load_spec(path: Path) -> VerificationSpec:
         package_modules=tuple(sorted(packages)),
         surfaces=tuple(payload["surfaces"]),
         async_terminals=tuple(payload.get("async_terminals", [])),
+        refusing_authorizers=tuple(payload.get("refusing_authorizers", [])),
+        allow_none_return=payload.get("allow_none_return", False),
+        entry_bindings={
+            entry: {target: tuple(selectors) for target, selectors in protocols.items()}
+            for entry, protocols in payload.get("entry_bindings", {}).items()
+        },
         terminal_parameters={
             key: tuple(value)
             for key, value in payload.get("terminal_parameters", {}).items()
@@ -4846,11 +5255,19 @@ def load_spec(path: Path) -> VerificationSpec:
             )
             for target, items in payload.get("requirements", {}).items()
         },
+        read_sources=tuple(
+            ReadSource(item["target"]) for item in payload.get("read_sources", [])
+        ),
+        return_requirements=tuple(
+            Requirement(item["permission"], tuple(item["bindings"]))
+            for item in payload.get("return_requirements", [])
+        ),
         authorizers=tuple(
             Authorizer(
                 item["target"],
                 tuple(item["bindings"]),
                 permission=item.get("permission", "tool_call"),
+                decision=item.get("decision", ""),
             )
             for item in payload["authorizers"]
         ),

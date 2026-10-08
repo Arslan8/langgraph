@@ -137,6 +137,39 @@ def test_normalize_resource(
     assert normalize_resource(resource, value) == expected
 
 
+@pytest.mark.parametrize(
+    "value",
+    [
+        "example.test ?query=value",
+        "https://example.test /path",
+        "https://exa mple.test/path",
+        "https://example.test\u00a0/path",
+        "\u00a8",
+    ],
+)
+def test_domain_normalizer_rejects_whitespace_in_extracted_host(value: str) -> None:
+    with pytest.raises(ValueError, match="whitespace"):
+        normalize_resource(ResourceArg("url", "url", "domain"), value)
+
+
+@pytest.mark.parametrize(
+    "value, expected",
+    [
+        ("https://EXAMPLE.test./path", "example.test"),
+        ("example\u3002test\u3002", "example.test"),
+        ("B\u00dcCHER.example", "xn--bcher-kva.example"),
+        ("https://[2001:db8::1]:443/path", "2001:db8::1"),
+        ("2001:0db8:0:0:0:0:0:1", "2001:db8::1"),
+        ("192.0.2.1", "192.0.2.1"),
+    ],
+)
+def test_domain_policy_keys_are_idempotent(value: str, expected: str) -> None:
+    resource = ResourceArg("url", "url", "domain")
+    normalized = normalize_resource(resource, value)
+    assert normalized == expected
+    assert normalize_resource(resource, normalized) == normalized
+
+
 def test_realpath_normalizer_resolves_parent_segments(tmp_path: Path) -> None:
     """Path grants compare canonical paths rather than raw prefixes."""
     resource = ResourceArg("path", "path", "realpath")

@@ -61,6 +61,46 @@ def test_empty_input_is_not_a_complete_inventory():
     assert not report["path_cover_proved"]
 
 
+def test_new_source_file_is_in_the_api_obligation_ledger(sources):
+    path = "libs/prebuilt/langgraph/prebuilt/new_component.py"
+    sources[path] = (
+        "class NewTool:\n    def new_api(self):\n        return self.inner.read()\n"
+    )
+    inventory = layered.inventory_sources(sources)
+    ledger = layered.obligation_ledger(
+        inventory, {"entries": [], "complete": False}, {"complete": False}
+    )
+    entry = next(item for item in ledger if item["path"] == path)
+    assert (
+        entry["qualified_symbol"] == "langgraph.prebuilt.new_component.NewTool.new_api"
+    )
+    assert entry["status"] == "unresolved"
+    assert entry["publication_transfer"] == "not_analyzed"
+    assert entry["source_sha256"] == inventory["source_sha256"][path]
+
+
+def test_partial_publication_proof_never_becomes_whole_api_proof(sources):
+    inventory = layered.inventory_sources(sources)
+    publications = {
+        "complete": False,
+        "entries": [
+            {
+                "entry": "langgraph.prebuilt.security.object_manager.MediatedStore.batch",
+                "status": "verified",
+            }
+        ],
+    }
+    ledger = layered.obligation_ledger(inventory, publications, {"complete": False})
+    entry = next(
+        item
+        for item in ledger
+        if item["qualified_symbol"].endswith("MediatedStore.batch")
+    )
+    assert entry["publication_transfer"] == "verified"
+    assert not entry["publication_model_closed"]
+    assert entry["status"] == "unresolved"
+
+
 def test_source_edits_change_evidence_binding(sources):
     before = layered.inventory_sources(sources)
     path = layered._SECURITY + "placement.py"
@@ -69,7 +109,8 @@ def test_source_edits_change_evidence_binding(sources):
     assert before["source_sha256"][path] != after["source_sha256"][path]
 
 
-def test_complete_gate_cannot_pass_on_router_proof_alone(monkeypatch, tmp_path):
+@pytest.mark.parametrize("strict", [False, True])
+def test_complete_gate_cannot_pass_on_router_proof_alone(monkeypatch, tmp_path, strict):
     report = {
         "complete": False,
         "router": {"complete": True},
@@ -80,6 +121,7 @@ def test_complete_gate_cannot_pass_on_router_proof_alone(monkeypatch, tmp_path):
     monkeypatch.setattr(layered, "verify_layers", lambda repo: report)
     monkeypatch.setattr(
         "sys.argv",
-        ["layered", "--require-complete", "--output", str(tmp_path / "report.json")],
+        ["layered", "--output", str(tmp_path / "report.json")]
+        + (["--require-complete"] if strict else []),
     )
     assert layered._main() == 1

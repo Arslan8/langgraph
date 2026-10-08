@@ -62,6 +62,9 @@ jobs:
       - name: Require layered completeness (router proof alone is insufficient)
         if: always()
         run: make security-verify-complete
+      - name: Check finite denial and original-binding permutations
+        if: always()
+        run: make security-verify-permutations
       - name: Check Tool API conformance
         if: always()
         run: >-
@@ -75,6 +78,7 @@ jobs:
           path: |
             libs/prebuilt/mediation-report.json
             libs/prebuilt/security-verification-report.json
+            libs/prebuilt/security-permutation-report.json
             libs/prebuilt/tool-api-report.json
             libs/prebuilt/host-router-certificate.json
       - name: Run strict security-package type check

@@ -223,7 +223,12 @@ def test_authorizer_inputs_cannot_be_rebound_before_checking():
         1,
     )
     report = verify_router_source(source)
-    assert report["source_proof"][
-        "complete"
-    ]  # Decision and effect agree with each other.
-    assert not report["complete"]  # But they no longer agree with the API principal.
+    # The shared transfer engine now checks original entry identities too,
+    # rather than relying only on the router-specific report wrapper.
+    assert not report["source_proof"]["complete"]
+    assert any(
+        not authorization["entry_bound"]
+        for entry in report["source_proof"]["entries"]
+        for authorization in entry["authorizations"]
+    )
+    assert not report["complete"]

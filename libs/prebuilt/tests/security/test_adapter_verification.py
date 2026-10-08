@@ -203,3 +203,50 @@ def test_fingerprint_survives_line_only_edits():
     after = check("\n# moved\n" + source)[0]
     assert before["line"] != after["line"]
     assert before["fingerprint"] == after["fingerprint"]
+
+
+@pytest.mark.parametrize("asynchronous", [False, True])
+def test_raw_backing_store_result_is_reported(asynchronous):
+    prefix = "async " if asynchronous else ""
+    wait = "await " if asynchronous else ""
+    name = "abatch" if asynchronous else "batch"
+    source = f"""class MediatedStore:
+    {prefix}def {name}(self, ops):
+        effective = self.authorize_inputs(ops)
+        return {wait}self._store.{name}(effective)
+"""
+    findings = check(source, rule="SGV107")
+    assert len(findings) == 1
+    assert findings[0]["symbol"] == f"MediatedStore.{name}"
+    mediated = source.replace(
+        f"return {wait}self._store.{name}(effective)",
+        f"values = {wait}self._store.{name}(effective)\n"
+        "        return self.authorize_results(values)",
+    )
+    assert not check(mediated, rule="SGV107")
+    assert not check_adapters({BASE + "object_manager.py": mediated})["proof"]
+
+
+@pytest.mark.parametrize(
+    "body",
+    [
+        "yield from self.inner.list(config)",
+        "for value in self.inner.list(config):\n            yield value",
+        "async for value in self.inner.alist(config):\n            yield value",
+    ],
+)
+def test_raw_checkpoint_history_is_reported(body):
+    prefix = "async " if body.startswith("async") else ""
+    source = f"""class MediatedCheckpointer:
+    {prefix}def history(self, config):
+        self.router.state(config)
+        {body}
+"""
+    assert len(check(source, module="checkpoint_security", rule="SGV108")) == 1
+    mediated = source.replace(
+        "yield from self.inner.list(config)",
+        "for value in self.inner.list(config):\n"
+        "            yield self.verify_history(value)",
+    ).replace("yield value", "yield self.verify_history(value)")
+    assert not check(mediated, module="checkpoint_security", rule="SGV108")
+    assert not check_adapters({BASE + "checkpoint_security.py": mediated})["proof"]
