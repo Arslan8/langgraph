@@ -1,11 +1,110 @@
 # Tool verification framework
 
+## Developer acceptance workflow
+
+From `libs/prebuilt`, run:
+
+```sh
+make security-verify
+```
+
+This fast source-only command recomputes the router proof and adapter checks,
+prints an actionable repair queue, and writes `security-verification-report.json`.
+Each finding has a stable rule ID, source location, structural fingerprint,
+owner, and fix guidance. It does not execute source candidates or tool bodies.
+Exit 0 means the implemented acceptance checks passed, 1 means findings remain,
+and the Python CLI uses exit 2 for an invalid input/report. Make may map a failed
+subcommand to its own exit code.
+
+To compare iterations without treating an old report as authority:
+
+```sh
+make security-verify SECURITY_REPORT=/tmp/slanggraph-before.json
+# After making changes:
+uv run python -m langgraph.prebuilt.security.developer_verification \
+  --compare /tmp/slanggraph-before.json --output /tmp/slanggraph-after.json
+```
+
+The comparison reports new, resolved, and remaining task fingerprints. Line-only
+edits do not change adapter fingerprints; structural changes do. No finding is
+waived automatically. `--list-checks` prints the rule descriptions without
+running analysis.
+
+| Rule | Developer obligation |
+| --- | --- |
+| `SGV101` | Preserve effective authorized results through the actual effect. |
+| `SGV102` | Include current object DAC in the resume chain. |
+| `SGV103` | Normalize or reject every supported state/model input shape. |
+| `SGV104` | Mediate callback publication as well as normal stream yields. |
+| `SGV105` | Bind stored state to invocation identity, not just channel names. |
+| `SGV106` | Place checkpoint history, writes, and administrative effects. |
+| `SGV190` | Restore missing/unresolved analyzer inputs or update its model. |
+| `SGV201` | Restore the router's required protocol and exact identity bindings. |
+| `SGV301` / `SGV302` | Resolve escape findings and stale/malformed waivers. |
+
+These adapter rules detect specific review patterns. They are not a replacement
+for full dataflow, path dominance, alias, or isolation analysis. For example,
+assigning an authorized result without using it is not a correct fix merely
+because it clears a discarded-expression diagnostic. Missing required source
+or methods fails analysis; newly declared checkpoint methods are inspected
+without extending a fixed API list. Other novel structures may still require
+an analyzer extension and must not be described as proved.
+
+The report separates implementation findings from verifier-owned proof work:
+`SGV901` (placement), `SGV902` (adapter composition), and `SGV903` (host adapter
+and isolation evidence). Developers are not asked to waive these gaps. The
+stronger command, used in CI, is:
+
+```sh
+make security-verify-complete
+```
+
+It also requires system proof closure. Clearing the acceptance findings alone
+does not satisfy it. CI uploads the same JSON repair queue developers get
+locally. Add checker regressions in `test_adapter_verification.py` and CLI/report
+regressions in `test_developer_verification.py` when extending a rule. Candidate
+fixtures must remain source-only; include both rejected and corrected examples.
+
+## Current layered verification
+
+ADR 0007 changes the main proof obligation to the composed object-manager
+boundary. The current command is:
+
+```sh
+uv run python -m langgraph.prebuilt.security.layered_verification \
+  --require-complete --output layered-verification-report.json
+```
+
+This lower-level evidence command reruns the router proof, inventories the independent ten-class/28-operation
+contract, checks request/operation declaration drift, records adapter call-site
+candidates and source hashes, runs adapter regressions, and checks escape-waiver disposition. The
+[recorded report](layered-verification-report.json) separates these results.
+Candidate discovery is syntactic, not an alias, inheritance, or dominance
+analysis. It cannot establish placement completeness. The system gate therefore
+remains nonzero until a placement and composition proof is implemented and
+discharges the remaining obligations. Omitting `--require-complete` checks
+evidence consistency and implemented regressions only; exit zero then is not a system certificate.
+
+CI uses the developer command's strict gate and separately runs Tool API conformance. The router
+proof requires the correct authorization protocol for each entry and the
+original input identities, including the original approval on resume. Matching
+an altered principal at both authorization and dispatch is insufficient.
+
+The prior installed-source report and its 175-entry denominator are historical
+whole-Python diagnostics, not current object-manager coverage. That optional
+analysis remains available below; the shared source transfer engine is still
+used to prove the router. Unsupported tool internals are not automatically
+discharged as host-MAC obligations: framework access must first be shown to
+cross the authenticated object boundary.
+
+## Optional whole-Python diagnostic
+
 `langgraph.prebuilt.security.verification` is an interprocedural source analyzer
 with an installed-framework driver. It computes authorization state through
 helper bodies; it does not accept hashes or successful examples as proof that a
 helper preserves authority.
 
-From `libs/prebuilt`, run the integrated gate:
+From `libs/prebuilt`, run the legacy integrated diagnostic:
 
 ```sh
 uv run python -m langgraph.prebuilt.security.verification \
@@ -16,8 +115,9 @@ This discovers installed Tool/base-class source, scans the prebuilt package for
 new classes, follows transitive imports to already loaded source modules in the
 discovered framework distributions, analyzes every discovered surface method,
 and runs the execution
-API conformance matrix. Both layers must pass for exit zero. The same command is
-used in CI, with the JSON report uploaded even on failure.
+API conformance matrix. Both layers must pass for exit zero. It is no longer the
+system gate in CI; the layered gate above replaces it without upgrading any of
+its unresolved obligations to passing results.
 
 Dependency discovery reads source and existing module dictionaries; it does not
 execute candidate imports or invoke lazy export hooks. A loaded export can

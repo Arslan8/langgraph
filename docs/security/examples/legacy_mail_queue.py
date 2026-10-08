@@ -62,7 +62,14 @@ def main() -> None:
         ),
     )
     builder = StateGraph(MessagesState)
-    builder.add_node("tools", ToolNode([adapted]))
+    builder.add_node(
+        "tools",
+        ToolNode([adapted]),
+        metadata={
+            "security_trust": "trusted",
+            "security_promotion_reason": "operator-reviewed legacy mail adapter",
+        },
+    )
     builder.add_edge(START, "tools")
     graph = builder.compile(security=security)
     alice = Principal(

@@ -5,6 +5,14 @@ target accepted by [ADR 0007](adr/0007-kernel-enforced-confinement.md). A row
 marked planned or partial cannot support a complete-mediation or layered
 reference-monitor claim.
 
+Verification update: graph placement, checkpoint adapters, and final stream
+filters are now present in the code, so several placement descriptions below
+lag implementation. The [current layered report](layered-verification-report.json)
+and [adapter review](host-routing-completeness.md#implementation-review-after-the-object-manager-update)
+record the new evidence and remaining obligations. The 21-entry router proof
+passes; full placement and composition are not yet proved. Existence of the
+adapters must not be confused with complete coverage of their supported APIs.
+
 ## Model
 
 The target is a layered reference monitor: LangGraph is a user-space object

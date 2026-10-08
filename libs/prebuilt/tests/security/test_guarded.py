@@ -377,7 +377,14 @@ def test_escalation_uses_interrupt_and_rechecks_approval() -> None:
 
     security = SecurityConfig(modules=[ApprovalModule()])
     builder = StateGraph(MessagesState)
-    builder.add_node("tools", ToolNode([change_value]))
+    builder.add_node(
+        "tools",
+        ToolNode([change_value]),
+        metadata={
+            "security_trust": "trusted",
+            "security_promotion_reason": "operator-defined approval test tool",
+        },
+    )
     builder.add_edge(START, "tools")
     graph = builder.compile(checkpointer=InMemorySaver(), security=security)
     config = with_principal(
@@ -447,7 +454,14 @@ def test_approval_rechecks_modules_after_escalating_module() -> None:
 
     security = SecurityConfig(modules=[ApprovalModule(), DenyAfterApproval()])
     builder = StateGraph(MessagesState)
-    builder.add_node("tools", ToolNode([restricted_change]))
+    builder.add_node(
+        "tools",
+        ToolNode([restricted_change]),
+        metadata={
+            "security_trust": "trusted",
+            "security_promotion_reason": "operator-defined approval test tool",
+        },
+    )
     builder.add_edge(START, "tools")
     graph = builder.compile(checkpointer=InMemorySaver(), security=security)
     config = with_principal(

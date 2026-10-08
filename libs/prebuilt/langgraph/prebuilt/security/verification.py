@@ -1785,6 +1785,7 @@ class _Engine:
         self.operations = {item.target: item for item in self.spec.operations}
         self.issues: list[dict[str, Any]] = []
         self.dispatches: list[dict[str, Any]] = []
+        self.authorizations: list[dict[str, Any]] = []
         self.edges: set[tuple[str, str]] = set()
         self.visited: set[str] = set()
         self.calls: set[tuple[str, int, int]] = set()
@@ -3290,6 +3291,17 @@ class _Engine:
                     primitive.permission, primitive.bindings, args, token, node
                 )
                 if target in self.authorizers:
+                    primitive = self.authorizers[target]
+                    self.authorizations.append(
+                        {
+                            "function": self.stack[-1],
+                            "line": node.lineno,
+                            "target": target,
+                            "arguments": list(args),
+                            "bindings": list(binding),
+                            "call_path": list(self.stack),
+                        }
+                    )
                     decision_token = token + (
                         f".{primitive.decision}" if primitive.decision else ""
                     )
@@ -4646,6 +4658,7 @@ class _Engine:
             "status": status,
             "issues": self.issues,
             "dispatches": self.dispatches,
+            "authorizations": self.authorizations,
             "visited_functions": sorted(self.visited),
             "call_graph": [{"caller": a, "callee": b} for a, b in sorted(self.edges)],
             "steps": self.steps,

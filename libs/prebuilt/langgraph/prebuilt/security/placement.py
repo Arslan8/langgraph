@@ -178,23 +178,45 @@ class MediatedNode(Runnable[Any, Any]):
     def _model_input(
         self, principal: Principal, value: Any, config: RunnableConfig
     ) -> Any:
-        if self.spec.kind is not NodeKind.MODEL or not isinstance(value, Mapping):
+        if self.spec.kind is not NodeKind.MODEL:
             return value
-        context = tuple(
-            _as_labeled(
-                name,
-                self.router.state(
-                    principal,
-                    StateRequest(
-                        StateOperation.MODEL_READ,
-                        str(name),
-                        principal.user_id,
-                        value=item,
+        if isinstance(value, Mapping):
+            context = tuple(
+                _as_labeled(
+                    name,
+                    self.router.state(
+                        principal,
+                        StateRequest(
+                            StateOperation.MODEL_READ,
+                            str(name),
+                            principal.user_id,
+                            value=item,
+                        ),
+                    ),
+                )
+                for name, item in value.items()
+            )
+            rebuild = _rebuild_mapping
+        elif isinstance(value, Sequence) and not isinstance(
+            value, (str, bytes, bytearray)
+        ):
+            context = (
+                _as_labeled(
+                    "messages",
+                    self.router.state(
+                        principal,
+                        StateRequest(
+                            StateOperation.MODEL_READ,
+                            "messages",
+                            principal.user_id,
+                            value=value,
+                        ),
                     ),
                 ),
             )
-            for name, item in value.items()
-        )
+            rebuild = _rebuild_sequence
+        else:
+            raise TypeError("placement:model_input_must_be_mapping_or_sequence")
         effective = cast(
             Sequence[LabeledValue],
             self.router.model_invoke(
@@ -206,15 +228,25 @@ class MediatedNode(Runnable[Any, Any]):
                 ),
             ),
         )
-        return {item.name: item.value for item in effective}
+        return rebuild(effective)
 
     async def _amodel_input(
         self, principal: Principal, value: Any, config: RunnableConfig
     ) -> Any:
-        if self.spec.kind is not NodeKind.MODEL or not isinstance(value, Mapping):
+        if self.spec.kind is not NodeKind.MODEL:
             return value
         context: list[LabeledValue] = []
-        for name, item in value.items():
+        if isinstance(value, Mapping):
+            values = value.items()
+            rebuild = _rebuild_mapping
+        elif isinstance(value, Sequence) and not isinstance(
+            value, (str, bytes, bytearray)
+        ):
+            values = (("messages", value),)
+            rebuild = _rebuild_sequence
+        else:
+            raise TypeError("placement:model_input_must_be_mapping_or_sequence")
+        for name, item in values:
             read = await self.router.astate(
                 principal,
                 StateRequest(
@@ -236,7 +268,7 @@ class MediatedNode(Runnable[Any, Any]):
                 ),
             ),
         )
-        return {item.name: item.value for item in effective}
+        return rebuild(effective)
 
     def _state_writes(self, principal: Principal, result: Any) -> Any:
         if isinstance(result, Mapping):
@@ -259,7 +291,10 @@ class MediatedNode(Runnable[Any, Any]):
             )
         if isinstance(result, Command):
             _route_sends(self.router, principal, result.goto, None, self.spec.name)
-        return result
+            return result
+        if result is None:
+            return None
+        raise TypeError("placement:node_update_must_be_mapping_command_or_none")
 
     async def _astate_writes(self, principal: Principal, result: Any) -> Any:
         if isinstance(result, Mapping):
@@ -284,7 +319,10 @@ class MediatedNode(Runnable[Any, Any]):
             await _aroute_sends(
                 self.router, principal, result.goto, None, self.spec.name
             )
-        return result
+            return result
+        if result is None:
+            return None
+        raise TypeError("placement:node_update_must_be_mapping_command_or_none")
 
 
 class MediatedBranch(Runnable[Any, Any]):
@@ -364,7 +402,7 @@ class OutputMediator:
             OutputRequest(
                 self.destination,
                 content,
-                self.host.labels_for_output(content),
+                self.host.labels_for_output(principal, content),
                 self.clearance,
                 _operation_id(bound_config, "__graph__", "output"),
             ),
@@ -381,7 +419,7 @@ class OutputMediator:
             OutputRequest(
                 self.destination,
                 content,
-                self.host.labels_for_output(content),
+                self.host.labels_for_output(principal, content),
                 self.clearance,
                 _operation_id(bound_config, "__graph__", "output"),
             ),
@@ -574,6 +612,18 @@ def _as_labeled(name: Any, value: Any) -> LabeledValue:
     if isinstance(value, LabeledValue):
         return LabeledValue(str(name), value.value, value.labels)
     return LabeledValue(str(name), value)
+
+
+def _rebuild_mapping(items: Sequence[LabeledValue]) -> dict[str, Any]:
+    return {item.name: item.value for item in items}
+
+
+def _rebuild_sequence(items: Sequence[LabeledValue]) -> Any:
+    if not items:
+        return []
+    if len(items) != 1 or items[0].name != "messages":
+        raise PermissionError("placement:invalid_effective_model_context")
+    return items[0].value
 
 
 def _raw_value(value: Any) -> Any:

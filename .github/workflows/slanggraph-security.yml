@@ -59,11 +59,14 @@ jobs:
           langgraph/prebuilt ../../libs/langgraph/langgraph
           --waivers ../../docs/security/escape-waivers.json
           --json
-      - name: Verify installed Tool source paths and API conformance
+      - name: Require layered completeness (router proof alone is insufficient)
+        if: always()
+        run: make security-verify-complete
+      - name: Check Tool API conformance
         if: always()
         run: >-
-          uv run python -m langgraph.prebuilt.security.verification
-          --installed --output tool-verification-report.json
+          uv run python -m langgraph.prebuilt.security.tool_api_verifier
+          --output tool-api-report.json
       - name: Upload authorization coverage and unresolved obligations
         if: always()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
@@ -71,7 +74,8 @@ jobs:
           name: mediation-report-${{ github.sha }}
           path: |
             libs/prebuilt/mediation-report.json
-            libs/prebuilt/tool-verification-report.json
+            libs/prebuilt/security-verification-report.json
+            libs/prebuilt/tool-api-report.json
             libs/prebuilt/host-router-certificate.json
       - name: Run strict security-package type check
         run: >-

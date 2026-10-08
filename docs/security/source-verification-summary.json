@@ -16,6 +16,8 @@
   },
   "command": "cd libs/prebuilt && uv run python -m langgraph.prebuilt.security.verification --installed --output tool-verification-report.json",
   "complete": false,
+  "current_assurance_report": "layered-verification-report.json",
+  "evidence_status": "Historical whole-Python diagnostic predating the object-manager update; not current system coverage.",
   "full_report_sha256": "aad2bea5f058e7238ba423fa8e92c49722d4a00a85616b9f6b018a68817ada0a",
   "property": "Every reachable terminal dispatch on every modelled path consumes a fresh ALLOW decision for identical principal/request bindings.",
   "source": {

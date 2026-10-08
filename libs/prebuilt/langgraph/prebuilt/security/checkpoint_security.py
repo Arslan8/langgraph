@@ -7,7 +7,7 @@ import hashlib
 import hmac
 import json
 from collections.abc import AsyncIterator, Iterator, Sequence
-from typing import Any
+from typing import Any, cast
 
 from langchain_core.runnables import RunnableConfig
 from langgraph.checkpoint.base import (
@@ -26,7 +26,6 @@ from langgraph.prebuilt.security.types import Principal
 
 _SECURITY_METADATA = "__slanggraph_security__"
 _WRITE_WITNESS_CHANNEL = "__slanggraph_write_witness__"
-_WRITE_WITNESS_TASK_PREFIX = "__slanggraph_witness__:"
 
 
 class MediatedCheckpointer(BaseCheckpointSaver):
@@ -63,9 +62,25 @@ class MediatedCheckpointer(BaseCheckpointSaver):
         before: RunnableConfig | None = None,
         limit: int | None = None,
     ) -> Iterator[CheckpointTuple]:
-        # History inspection is a trusted read, not a restore operation. Each
-        # tuple remains authenticated when selected later through get_tuple.
-        yield from self.inner.list(config, filter=filter, before=before, limit=limit)
+        if config is None:
+            raise PermissionError("checkpoint:list_requires_principal")
+        principal = _principal(config)
+        effective = self.router.state(
+            principal,
+            StateRequest(
+                StateOperation.CHECKPOINT_READ,
+                _checkpoint_resource(config, "history"),
+                principal.user_id,
+                value={"filter": filter, "before": before, "limit": limit},
+            ),
+        )
+        options = _checkpoint_options(effective)
+        yield from self.inner.list(
+            config,
+            filter=options["filter"],
+            before=options["before"],
+            limit=options["limit"],
+        )
 
     async def alist(
         self,
@@ -75,8 +90,24 @@ class MediatedCheckpointer(BaseCheckpointSaver):
         before: RunnableConfig | None = None,
         limit: int | None = None,
     ) -> AsyncIterator[CheckpointTuple]:
+        if config is None:
+            raise PermissionError("checkpoint:list_requires_principal")
+        principal = _principal(config)
+        effective = await self.router.astate(
+            principal,
+            StateRequest(
+                StateOperation.CHECKPOINT_READ,
+                _checkpoint_resource(config, "history"),
+                principal.user_id,
+                value={"filter": filter, "before": before, "limit": limit},
+            ),
+        )
+        options = _checkpoint_options(effective)
         async for value in self.inner.alist(
-            config, filter=filter, before=before, limit=limit
+            config,
+            filter=options["filter"],
+            before=options["before"],
+            limit=options["limit"],
         ):
             yield value
 
@@ -88,8 +119,8 @@ class MediatedCheckpointer(BaseCheckpointSaver):
         new_versions: ChannelVersions,
     ) -> RunnableConfig:
         principal = _principal(config)
-        secured = self._metadata(config, checkpoint, metadata, principal)
-        return self.inner.put(config, checkpoint, secured, new_versions)
+        effective, secured = self._metadata(config, checkpoint, metadata, principal)
+        return self.inner.put(config, effective, secured, new_versions)
 
     async def aput(
         self,
@@ -99,8 +130,10 @@ class MediatedCheckpointer(BaseCheckpointSaver):
         new_versions: ChannelVersions,
     ) -> RunnableConfig:
         principal = _principal(config)
-        secured = await self._ametadata(config, checkpoint, metadata, principal)
-        return await self.inner.aput(config, checkpoint, secured, new_versions)
+        effective, secured = await self._ametadata(
+            config, checkpoint, metadata, principal
+        )
+        return await self.inner.aput(config, effective, secured, new_versions)
 
     def put_writes(
         self,
@@ -110,13 +143,21 @@ class MediatedCheckpointer(BaseCheckpointSaver):
         task_path: str = "",
     ) -> None:
         principal = _principal(config)
-        self.inner.put_writes(config, writes, task_id, task_path)
-        witness = self._write_witness(config, writes, task_id, principal)
-        witness_task = _WRITE_WITNESS_TASK_PREFIX + witness["digest"]
+        effective = self.router.state(
+            principal,
+            StateRequest(
+                StateOperation.CHECKPOINT_WRITE,
+                _checkpoint_resource(config, f"writes:{task_id}"),
+                principal.user_id,
+                value=tuple(writes),
+            ),
+        )
+        authorized_writes = _checkpoint_writes(effective)
+        witness = self._write_witness(config, authorized_writes, task_id, principal)
         self.inner.put_writes(
             config,
-            ((_WRITE_WITNESS_CHANNEL, witness),),
-            witness_task,
+            (*authorized_writes, (_WRITE_WITNESS_CHANNEL, witness)),
+            task_id,
             task_path,
         )
 
@@ -128,43 +169,51 @@ class MediatedCheckpointer(BaseCheckpointSaver):
         task_path: str = "",
     ) -> None:
         principal = _principal(config)
-        await self.inner.aput_writes(config, writes, task_id, task_path)
-        witness = self._write_witness(config, writes, task_id, principal)
-        witness_task = _WRITE_WITNESS_TASK_PREFIX + witness["digest"]
+        effective = await self.router.astate(
+            principal,
+            StateRequest(
+                StateOperation.CHECKPOINT_WRITE,
+                _checkpoint_resource(config, f"writes:{task_id}"),
+                principal.user_id,
+                value=tuple(writes),
+            ),
+        )
+        authorized_writes = _checkpoint_writes(effective)
+        witness = self._write_witness(config, authorized_writes, task_id, principal)
         await self.inner.aput_writes(
             config,
-            ((_WRITE_WITNESS_CHANNEL, witness),),
-            witness_task,
+            (*authorized_writes, (_WRITE_WITNESS_CHANNEL, witness)),
+            task_id,
             task_path,
         )
 
     def delete_thread(self, thread_id: str) -> None:
-        self.inner.delete_thread(thread_id)
+        raise PermissionError("checkpoint:administrative_operation_requires_principal")
 
     async def adelete_thread(self, thread_id: str) -> None:
-        await self.inner.adelete_thread(thread_id)
+        raise PermissionError("checkpoint:administrative_operation_requires_principal")
 
     def delete_for_runs(self, run_ids: Sequence[str]) -> None:
-        self.inner.delete_for_runs(run_ids)
+        raise PermissionError("checkpoint:administrative_operation_requires_principal")
 
     async def adelete_for_runs(self, run_ids: Sequence[str]) -> None:
-        await self.inner.adelete_for_runs(run_ids)
+        raise PermissionError("checkpoint:administrative_operation_requires_principal")
 
     def copy_thread(self, source_thread_id: str, target_thread_id: str) -> None:
-        self.inner.copy_thread(source_thread_id, target_thread_id)
+        raise PermissionError("checkpoint:administrative_operation_requires_principal")
 
     async def acopy_thread(self, source_thread_id: str, target_thread_id: str) -> None:
-        await self.inner.acopy_thread(source_thread_id, target_thread_id)
+        raise PermissionError("checkpoint:administrative_operation_requires_principal")
 
     def prune(
         self, thread_ids: Sequence[str], *, strategy: str = "keep_latest"
     ) -> None:
-        self.inner.prune(thread_ids, strategy=strategy)
+        raise PermissionError("checkpoint:administrative_operation_requires_principal")
 
     async def aprune(
         self, thread_ids: Sequence[str], *, strategy: str = "keep_latest"
     ) -> None:
-        await self.inner.aprune(thread_ids, strategy=strategy)
+        raise PermissionError("checkpoint:administrative_operation_requires_principal")
 
     def get_next_version(self, current: Any, channel: None) -> Any:
         return self.inner.get_next_version(current, channel)
@@ -175,29 +224,31 @@ class MediatedCheckpointer(BaseCheckpointSaver):
         checkpoint: Checkpoint,
         metadata: CheckpointMetadata,
         principal: Principal,
-    ) -> CheckpointMetadata:
+    ) -> tuple[Checkpoint, CheckpointMetadata]:
         predecessor = self.inner.get_tuple(config)
         previous_hash, sequence = _predecessor(predecessor)
+        effective = _checkpoint(
+            self.router.state(
+                principal,
+                StateRequest(
+                    StateOperation.CHECKPOINT_WRITE,
+                    _checkpoint_resource(config, checkpoint["id"]),
+                    principal.user_id,
+                    value=checkpoint,
+                ),
+            )
+        )
         envelope = seal_checkpoint(
             self.checkpoint_key,
-            checkpoint_id=checkpoint["id"],
+            checkpoint_id=effective["id"],
             principal=principal,
             sequence=sequence,
             previous_hash=previous_hash,
-            payload=checkpoint,
+            payload=effective,
         )
         secured = dict(metadata)
         secured[_SECURITY_METADATA] = _envelope_metadata(envelope)  # type: ignore[typeddict-unknown-key]
-        self.router.state(
-            principal,
-            StateRequest(
-                StateOperation.WRITE,
-                f"checkpoint:{checkpoint['id']}",
-                principal.user_id,
-                value=checkpoint,
-            ),
-        )
-        return secured  # type: ignore[return-value]
+        return effective, cast(CheckpointMetadata, secured)
 
     async def _ametadata(
         self,
@@ -205,29 +256,31 @@ class MediatedCheckpointer(BaseCheckpointSaver):
         checkpoint: Checkpoint,
         metadata: CheckpointMetadata,
         principal: Principal,
-    ) -> CheckpointMetadata:
+    ) -> tuple[Checkpoint, CheckpointMetadata]:
         predecessor = await self.inner.aget_tuple(config)
         previous_hash, sequence = _predecessor(predecessor)
+        effective = _checkpoint(
+            await self.router.astate(
+                principal,
+                StateRequest(
+                    StateOperation.CHECKPOINT_WRITE,
+                    _checkpoint_resource(config, checkpoint["id"]),
+                    principal.user_id,
+                    value=checkpoint,
+                ),
+            )
+        )
         envelope = seal_checkpoint(
             self.checkpoint_key,
-            checkpoint_id=checkpoint["id"],
+            checkpoint_id=effective["id"],
             principal=principal,
             sequence=sequence,
             previous_hash=previous_hash,
-            payload=checkpoint,
+            payload=effective,
         )
         secured = dict(metadata)
         secured[_SECURITY_METADATA] = _envelope_metadata(envelope)  # type: ignore[typeddict-unknown-key]
-        await self.router.astate(
-            principal,
-            StateRequest(
-                StateOperation.WRITE,
-                f"checkpoint:{checkpoint['id']}",
-                principal.user_id,
-                value=checkpoint,
-            ),
-        )
-        return secured  # type: ignore[return-value]
+        return effective, cast(CheckpointMetadata, secured)
 
     def _verify(
         self, config: RunnableConfig, value: CheckpointTuple
@@ -235,16 +288,18 @@ class MediatedCheckpointer(BaseCheckpointSaver):
         principal = _principal(config)
         value = self._verify_pending_writes(value, principal)
         envelope = _envelope(value, principal)
-        self.router.state(
-            principal,
-            StateRequest(
-                StateOperation.RESTORE,
-                f"checkpoint:{envelope.checkpoint_id}",
-                principal.user_id,
-                value=envelope,
-            ),
+        effective = _checkpoint(
+            self.router.state(
+                principal,
+                StateRequest(
+                    StateOperation.RESTORE,
+                    f"checkpoint:{envelope.checkpoint_id}",
+                    principal.user_id,
+                    value=envelope,
+                ),
+            )
         )
-        return value
+        return value._replace(checkpoint=effective)
 
     async def _averify(
         self, config: RunnableConfig, value: CheckpointTuple
@@ -252,16 +307,18 @@ class MediatedCheckpointer(BaseCheckpointSaver):
         principal = _principal(config)
         value = self._verify_pending_writes(value, principal)
         envelope = _envelope(value, principal)
-        await self.router.astate(
-            principal,
-            StateRequest(
-                StateOperation.RESTORE,
-                f"checkpoint:{envelope.checkpoint_id}",
-                principal.user_id,
-                value=envelope,
-            ),
+        effective = _checkpoint(
+            await self.router.astate(
+                principal,
+                StateRequest(
+                    StateOperation.RESTORE,
+                    f"checkpoint:{envelope.checkpoint_id}",
+                    principal.user_id,
+                    value=envelope,
+                ),
+            )
         )
-        return value
+        return value._replace(checkpoint=effective)
 
     def _write_witness(
         self,
@@ -324,12 +381,14 @@ class MediatedCheckpointer(BaseCheckpointSaver):
         visible = []
         for task_id, channel, item in pending:
             if channel == _WRITE_WITNESS_CHANNEL:
-                if not task_id.startswith(_WRITE_WITNESS_TASK_PREFIX):
-                    raise PermissionError("checkpoint:malformed_write_witness")
                 if not isinstance(item, dict):
                     raise PermissionError("checkpoint:malformed_write_witness")
                 witnessed_task = item.get("task_id")
-                if not isinstance(witnessed_task, str) or witnessed_task in witnesses:
+                if (
+                    not isinstance(witnessed_task, str)
+                    or witnessed_task != task_id
+                    or witnessed_task in witnesses
+                ):
                     raise PermissionError("checkpoint:malformed_write_witness")
                 witnesses[witnessed_task] = item
                 continue
@@ -375,6 +434,55 @@ def _checkpoint_id(config: RunnableConfig) -> str:
     if not isinstance(checkpoint_id, str) or not checkpoint_id:
         raise PermissionError("checkpoint:missing_checkpoint_id")
     return checkpoint_id
+
+
+def _checkpoint_resource(config: RunnableConfig, suffix: str) -> str:
+    configurable = config.get("configurable")
+    thread_id = (
+        configurable.get("thread_id") if isinstance(configurable, dict) else None
+    )
+    if not isinstance(thread_id, str) or not thread_id:
+        raise PermissionError("checkpoint:missing_thread_id")
+    return f"checkpoint:{thread_id}:{suffix}"
+
+
+def _checkpoint(value: Any) -> Checkpoint:
+    if not isinstance(value, dict):
+        raise PermissionError("checkpoint:invalid_effective_value")
+    checkpoint_id = value.get("id")
+    if not isinstance(checkpoint_id, str) or not checkpoint_id:
+        raise PermissionError("checkpoint:invalid_effective_value")
+    return cast(Checkpoint, value)
+
+
+def _checkpoint_options(value: Any) -> dict[str, Any]:
+    if not isinstance(value, dict) or set(value) != {"filter", "before", "limit"}:
+        raise PermissionError("checkpoint:invalid_effective_history_query")
+    if value["filter"] is not None and not isinstance(value["filter"], dict):
+        raise PermissionError("checkpoint:invalid_effective_history_query")
+    if value["before"] is not None and not isinstance(value["before"], dict):
+        raise PermissionError("checkpoint:invalid_effective_history_query")
+    if value["limit"] is not None and (
+        type(value["limit"]) is not int or value["limit"] < 0
+    ):
+        raise PermissionError("checkpoint:invalid_effective_history_query")
+    return value
+
+
+def _checkpoint_writes(value: Any) -> tuple[tuple[str, Any], ...]:
+    if not isinstance(value, (tuple, list)):
+        raise PermissionError("checkpoint:invalid_effective_writes")
+    writes: list[tuple[str, Any]] = []
+    for item in value:
+        if (
+            not isinstance(item, (tuple, list))
+            or len(item) != 2
+            or not isinstance(item[0], str)
+            or item[0] == _WRITE_WITNESS_CHANNEL
+        ):
+            raise PermissionError("checkpoint:invalid_effective_writes")
+        writes.append((item[0], item[1]))
+    return tuple(writes)
 
 
 def _predecessor(value: CheckpointTuple | None) -> tuple[str, int]:

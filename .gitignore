@@ -107,3 +107,5 @@ node_modules/
 .editorconfig
 .scratch
 .worktrees/
+# Local security acceptance report (CI uploads it separately).
+/libs/prebuilt/security-verification-report.json

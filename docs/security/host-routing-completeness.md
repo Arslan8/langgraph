@@ -77,6 +77,13 @@ The constructor compares loaded method bytecode with the checked source and
 rejects mismatched globals, defaults, closures, inheritance and runtime methods.
 The trusted controller must keep these bindings unchanged after construction.
 
+Certificate schema 2 also records every analyzed authorizer call and its input
+identities. Each entry has an explicit required protocol. In particular, resume
+must use `object_resume_permission` with the original principal, request, and
+approval. Ordinary object authorization cannot satisfy that entry's protocol.
+Source-only negative variants check missing guards, substituted effective
+requests, repeated dispatch, changed principals, and substituted resume inputs.
+
 ## Host trust is explicit
 
 This design does not analyze the tool body or attempt to prove the kernel's MAC
@@ -178,7 +185,89 @@ not a proof that the checker itself has no defects.
 
 The generated certificate currently reports 21 discovered, 21 obligated, and
 21 verified entries. The mandatory Tool APIs pass 15,744 API-conformance cases.
-The broader installed source proof remains unresolved; consult the
-[current summary](source-verification-summary.json).
-Those unresolved obligations are not converted into passing results by this
-reference certificate.
+The [layered report](layered-verification-report.json) is the current assurance
+inventory. The [older installed-source summary](source-verification-summary.json)
+is historical evidence; it is not refreshed by this router certificate.
+
+## Implementation review after the object-manager update
+
+The updated implementation includes `MediatedNode`, `MediatedBranch`,
+`OutputMediator`, `MediatedCheckpointer`, graph compilation integration, and
+sync/async stream filters. Earlier status descriptions saying these adapters
+were entirely absent are stale. Their existence and passing examples do not
+establish complete path coverage.
+
+The following source-review obligations remain. These are findings from reading
+the implementation, not executed bypass demonstrations or an exhaustive audit:
+
+1. **Bind actual adapter effects to effective authorization.**
+   `MediatedStore.batch`/`abatch` authorizes through an object manager but then
+   sends the original operations to a different backing store. The returned
+   authorized value is discarded. `MediatedCheckpointer._metadata` similarly
+   discards the state-write result before `put` writes the original checkpoint;
+   restore discards the routed result before returning the original tuple.
+   Authorize the authoritative backing object and apply the effective result,
+   or reject transformations that the adapter cannot enforce. Cover owner and
+   label lookup against the actual store, not only its separate shadow state.
+2. **Re-run object DAC on resume.** `ObjectManagerPolicy` checks `_dac` on ordinary
+   object permission but inherits resume from `StackBoundaryPolicy`, which
+   calls the stack directly. Resume must re-enter constructive object DAC and
+   the mandatory chain with current policy. The router certificate treats that
+   policy primitive as trusted and cannot prove its implementation semantics.
+3. **Cover all framework-supported value shapes.** `MediatedNode._state_writes`
+   handles mappings and an individual `Command`; graph state extraction also
+   supports root values, object schemas, and lists of commands. `_model_input`
+   passes non-mappings through without `model_invoke`. Normalize all supported
+   forms before mediation, or reject unsupported forms at the secured boundary.
+4. **Partition authoritative state and preserve labels.** `ObjectManagerHost`
+   keeps state under the channel name alone, shared by invocations of a compiled
+   graph. Establish principal/session/graph identity for state storage and reads.
+   `labels_for_output` infers labels from matching values and field names; this
+   is not a complete provenance argument for derived or renamed values.
+5. **Account for every publication and checkpoint API.** The final stream
+   filters cover ordinary stream yields, while Pregel still sends `loop.output`
+   to completion callbacks separately. Checkpointer history and administrative
+   methods delegate directly to the underlying saver. Give each channel an
+   enforced decision or an explicit, justified TCB-only admission boundary;
+   testing ordinary `invoke`/`ainvoke` is insufficient.
+6. **Establish the worker boundary.** `UntrustedNodeHost` is a protocol supplied
+   by the operator. Interface conformance does not establish process isolation
+   or authenticated object RPC. `HostExecutorBoundary` still denies nested tool
+   calls. Keep these adapter obligations distinct from the assumed correctness
+   of host MAC.
+
+The layered inventory holds the protected operation set independently of
+existing hooks. A missing hook is a coverage failure, not a reason to remove an
+operation from scope. Reviewed waivers remain explicit assumptions and never
+become path-cover proofs.
+
+Developers can now run `make security-verify` in `libs/prebuilt` to obtain
+source-located regression findings for these review patterns, router failures,
+and waiver problems. The [developer workflow](source-verification.md#developer-acceptance-workflow)
+documents rule IDs, report comparison, extension tests, and the separate strict
+system gate. The current developer acceptance run has no implementation-owned
+findings. The verifier's three unfinished proof areas remain explicitly assigned
+to the verifier in the output, so the acceptance pass is not a system proof.
+
+Validation of this verification update:
+
+- Router source/runtime certificate: 21/21 entries and 21 dispatch obligations
+  pass, including the stronger per-entry authorization protocol checks.
+- Focused effective-value, object-manager, placement, callback, and checkpoint
+  regression tests: 54 pass. The secured React-agent regression verifies that
+  hooks, nodes, and conditional edges are wrapped before execution.
+- Tool API conformance: 15,744/15,744 cases across 72 surfaces pass, with no
+  background errors. This uses synthetic host oracles, not a fresh kernel proof.
+- `make format` and `make lint` pass in both modified libraries.
+- `make test` passes with 1,827 tests in `libs/prebuilt` and 1,737 tests in
+  `libs/langgraph`; the latter also reports 295 environment-dependent skips.
+- Escape discovery reports 55 exact reviewed findings, 55 matched waivers, no
+  unwaived finding, and no stale or malformed entry. Nineteen line-shifted
+  React-agent findings were re-reviewed against the secured-placement regression
+  before their exact fingerprints were updated. These waivers remain explicit
+  assumptions and are not promoted to path-cover evidence.
+
+The layered `--require-complete` gate fails intentionally while the placement,
+adapter-composition, and host-isolation proofs are absent. Its inventory hashes
+149 Python files and lists 70 route candidates. Candidate counts are not a
+coverage percentage or an exhaustive count of protected effects.

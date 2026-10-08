@@ -3,12 +3,15 @@ from __future__ import annotations
 from typing import Any
 
 import pytest
+from langchain_core.callbacks import BaseCallbackHandler
 from langchain_core.runnables import Runnable, RunnableConfig
+from langchain_core.tools import tool
 from langgraph.checkpoint.memory import InMemorySaver
 from langgraph.graph import END, START, StateGraph
 from langgraph.types import Send
 from typing_extensions import NotRequired, TypedDict
 
+from langgraph.prebuilt import create_react_agent
 from langgraph.prebuilt.security import (
     Decision,
     EscalationRequest,
@@ -22,7 +25,12 @@ from langgraph.prebuilt.security import (
     Verdict,
     with_principal,
 )
-from langgraph.prebuilt.security.placement import OutputApprovalRequired
+from langgraph.prebuilt.security.placement import (
+    MediatedBranch,
+    MediatedNode,
+    OutputApprovalRequired,
+)
+from tests.model import FakeToolCallingModel
 
 
 class PlacementState(TypedDict):
@@ -65,6 +73,36 @@ class RecordPlacement(SecurityModule):
 
 def update_value(state: PlacementState) -> PlacementState:
     return {"value": state.get("value", "") + "!"}
+
+
+def test_secured_react_agent_places_hooks_nodes_and_conditional_edges() -> None:
+    @tool
+    def lookup(query: str) -> str:
+        """Look up one test value."""
+        return query
+
+    def pre_model_hook(state):
+        return None
+
+    def post_model_hook(state):
+        return None
+
+    graph = create_react_agent(
+        FakeToolCallingModel(),
+        [lookup],
+        pre_model_hook=pre_model_hook,
+        post_model_hook=post_model_hook,
+        security=SecurityConfig(untrusted_node_host=FakeProcessHost()),
+    )
+
+    assert all(
+        isinstance(node.runnable, MediatedNode) for node in graph.builder.nodes.values()
+    )
+    assert all(
+        isinstance(branch.path, MediatedBranch)
+        for branches in graph.builder.branches.values()
+        for branch in branches.values()
+    )
 
 
 @pytest.mark.parametrize("asynchronous", [False, True])
@@ -170,6 +208,14 @@ class RedactSecretOutput(SecurityModule):
         )
 
 
+class CaptureChainEnd(BaseCallbackHandler):
+    def __init__(self) -> None:
+        self.outputs: list[Any] = []
+
+    def on_chain_end(self, outputs: Any, **kwargs: Any) -> None:
+        self.outputs.append(outputs)
+
+
 def produce_secret(state: PlacementState) -> PlacementState:
     return {
         "secret": LabeledValue(
@@ -197,6 +243,30 @@ async def test_secret_is_redacted_on_sync_and_async_graph_output(
     )
 
     assert result == "[redacted]"
+
+
+@pytest.mark.parametrize("asynchronous", [False, True])
+async def test_final_callback_receives_mediated_output(asynchronous: bool) -> None:
+    handler = CaptureChainEnd()
+    builder = StateGraph(PlacementState)
+    builder.add_node("secret", produce_secret)
+    builder.add_edge(START, "secret")
+    builder.add_edge("secret", END)
+    graph = builder.compile(security=SecurityConfig(modules=(RedactSecretOutput(),)))
+    config = with_principal(
+        {
+            "callbacks": [handler],
+            "configurable": {"thread_id": "callback-output-thread"},
+        },
+        _principal(),
+    )
+
+    result = (
+        await graph.ainvoke({}, config) if asynchronous else graph.invoke({}, config)
+    )
+
+    assert result == "[redacted]"
+    assert handler.outputs[-1] == "[redacted]"
 
 
 class ApproveOutput(SecurityModule):

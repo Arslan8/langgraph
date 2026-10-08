@@ -26,6 +26,27 @@
   "complete": true,
   "entries": [
     {
+      "authorizations": [
+        {
+          "arguments": [
+            "input:principal",
+            "input:request"
+          ],
+          "bindings": [
+            "tool_call",
+            "input:principal",
+            "input:request"
+          ],
+          "call_path": [
+            "example.Tool.invoke",
+            "example.execute",
+            "example.decision_for"
+          ],
+          "function": "example.decision_for",
+          "line": 7,
+          "target": "policy.permission"
+        }
+      ],
       "call_graph": [
         {
           "callee": "example.execute",
@@ -84,6 +105,28 @@
       ]
     },
     {
+      "authorizations": [
+        {
+          "arguments": [
+            "input:principal",
+            "input:request"
+          ],
+          "bindings": [
+            "tool_call",
+            "input:principal",
+            "input:request"
+          ],
+          "call_path": [
+            "example.Tool.run",
+            "example.Tool.invoke",
+            "example.execute",
+            "example.decision_for"
+          ],
+          "function": "example.decision_for",
+          "line": 7,
+          "target": "policy.permission"
+        }
+      ],
       "call_graph": [
         {
           "callee": "example.execute",
@@ -148,6 +191,25 @@
       ]
     },
     {
+      "authorizations": [
+        {
+          "arguments": [
+            "input:principal",
+            "input:request"
+          ],
+          "bindings": [
+            "tool_call",
+            "input:principal",
+            "input:request"
+          ],
+          "call_path": [
+            "example.Tool.ainvoke"
+          ],
+          "function": "example.Tool.ainvoke",
+          "line": 24,
+          "target": "policy.apermission"
+        }
+      ],
       "call_graph": [
         {
           "callee": "legacy.adispatch",
@@ -195,6 +257,26 @@
       ]
     },
     {
+      "authorizations": [
+        {
+          "arguments": [
+            "input:principal",
+            "input:request"
+          ],
+          "bindings": [
+            "tool_call",
+            "input:principal",
+            "input:request"
+          ],
+          "call_path": [
+            "example.Child.arun",
+            "example.Tool.ainvoke"
+          ],
+          "function": "example.Tool.ainvoke",
+          "line": 24,
+          "target": "policy.apermission"
+        }
+      ],
       "call_graph": [
         {
           "callee": "example.Tool.ainvoke",
@@ -248,6 +330,27 @@
       ]
     },
     {
+      "authorizations": [
+        {
+          "arguments": [
+            "input:principal",
+            "input:request"
+          ],
+          "bindings": [
+            "tool_call",
+            "input:principal",
+            "input:request"
+          ],
+          "call_path": [
+            "example.Tool.invoke",
+            "example.execute",
+            "example.decision_for"
+          ],
+          "function": "example.decision_for",
+          "line": 7,
+          "target": "policy.permission"
+        }
+      ],
       "call_graph": [
         {
           "callee": "example.execute",
@@ -306,6 +409,28 @@
       ]
     },
     {
+      "authorizations": [
+        {
+          "arguments": [
+            "input:principal",
+            "input:request"
+          ],
+          "bindings": [
+            "tool_call",
+            "input:principal",
+            "input:request"
+          ],
+          "call_path": [
+            "example.Tool.run",
+            "example.Tool.invoke",
+            "example.execute",
+            "example.decision_for"
+          ],
+          "function": "example.decision_for",
+          "line": 7,
+          "target": "policy.permission"
+        }
+      ],
       "call_graph": [
         {
           "callee": "example.execute",
@@ -370,6 +495,25 @@
       ]
     },
     {
+      "authorizations": [
+        {
+          "arguments": [
+            "input:principal",
+            "input:request"
+          ],
+          "bindings": [
+            "tool_call",
+            "input:principal",
+            "input:request"
+          ],
+          "call_path": [
+            "example.Tool.ainvoke"
+          ],
+          "function": "example.Tool.ainvoke",
+          "line": 24,
+          "target": "policy.apermission"
+        }
+      ],
       "call_graph": [
         {
           "callee": "legacy.adispatch",
@@ -499,5 +643,5 @@
       }
     ]
   },
-  "verifier_sha256": "ac4937b7b85a2a7d42fcdfcdd0cdb82177b5eded8196a5c314f3bf4269b34e0b"
+  "verifier_sha256": "8a9f1aba7d9c48fb7e8701325f879ec4566dbc7efb91d3c84df9fcbfc9440c3d"
 }

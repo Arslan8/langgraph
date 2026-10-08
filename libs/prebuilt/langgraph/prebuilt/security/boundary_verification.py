@@ -52,6 +52,37 @@ _ENTRY_KINDS = {
 }
 
 
+def _entry_protocol(name: str, kind: str | None, prefix: str) -> dict[str, list[str]]:
+    """Require the entry's actual authorization protocol and original inputs.
+
+    Effective object requests may change inside the trusted policy primitive.
+    Its input must still be the entry request. Resume additionally must submit
+    the entry approval to the resume primitive, never ordinary permission.
+    """
+    policy = f"{_CLASS}.policy.{prefix}"
+    if kind == "root":
+        return {policy + "permission": ["input:principal", "input:call"]}
+    if kind == "cross_tool":
+        origin = ["input:origin", "input:parent", "input:child", "input:call"]
+        return {
+            f"{_CLASS}.host.{prefix}origin_permission": origin,
+            policy + "delegation_permission": origin,
+            policy + "transition_permission": origin,
+            policy + "permission": ["input:child", "input:call"],
+        }
+    if kind == "framework":
+        if name in {"resume", "aresume"}:
+            return {
+                policy + "object_resume_permission": [
+                    "input:principal",
+                    "input:request",
+                    "input:approval",
+                ]
+            }
+        return {policy + "object_permission": ["input:principal", "input:request"]}
+    return {}
+
+
 def router_spec(source: str) -> VerificationSpec:
     """Describe only the policy and atomic host boundary primitive contracts."""
     authorizers: list[Authorizer] = []
@@ -183,6 +214,20 @@ def verify_router_source(source: str) -> dict[str, Any]:
         routed = bool(entry["dispatches"]) and all(
             site["target"] == expected for site in entry["dispatches"]
         )
+        protocol = _entry_protocol(name, kind, prefix)
+        authorizations = entry["authorizations"]
+        protocol_verified = (
+            bool(protocol)
+            and {site["target"] for site in authorizations} == set(protocol)
+            and all(
+                site["arguments"] == protocol.get(site["target"])
+                for site in authorizations
+            )
+        )
+        if not protocol_verified:
+            issues.append(
+                f"{entry['entry']}: authorization protocol or entry inputs differ"
+            )
         if not routed:
             issues.append(
                 f"{entry['entry']}: missing host route or wrong root/cross-tool dispatch"
@@ -193,11 +238,13 @@ def verify_router_source(source: str) -> dict[str, Any]:
                 "kind": kind,
                 "status": entry["status"],
                 "host_only": routed,
+                "entry_protocol_verified": protocol_verified,
+                "required_authorizers": protocol,
                 "dispatch_obligations": len(entry["dispatches"]),
             }
         )
     return {
-        "schema_version": 1,
+        "schema_version": 2,
         "complete": proof["complete"] and not issues,
         "claim": "Every admitted HostRouter entry authorizes the identical effective request before atomic dispatch; tool calls preserve constraints, and cross-tool entries additionally require fresh authenticated-origin, delegation and tool-transition decisions.",
         "scope": "HostRouter's entire discovered method surface, including the generic framework-object route. Host-confined ToolNode and guarded_tool calls enter the tool-call surface through a separately tested exact-decision bridge.",
@@ -216,6 +263,7 @@ def verify_router_source(source: str) -> dict[str, Any]:
             "verified": sum(
                 item["status"] == "verified"
                 and item["host_only"]
+                and item["entry_protocol_verified"]
                 and item["kind"] is not None
                 for item in coverage
             ),

@@ -247,6 +247,43 @@ The `langgraph-security-taint` command is the CLI over `analyze_source`. It exit
 nonzero for findings or parse errors. Today it is an explicit CI command; wiring
 it into `compile()` with audited exceptions is planned, not shipped.
 
+## Placement, checkpoint, and host adapters
+
+| Name | Contract |
+| --- | --- |
+| `MediatedCheckpointer` | Principal-bound checkpoint adapter that mediates reads and writes, authenticates contents and pending writes, and refuses administrative calls without principal authority. |
+| `NodeKind` | Framework role used to choose the mandatory placement route for a node. |
+| `NodeTrust` | Explicit trusted or untrusted execution classification resolved at graph compilation. |
+| `PlacementSpec` | Resolved node name, trust, kind, and audited promotion evidence. |
+| `UntrustedNodeHost` | Protocol for a separate-process untrusted-node host with no coordinator capabilities. |
+| `OutputApprovalRequired` | Withheld output carrying a redacted approval payload and single-use resume functions. |
+| `WasiSandboxExecutor` | WASI execution adapter for grants representable by the configured WASI runtime. |
+| `WasiToolSpec` | Immutable WASI module and entrypoint description. |
+
+## Credentials, broker, and MCP adapters
+
+| Name | Contract |
+| --- | --- |
+| `BrokerAuditRecord` | Redacted broker decision record for one credential request. |
+| `BrokerSession` | Authenticated worker-side broker channel with explicit lifetime management. |
+| `CredentialBroker` | Host-owned credential broker that binds requests to an activated worker grant. |
+| `CredentialIssuer` | Protocol for issuing request-scoped credentials after broker authorization. |
+| `GitHubAppIssuer` | GitHub App installation-token issuer used behind the credential broker. |
+| `IssuedCredential` | Credential payload plus its expiration time and redacted kind. |
+| `SpawnRecord` | Host-authenticated worker identity and confinement record used to open a broker session. |
+| `StsSessionIssuer` | AWS STS session issuer used behind the credential broker. |
+| `broker_request` | Worker helper for one authenticated credential request over the installed broker channel. |
+| `McpServerSpec` | Immutable MCP stdio server command and environment declaration. |
+| `McpStdioProxy` | Host-side MCP proxy that confines server startup and mediates calls. |
+| `mcp_service_map` | Builds the service-to-tool mapping used for MCP policy validation. |
+
+## Escape disposition
+
+| Name | Contract |
+| --- | --- |
+| `WaiverDisposition` | Exact split of current findings into reviewed, unreviewed, and malformed or stale waiver entries. |
+| `apply_waivers` | Applies exact source fingerprints and rejects stale, duplicate, or malformed waiver entries. |
+
 ## Constructive profile model
 
 The profile objects are immutable. Most users call `parse_profiles` and

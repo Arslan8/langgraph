@@ -30,6 +30,8 @@ class StateOperation(str, Enum):
     MODEL_READ = "model_read"
     STORE_READ = "store_read"
     STORE_WRITE = "store_write"
+    CHECKPOINT_READ = "checkpoint_read"
+    CHECKPOINT_WRITE = "checkpoint_write"
 
 
 @dataclass(frozen=True, slots=True)

@@ -3039,7 +3039,12 @@ class Pregel(
                     raise RuntimeError("Draining status requires run control")
                 raise GraphDrained(loop.control.drain_reason or "shutdown")
             # set final channel values as run output
-            run_manager.on_chain_end(loop.output)
+            callback_output = (
+                self._output_filter(loop.output, config)
+                if self._output_filter is not None
+                else loop.output
+            )
+            run_manager.on_chain_end(callback_output)
         except BaseException as e:
             if run_manager is not None:
                 run_manager.on_chain_error(e)
@@ -3528,7 +3533,12 @@ class Pregel(
                     raise RuntimeError("Draining status requires run control")
                 raise GraphDrained(loop.control.drain_reason or "shutdown")
             # set final channel values as run output
-            await run_manager.on_chain_end(loop.output)
+            callback_output = (
+                await self._aoutput_filter(loop.output, config)
+                if self._aoutput_filter is not None
+                else loop.output
+            )
+            await run_manager.on_chain_end(callback_output)
         except BaseException as e:
             if run_manager is not None:
                 await asyncio.shield(run_manager.on_chain_error(e))

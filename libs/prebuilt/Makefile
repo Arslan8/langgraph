@@ -1,7 +1,16 @@
-.PHONY: all format lint type test test-fast test_watch integration_tests spell_check spell_fix benchmark profile
+.PHONY: all format lint type test test-fast test_watch integration_tests spell_check spell_fix benchmark profile security-verify security-verify-complete
 
 # Default target executed when no arguments are given to make.
 all: help
+
+# Fast source-only repair queue. Exit zero covers the implemented acceptance
+# checks, not system completeness. Keep the stronger proof gate explicit.
+SECURITY_REPORT ?= security-verification-report.json
+security-verify:
+	uv run python -m langgraph.prebuilt.security.developer_verification --output "$(SECURITY_REPORT)"
+
+security-verify-complete:
+	uv run python -m langgraph.prebuilt.security.developer_verification --require-complete --output "$(SECURITY_REPORT)"
 
 ######################
 # TESTING AND COVERAGE

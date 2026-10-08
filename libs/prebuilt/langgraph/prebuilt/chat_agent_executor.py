@@ -799,7 +799,9 @@ def create_react_agent(
                 "security_kind": "model",
                 "security_trust": "trusted",
                 "security_promotion_reason": "reviewed LangGraph model coordinator",
-            },
+            }
+            if security is not None
+            else None,
         )
         if pre_model_hook is not None:
             workflow.add_node("pre_model_hook", pre_model_hook)  # type: ignore[arg-type]
@@ -827,7 +829,9 @@ def create_react_agent(
                     "security_promotion_reason": (
                         "reviewed structured-output coordinator"
                     ),
-                },
+                }
+                if security is not None
+                else None,
             )
             if post_model_hook is not None:
                 workflow.add_edge("post_model_hook", "generate_structured_response")
@@ -889,7 +893,9 @@ def create_react_agent(
             "security_kind": "model",
             "security_trust": "trusted",
             "security_promotion_reason": "reviewed LangGraph model coordinator",
-        },
+        }
+        if security is not None
+        else None,
     )
     tool_metadata: dict[str, str] | None = None
     if security is not None and security.host_executor is not None:
@@ -937,7 +943,9 @@ def create_react_agent(
                 "security_kind": "model",
                 "security_trust": "trusted",
                 "security_promotion_reason": "reviewed structured-output coordinator",
-            },
+            }
+            if security is not None
+            else None,
         )
         if post_model_hook is not None:
             post_model_hook_paths.append("generate_structured_response")

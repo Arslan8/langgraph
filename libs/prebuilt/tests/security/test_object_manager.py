@@ -3,12 +3,14 @@ from __future__ import annotations
 from dataclasses import replace
 
 import pytest
+from langgraph.store.memory import InMemoryStore
 
 from langgraph.prebuilt.security.audit import MemoryAuditSink
 from langgraph.prebuilt.security.descriptor import ToolDac
 from langgraph.prebuilt.security.hooks import SecurityModule
 from langgraph.prebuilt.security.host_boundary import make_host_router
 from langgraph.prebuilt.security.object_manager import (
+    MediatedStore,
     ObjectManagerHost,
     ObjectManagerPolicy,
     ToolObjectDac,
@@ -116,6 +118,36 @@ class EscalateOutput(SecurityModule):
                 request.output_id,
             ),
         )
+
+
+class EscalateStateRead(SecurityModule):
+    name = "escalate_state_read"
+    can_escalate = True
+
+    def state_read(self, principal, request):
+        return Decision(
+            Verdict.ESCALATE,
+            "test:approval_required",
+            escalation=EscalationRequest(
+                "state-approval-1",
+                "review state read",
+                "state_read",
+                request.resource,
+            ),
+        )
+
+
+class RewriteStoreValue(SecurityModule):
+    name = "rewrite_store_value"
+
+    def state_write(self, principal, request):
+        if request.operation is StateOperation.STORE_WRITE:
+            return Decision(
+                Verdict.TRANSFORM,
+                "test:rewrite_store_value",
+                new_args={"value": {"authorized": True}},
+            )
+        return Decision(Verdict.ALLOW, "test:allow")
 
 
 @pytest.mark.parametrize("asynchronous", [False, True])
@@ -247,6 +279,105 @@ def test_store_keys_are_owner_bound_and_dac_mediated() -> None:
         assert router.route(alice, read) == "alice-data"
         with pytest.raises(PermissionError, match="store:owner_mismatch"):
             router.route(bob, replace(read, owner_id=bob.user_id))
+    finally:
+        stack.close()
+
+
+@pytest.mark.parametrize("asynchronous", [False, True])
+@pytest.mark.asyncio
+async def test_mediated_store_applies_effective_authorized_write(
+    asynchronous: bool,
+) -> None:
+    stack, _, router = _router(
+        RewriteStoreValue(),
+        dacs={"writer": ToolObjectDac(writable_store_keys=frozenset({"notes/item"}))},
+    )
+    backing = InMemoryStore()
+    store = MediatedStore(
+        backing,
+        router=router,
+        principal=_principal(),
+        tool_name="writer",
+    )
+    try:
+        if asynchronous:
+            await store.aput(("notes",), "item", {"authorized": False})
+        else:
+            store.put(("notes",), "item", {"authorized": False})
+        saved = backing.get(("notes",), "item")
+        assert saved is not None
+        assert saved.value == {"authorized": True}
+    finally:
+        stack.close()
+
+
+def test_state_channels_are_isolated_by_principal_session() -> None:
+    stack, _, router = _router()
+    first = _principal()
+    second = replace(first, session_id="other-session")
+
+    def request(principal: Principal, operation: StateOperation, value=None):
+        return StateRequest(
+            operation,
+            "messages",
+            principal.user_id,
+            value=value,
+        )
+
+    try:
+        assert router.state(first, request(first, StateOperation.WRITE, "first")) == (
+            "first"
+        )
+        assert (
+            router.state(second, request(second, StateOperation.WRITE, "second"))
+            == "second"
+        )
+        assert (
+            router.state(first, request(first, StateOperation.MODEL_READ)).value
+            == "first"
+        )
+        assert (
+            router.state(second, request(second, StateOperation.MODEL_READ)).value
+            == "second"
+        )
+    finally:
+        stack.close()
+
+
+@pytest.mark.parametrize("asynchronous", [False, True])
+@pytest.mark.asyncio
+async def test_resume_rechecks_object_dac_before_dispatch(asynchronous: bool) -> None:
+    stack, _, router = _router(
+        EscalateStateRead(),
+        dacs={"reader": ToolObjectDac(readable_channels=frozenset({"allowed"}))},
+    )
+    principal = _principal()
+    request = StateRequest(
+        StateOperation.TOOL_READ,
+        "allowed",
+        principal.user_id,
+        tool_name="reader",
+    )
+    try:
+        authorization = (
+            await router.astate(principal, request)
+            if asynchronous
+            else router.state(principal, request)
+        )
+        escalation = authorization.decision.escalation
+        assert escalation is not None
+        approval = Approval(
+            escalation.request_id,
+            True,
+            "operator",
+            subject_digest=escalation.subject_digest,
+        )
+        forbidden = replace(request, resource="forbidden")
+        with pytest.raises(PermissionError, match="dac:object_not_granted"):
+            if asynchronous:
+                await router.aresume(principal, forbidden, approval)
+            else:
+                router.resume(principal, forbidden, approval)
     finally:
         stack.close()
 

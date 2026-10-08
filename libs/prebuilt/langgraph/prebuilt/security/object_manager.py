@@ -31,6 +31,7 @@ from langgraph.prebuilt.security.objects import (
 )
 from langgraph.prebuilt.security.stack import SecurityStack
 from langgraph.prebuilt.security.types import (
+    Approval,
     Decision,
     PolicyConstraint,
     Principal,
@@ -101,6 +102,36 @@ class ObjectManagerPolicy(StackBoundaryPolicy):
         self.stack.record_object_decision(principal, request, authorization)
         return authorization
 
+    def object_resume_permission(
+        self, principal: Principal, request: FrameworkRequest, approval: Approval
+    ):
+        denied = self._dac(request)
+        if denied is not None:
+            from langgraph.prebuilt.security.objects import ObjectAuthorization
+
+            authorization = ObjectAuthorization(denied, request)
+        else:
+            authorization = self.stack.object_resume_permission(
+                principal, request, approval
+            )
+        self.stack.record_object_decision(principal, request, authorization)
+        return authorization
+
+    async def aobject_resume_permission(
+        self, principal: Principal, request: FrameworkRequest, approval: Approval
+    ):
+        denied = self._dac(request)
+        if denied is not None:
+            from langgraph.prebuilt.security.objects import ObjectAuthorization
+
+            authorization = ObjectAuthorization(denied, request)
+        else:
+            authorization = await self.stack.aobject_resume_permission(
+                principal, request, approval
+            )
+        self.stack.record_object_decision(principal, request, authorization)
+        return authorization
+
     def _dac(self, request: FrameworkRequest) -> Decision | None:
         if not isinstance(request, StateRequest) or not request.tool_name:
             return None
@@ -158,7 +189,7 @@ class ObjectManagerHost:
         if not checkpoint_key:
             raise ValueError("checkpoint_key must be non-empty")
         self._checkpoint_key = bytes(checkpoint_key)
-        self._state: dict[str, LabeledValue] = {}
+        self._state: dict[tuple[str, str, str, str], LabeledValue] = {}
         self._store: dict[str, StoreResource] = {}
         self._tools: dict[str, Tool] = dict(tools or {})
         self._restored: dict[tuple[str, str], tuple[int, str]] = {}
@@ -241,13 +272,14 @@ class ObjectManagerHost:
         raise HostExecutionDenied("host:tool_execution_unavailable")
 
     def _state_operation(self, principal: Principal, request: StateRequest) -> object:
+        state_key = _state_key(principal, request)
         if request.operation is StateOperation.WRITE:
-            self._state[request.resource] = LabeledValue(
+            self._state[state_key] = LabeledValue(
                 request.resource, request.value, request.labels
             )
             return request.value
         if request.operation in (StateOperation.TOOL_READ, StateOperation.MODEL_READ):
-            stored = self._state.get(request.resource)
+            stored = self._state.get(state_key)
             if stored is None:
                 return request.value
             if not isinstance(stored, LabeledValue):
@@ -277,9 +309,14 @@ class ObjectManagerHost:
                 raise PermissionError("checkpoint:malformed")
             self._verify_checkpoint(principal, request.value)
             return request.value.payload
+        if request.operation in (
+            StateOperation.CHECKPOINT_READ,
+            StateOperation.CHECKPOINT_WRITE,
+        ):
+            return request.value
         raise PermissionError("state:unsupported_operation")
 
-    def labels_for_output(self, value: Any) -> SecurityLabels:
+    def labels_for_output(self, principal: Principal, value: Any) -> SecurityLabels:
         """Join labels for state values present in one externally emitted item."""
         confidentiality: set[str] = set()
         integrities: set[str] = set()
@@ -290,7 +327,9 @@ class ObjectManagerHost:
                 integrities.add(item.labels.integrity)
                 return
             if key is not None:
-                stored = self._state.get(key)
+                stored = self._state.get(
+                    (principal.user_id, principal.session_id, "", key)
+                )
                 if isinstance(stored, LabeledValue) and stored.value == item:
                     confidentiality.update(stored.labels.confidentiality)
                     integrities.add(stored.labels.integrity)
@@ -408,15 +447,18 @@ class MediatedStore(BaseStore):
 
     def batch(self, ops):
         operations = tuple(ops)
-        for operation in operations:
-            self._authorize(operation, asynchronous=False)
-        return self._store.batch(operations)
+        effective = tuple(
+            self._authorize(operation, asynchronous=False) for operation in operations
+        )
+        return self._store.batch(effective)
 
     async def abatch(self, ops):
         operations = tuple(ops)
-        for operation in operations:
+        effective = [
             await self._authorize(operation, asynchronous=True)
-        return await self._store.abatch(operations)
+            for operation in operations
+        ]
+        return await self._store.abatch(tuple(effective))
 
     def _authorize(self, operation: Any, *, asynchronous: bool):
         if isinstance(operation, GetOp):
@@ -439,9 +481,35 @@ class MediatedStore(BaseStore):
             value=value,
         )
         if asynchronous:
-            return self._router.astate(self._principal, request)
-        self._router.state(self._principal, request)
-        return None
+            return _aeffective_store_operation(
+                operation, self._router.astate(self._principal, request)
+            )
+        return _effective_store_operation(
+            operation,
+            self._router.state(self._principal, request),
+        )
+
+
+def _effective_store_operation(operation: Any, routed: Any) -> Any:
+    """Apply a narrowed write value; reads carry no value to transform."""
+    if isinstance(operation, PutOp):
+        return (
+            operation if routed is operation.value else operation._replace(value=routed)
+        )
+    return operation
+
+
+async def _aeffective_store_operation(operation: Any, routed: Any) -> Any:
+    return _effective_store_operation(operation, await routed)
+
+
+def _state_key(
+    principal: Principal, request: StateRequest
+) -> tuple[str, str, str, str]:
+    graph_id = request.metadata.get("graph_id", "")
+    if not isinstance(graph_id, str):
+        raise PermissionError("state:invalid_graph_identity")
+    return (principal.user_id, principal.session_id, graph_id, request.resource)
 
 
 def _store_resource(namespace: tuple[str, ...], key: str) -> str:

@@ -1032,7 +1032,11 @@ def _object_hook(
     if isinstance(request, StateRequest):
         if request.operation is StateOperation.RESTORE:
             return module.state_restore(principal, request)
-        if request.operation in (StateOperation.WRITE, StateOperation.STORE_WRITE):
+        if request.operation in (
+            StateOperation.WRITE,
+            StateOperation.STORE_WRITE,
+            StateOperation.CHECKPOINT_WRITE,
+        ):
             return module.state_write(principal, request)
         return module.state_read(principal, request)
     if isinstance(request, ModelInvocationRequest):

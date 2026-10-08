@@ -1,153 +1,338 @@
 {
-  "certificate_checker_sha256": "f3d09976a7192d81ef0af9109602255a8c75693a276c2713998d5652ab7bec19",
+  "certificate_checker_sha256": "7c1d0b013935b7ed5f9443e0f927b5bc61c0b45533af6bf7c07ea0d7419a83d8",
   "claim": "Every admitted HostRouter entry authorizes the identical effective request before atomic dispatch; tool calls preserve constraints, and cross-tool entries additionally require fresh authenticated-origin, delegation and tool-transition decisions.",
   "complete": true,
   "coverage": [
     {
       "dispatch_obligations": 1,
       "entry": "langgraph.prebuilt.security.host_router.HostRouter.invoke",
+      "entry_protocol_verified": true,
       "host_only": true,
       "kind": "root",
+      "required_authorizers": {
+        "langgraph.prebuilt.security.host_router.HostRouter.policy.permission": [
+          "input:principal",
+          "input:call"
+        ]
+      },
       "status": "verified"
     },
     {
       "dispatch_obligations": 1,
       "entry": "langgraph.prebuilt.security.host_router.HostRouter.ainvoke",
+      "entry_protocol_verified": true,
       "host_only": true,
       "kind": "root",
+      "required_authorizers": {
+        "langgraph.prebuilt.security.host_router.HostRouter.policy.apermission": [
+          "input:principal",
+          "input:call"
+        ]
+      },
       "status": "verified"
     },
     {
       "dispatch_obligations": 1,
       "entry": "langgraph.prebuilt.security.host_router.HostRouter.invoke_from",
+      "entry_protocol_verified": true,
       "host_only": true,
       "kind": "cross_tool",
+      "required_authorizers": {
+        "langgraph.prebuilt.security.host_router.HostRouter.host.origin_permission": [
+          "input:origin",
+          "input:parent",
+          "input:child",
+          "input:call"
+        ],
+        "langgraph.prebuilt.security.host_router.HostRouter.policy.delegation_permission": [
+          "input:origin",
+          "input:parent",
+          "input:child",
+          "input:call"
+        ],
+        "langgraph.prebuilt.security.host_router.HostRouter.policy.permission": [
+          "input:child",
+          "input:call"
+        ],
+        "langgraph.prebuilt.security.host_router.HostRouter.policy.transition_permission": [
+          "input:origin",
+          "input:parent",
+          "input:child",
+          "input:call"
+        ]
+      },
       "status": "verified"
     },
     {
       "dispatch_obligations": 1,
       "entry": "langgraph.prebuilt.security.host_router.HostRouter.ainvoke_from",
+      "entry_protocol_verified": true,
       "host_only": true,
       "kind": "cross_tool",
+      "required_authorizers": {
+        "langgraph.prebuilt.security.host_router.HostRouter.host.aorigin_permission": [
+          "input:origin",
+          "input:parent",
+          "input:child",
+          "input:call"
+        ],
+        "langgraph.prebuilt.security.host_router.HostRouter.policy.adelegation_permission": [
+          "input:origin",
+          "input:parent",
+          "input:child",
+          "input:call"
+        ],
+        "langgraph.prebuilt.security.host_router.HostRouter.policy.apermission": [
+          "input:child",
+          "input:call"
+        ],
+        "langgraph.prebuilt.security.host_router.HostRouter.policy.atransition_permission": [
+          "input:origin",
+          "input:parent",
+          "input:child",
+          "input:call"
+        ]
+      },
       "status": "verified"
     },
     {
       "dispatch_obligations": 1,
       "entry": "langgraph.prebuilt.security.host_router.HostRouter.route",
+      "entry_protocol_verified": true,
       "host_only": true,
       "kind": "framework",
+      "required_authorizers": {
+        "langgraph.prebuilt.security.host_router.HostRouter.policy.object_permission": [
+          "input:principal",
+          "input:request"
+        ]
+      },
       "status": "verified"
     },
     {
       "dispatch_obligations": 1,
       "entry": "langgraph.prebuilt.security.host_router.HostRouter.aroute",
+      "entry_protocol_verified": true,
       "host_only": true,
       "kind": "framework",
+      "required_authorizers": {
+        "langgraph.prebuilt.security.host_router.HostRouter.policy.aobject_permission": [
+          "input:principal",
+          "input:request"
+        ]
+      },
       "status": "verified"
     },
     {
       "dispatch_obligations": 1,
       "entry": "langgraph.prebuilt.security.host_router.HostRouter.resume",
+      "entry_protocol_verified": true,
       "host_only": true,
       "kind": "framework",
+      "required_authorizers": {
+        "langgraph.prebuilt.security.host_router.HostRouter.policy.object_resume_permission": [
+          "input:principal",
+          "input:request",
+          "input:approval"
+        ]
+      },
       "status": "verified"
     },
     {
       "dispatch_obligations": 1,
       "entry": "langgraph.prebuilt.security.host_router.HostRouter.aresume",
+      "entry_protocol_verified": true,
       "host_only": true,
       "kind": "framework",
+      "required_authorizers": {
+        "langgraph.prebuilt.security.host_router.HostRouter.policy.aobject_resume_permission": [
+          "input:principal",
+          "input:request",
+          "input:approval"
+        ]
+      },
       "status": "verified"
     },
     {
       "dispatch_obligations": 1,
       "entry": "langgraph.prebuilt.security.host_router.HostRouter.dispatch",
+      "entry_protocol_verified": true,
       "host_only": true,
       "kind": "framework",
+      "required_authorizers": {
+        "langgraph.prebuilt.security.host_router.HostRouter.policy.object_permission": [
+          "input:principal",
+          "input:request"
+        ]
+      },
       "status": "verified"
     },
     {
       "dispatch_obligations": 1,
       "entry": "langgraph.prebuilt.security.host_router.HostRouter.adispatch",
+      "entry_protocol_verified": true,
       "host_only": true,
       "kind": "framework",
+      "required_authorizers": {
+        "langgraph.prebuilt.security.host_router.HostRouter.policy.aobject_permission": [
+          "input:principal",
+          "input:request"
+        ]
+      },
       "status": "verified"
     },
     {
       "dispatch_obligations": 1,
       "entry": "langgraph.prebuilt.security.host_router.HostRouter.register",
+      "entry_protocol_verified": true,
       "host_only": true,
       "kind": "framework",
+      "required_authorizers": {
+        "langgraph.prebuilt.security.host_router.HostRouter.policy.object_permission": [
+          "input:principal",
+          "input:request"
+        ]
+      },
       "status": "verified"
     },
     {
       "dispatch_obligations": 1,
       "entry": "langgraph.prebuilt.security.host_router.HostRouter.aregister",
+      "entry_protocol_verified": true,
       "host_only": true,
       "kind": "framework",
+      "required_authorizers": {
+        "langgraph.prebuilt.security.host_router.HostRouter.policy.aobject_permission": [
+          "input:principal",
+          "input:request"
+        ]
+      },
       "status": "verified"
     },
     {
       "dispatch_obligations": 1,
       "entry": "langgraph.prebuilt.security.host_router.HostRouter.state",
+      "entry_protocol_verified": true,
       "host_only": true,
       "kind": "framework",
+      "required_authorizers": {
+        "langgraph.prebuilt.security.host_router.HostRouter.policy.object_permission": [
+          "input:principal",
+          "input:request"
+        ]
+      },
       "status": "verified"
     },
     {
       "dispatch_obligations": 1,
       "entry": "langgraph.prebuilt.security.host_router.HostRouter.astate",
+      "entry_protocol_verified": true,
       "host_only": true,
       "kind": "framework",
+      "required_authorizers": {
+        "langgraph.prebuilt.security.host_router.HostRouter.policy.aobject_permission": [
+          "input:principal",
+          "input:request"
+        ]
+      },
       "status": "verified"
     },
     {
       "dispatch_obligations": 1,
       "entry": "langgraph.prebuilt.security.host_router.HostRouter.model_invoke",
+      "entry_protocol_verified": true,
       "host_only": true,
       "kind": "framework",
+      "required_authorizers": {
+        "langgraph.prebuilt.security.host_router.HostRouter.policy.object_permission": [
+          "input:principal",
+          "input:request"
+        ]
+      },
       "status": "verified"
     },
     {
       "dispatch_obligations": 1,
       "entry": "langgraph.prebuilt.security.host_router.HostRouter.amodel_invoke",
+      "entry_protocol_verified": true,
       "host_only": true,
       "kind": "framework",
+      "required_authorizers": {
+        "langgraph.prebuilt.security.host_router.HostRouter.policy.aobject_permission": [
+          "input:principal",
+          "input:request"
+        ]
+      },
       "status": "verified"
     },
     {
       "dispatch_obligations": 1,
       "entry": "langgraph.prebuilt.security.host_router.HostRouter.output_emit",
+      "entry_protocol_verified": true,
       "host_only": true,
       "kind": "framework",
+      "required_authorizers": {
+        "langgraph.prebuilt.security.host_router.HostRouter.policy.object_permission": [
+          "input:principal",
+          "input:request"
+        ]
+      },
       "status": "verified"
     },
     {
       "dispatch_obligations": 1,
       "entry": "langgraph.prebuilt.security.host_router.HostRouter.aoutput_emit",
+      "entry_protocol_verified": true,
       "host_only": true,
       "kind": "framework",
+      "required_authorizers": {
+        "langgraph.prebuilt.security.host_router.HostRouter.policy.aobject_permission": [
+          "input:principal",
+          "input:request"
+        ]
+      },
       "status": "verified"
     },
     {
       "dispatch_obligations": 1,
       "entry": "langgraph.prebuilt.security.host_router.HostRouter.run",
+      "entry_protocol_verified": true,
       "host_only": true,
       "kind": "root",
+      "required_authorizers": {
+        "langgraph.prebuilt.security.host_router.HostRouter.policy.permission": [
+          "input:principal",
+          "input:call"
+        ]
+      },
       "status": "verified"
     },
     {
       "dispatch_obligations": 1,
       "entry": "langgraph.prebuilt.security.host_router.HostRouter.arun",
+      "entry_protocol_verified": true,
       "host_only": true,
       "kind": "root",
+      "required_authorizers": {
+        "langgraph.prebuilt.security.host_router.HostRouter.policy.apermission": [
+          "input:principal",
+          "input:call"
+        ]
+      },
       "status": "verified"
     },
     {
       "dispatch_obligations": 1,
       "entry": "langgraph.prebuilt.security.host_router.HostRouter.__call__",
+      "entry_protocol_verified": true,
       "host_only": true,
       "kind": "root",
+      "required_authorizers": {
+        "langgraph.prebuilt.security.host_router.HostRouter.policy.permission": [
+          "input:principal",
+          "input:call"
+        ]
+      },
       "status": "verified"
     }
   ],
@@ -158,7 +343,7 @@
     "source_sha256": "95111c517dfedb354daaa7b16a012478432c0a437cf993c941a677fe14c3dd94",
     "verified": true
   },
-  "schema_version": 1,
+  "schema_version": 2,
   "scope": "HostRouter's entire discovered method surface, including the generic framework-object route. Host-confined ToolNode and guarded_tool calls enter the tool-call surface through a separately tested exact-decision bridge.",
   "source_proof": {
     "assumptions": [
@@ -195,6 +380,26 @@
     "complete": true,
     "entries": [
       {
+        "authorizations": [
+          {
+            "arguments": [
+              "input:principal",
+              "input:call"
+            ],
+            "bindings": [
+              "tool_call",
+              "input:principal",
+              "input:call",
+              "result:1.constraints"
+            ],
+            "call_path": [
+              "langgraph.prebuilt.security.host_router.HostRouter.invoke"
+            ],
+            "function": "langgraph.prebuilt.security.host_router.HostRouter.invoke",
+            "line": 34,
+            "target": "langgraph.prebuilt.security.host_router.HostRouter.policy.permission"
+          }
+        ],
         "call_graph": [
           {
             "callee": "langgraph.prebuilt.security.host_router.HostRouter.host.invoke",
@@ -244,6 +449,26 @@
         ]
       },
       {
+        "authorizations": [
+          {
+            "arguments": [
+              "input:principal",
+              "input:call"
+            ],
+            "bindings": [
+              "tool_call",
+              "input:principal",
+              "input:call",
+              "result:1.constraints"
+            ],
+            "call_path": [
+              "langgraph.prebuilt.security.host_router.HostRouter.ainvoke"
+            ],
+            "function": "langgraph.prebuilt.security.host_router.HostRouter.ainvoke",
+            "line": 42,
+            "target": "langgraph.prebuilt.security.host_router.HostRouter.policy.apermission"
+          }
+        ],
         "call_graph": [
           {
             "callee": "langgraph.prebuilt.security.host_router.HostRouter.host.ainvoke",
@@ -293,6 +518,91 @@
         ]
       },
       {
+        "authorizations": [
+          {
+            "arguments": [
+              "input:origin",
+              "input:parent",
+              "input:child",
+              "input:call"
+            ],
+            "bindings": [
+              "authenticated_origin",
+              "input:origin",
+              "input:parent",
+              "input:child",
+              "input:call"
+            ],
+            "call_path": [
+              "langgraph.prebuilt.security.host_router.HostRouter.invoke_from"
+            ],
+            "function": "langgraph.prebuilt.security.host_router.HostRouter.invoke_from",
+            "line": 50,
+            "target": "langgraph.prebuilt.security.host_router.HostRouter.host.origin_permission"
+          },
+          {
+            "arguments": [
+              "input:origin",
+              "input:parent",
+              "input:child",
+              "input:call"
+            ],
+            "bindings": [
+              "delegation",
+              "input:origin",
+              "input:parent",
+              "input:child",
+              "input:call",
+              "result:3.constraints"
+            ],
+            "call_path": [
+              "langgraph.prebuilt.security.host_router.HostRouter.invoke_from"
+            ],
+            "function": "langgraph.prebuilt.security.host_router.HostRouter.invoke_from",
+            "line": 53,
+            "target": "langgraph.prebuilt.security.host_router.HostRouter.policy.delegation_permission"
+          },
+          {
+            "arguments": [
+              "input:origin",
+              "input:parent",
+              "input:child",
+              "input:call"
+            ],
+            "bindings": [
+              "tool_transition",
+              "input:origin",
+              "input:parent",
+              "input:child",
+              "input:call",
+              "result:5.constraints"
+            ],
+            "call_path": [
+              "langgraph.prebuilt.security.host_router.HostRouter.invoke_from"
+            ],
+            "function": "langgraph.prebuilt.security.host_router.HostRouter.invoke_from",
+            "line": 56,
+            "target": "langgraph.prebuilt.security.host_router.HostRouter.policy.transition_permission"
+          },
+          {
+            "arguments": [
+              "input:child",
+              "input:call"
+            ],
+            "bindings": [
+              "tool_call",
+              "input:child",
+              "input:call",
+              "result:7.constraints"
+            ],
+            "call_path": [
+              "langgraph.prebuilt.security.host_router.HostRouter.invoke_from"
+            ],
+            "function": "langgraph.prebuilt.security.host_router.HostRouter.invoke_from",
+            "line": 59,
+            "target": "langgraph.prebuilt.security.host_router.HostRouter.policy.permission"
+          }
+        ],
         "call_graph": [
           {
             "callee": "langgraph.prebuilt.security.host_router.HostRouter.host.invoke_from",
@@ -386,6 +696,91 @@
         ]
       },
       {
+        "authorizations": [
+          {
+            "arguments": [
+              "input:origin",
+              "input:parent",
+              "input:child",
+              "input:call"
+            ],
+            "bindings": [
+              "authenticated_origin",
+              "input:origin",
+              "input:parent",
+              "input:child",
+              "input:call"
+            ],
+            "call_path": [
+              "langgraph.prebuilt.security.host_router.HostRouter.ainvoke_from"
+            ],
+            "function": "langgraph.prebuilt.security.host_router.HostRouter.ainvoke_from",
+            "line": 75,
+            "target": "langgraph.prebuilt.security.host_router.HostRouter.host.aorigin_permission"
+          },
+          {
+            "arguments": [
+              "input:origin",
+              "input:parent",
+              "input:child",
+              "input:call"
+            ],
+            "bindings": [
+              "delegation",
+              "input:origin",
+              "input:parent",
+              "input:child",
+              "input:call",
+              "result:3.constraints"
+            ],
+            "call_path": [
+              "langgraph.prebuilt.security.host_router.HostRouter.ainvoke_from"
+            ],
+            "function": "langgraph.prebuilt.security.host_router.HostRouter.ainvoke_from",
+            "line": 78,
+            "target": "langgraph.prebuilt.security.host_router.HostRouter.policy.adelegation_permission"
+          },
+          {
+            "arguments": [
+              "input:origin",
+              "input:parent",
+              "input:child",
+              "input:call"
+            ],
+            "bindings": [
+              "tool_transition",
+              "input:origin",
+              "input:parent",
+              "input:child",
+              "input:call",
+              "result:5.constraints"
+            ],
+            "call_path": [
+              "langgraph.prebuilt.security.host_router.HostRouter.ainvoke_from"
+            ],
+            "function": "langgraph.prebuilt.security.host_router.HostRouter.ainvoke_from",
+            "line": 83,
+            "target": "langgraph.prebuilt.security.host_router.HostRouter.policy.atransition_permission"
+          },
+          {
+            "arguments": [
+              "input:child",
+              "input:call"
+            ],
+            "bindings": [
+              "tool_call",
+              "input:child",
+              "input:call",
+              "result:7.constraints"
+            ],
+            "call_path": [
+              "langgraph.prebuilt.security.host_router.HostRouter.ainvoke_from"
+            ],
+            "function": "langgraph.prebuilt.security.host_router.HostRouter.ainvoke_from",
+            "line": 88,
+            "target": "langgraph.prebuilt.security.host_router.HostRouter.policy.apermission"
+          }
+        ],
         "call_graph": [
           {
             "callee": "langgraph.prebuilt.security.host_router.HostRouter.host.ainvoke_from",
@@ -479,6 +874,25 @@
         ]
       },
       {
+        "authorizations": [
+          {
+            "arguments": [
+              "input:principal",
+              "input:request"
+            ],
+            "bindings": [
+              "framework_object",
+              "input:principal",
+              "result:1.request"
+            ],
+            "call_path": [
+              "langgraph.prebuilt.security.host_router.HostRouter.route"
+            ],
+            "function": "langgraph.prebuilt.security.host_router.HostRouter.route",
+            "line": 102,
+            "target": "langgraph.prebuilt.security.host_router.HostRouter.policy.object_permission"
+          }
+        ],
         "call_graph": [
           {
             "callee": "langgraph.prebuilt.security.host_router.HostRouter.host.dispatch",
@@ -526,6 +940,25 @@
         ]
       },
       {
+        "authorizations": [
+          {
+            "arguments": [
+              "input:principal",
+              "input:request"
+            ],
+            "bindings": [
+              "framework_object",
+              "input:principal",
+              "result:1.request"
+            ],
+            "call_path": [
+              "langgraph.prebuilt.security.host_router.HostRouter.aroute"
+            ],
+            "function": "langgraph.prebuilt.security.host_router.HostRouter.aroute",
+            "line": 110,
+            "target": "langgraph.prebuilt.security.host_router.HostRouter.policy.aobject_permission"
+          }
+        ],
         "call_graph": [
           {
             "callee": "langgraph.prebuilt.security.host_router.HostRouter.host.adispatch",
@@ -573,6 +1006,26 @@
         ]
       },
       {
+        "authorizations": [
+          {
+            "arguments": [
+              "input:principal",
+              "input:request",
+              "input:approval"
+            ],
+            "bindings": [
+              "framework_object",
+              "input:principal",
+              "result:1.request"
+            ],
+            "call_path": [
+              "langgraph.prebuilt.security.host_router.HostRouter.resume"
+            ],
+            "function": "langgraph.prebuilt.security.host_router.HostRouter.resume",
+            "line": 120,
+            "target": "langgraph.prebuilt.security.host_router.HostRouter.policy.object_resume_permission"
+          }
+        ],
         "call_graph": [
           {
             "callee": "langgraph.prebuilt.security.host_router.HostRouter.host.dispatch",
@@ -620,6 +1073,26 @@
         ]
       },
       {
+        "authorizations": [
+          {
+            "arguments": [
+              "input:principal",
+              "input:request",
+              "input:approval"
+            ],
+            "bindings": [
+              "framework_object",
+              "input:principal",
+              "result:1.request"
+            ],
+            "call_path": [
+              "langgraph.prebuilt.security.host_router.HostRouter.aresume"
+            ],
+            "function": "langgraph.prebuilt.security.host_router.HostRouter.aresume",
+            "line": 130,
+            "target": "langgraph.prebuilt.security.host_router.HostRouter.policy.aobject_resume_permission"
+          }
+        ],
         "call_graph": [
           {
             "callee": "langgraph.prebuilt.security.host_router.HostRouter.host.adispatch",
@@ -667,6 +1140,26 @@
         ]
       },
       {
+        "authorizations": [
+          {
+            "arguments": [
+              "input:principal",
+              "input:request"
+            ],
+            "bindings": [
+              "framework_object",
+              "input:principal",
+              "result:1.request"
+            ],
+            "call_path": [
+              "langgraph.prebuilt.security.host_router.HostRouter.dispatch",
+              "langgraph.prebuilt.security.host_router.HostRouter.route"
+            ],
+            "function": "langgraph.prebuilt.security.host_router.HostRouter.route",
+            "line": 102,
+            "target": "langgraph.prebuilt.security.host_router.HostRouter.policy.object_permission"
+          }
+        ],
         "call_graph": [
           {
             "callee": "langgraph.prebuilt.security.host_router.HostRouter.route",
@@ -720,6 +1213,26 @@
         ]
       },
       {
+        "authorizations": [
+          {
+            "arguments": [
+              "input:principal",
+              "input:request"
+            ],
+            "bindings": [
+              "framework_object",
+              "input:principal",
+              "result:1.request"
+            ],
+            "call_path": [
+              "langgraph.prebuilt.security.host_router.HostRouter.adispatch",
+              "langgraph.prebuilt.security.host_router.HostRouter.aroute"
+            ],
+            "function": "langgraph.prebuilt.security.host_router.HostRouter.aroute",
+            "line": 110,
+            "target": "langgraph.prebuilt.security.host_router.HostRouter.policy.aobject_permission"
+          }
+        ],
         "call_graph": [
           {
             "callee": "langgraph.prebuilt.security.host_router.HostRouter.aroute",
@@ -773,6 +1286,26 @@
         ]
       },
       {
+        "authorizations": [
+          {
+            "arguments": [
+              "input:principal",
+              "input:request"
+            ],
+            "bindings": [
+              "framework_object",
+              "input:principal",
+              "result:1.request"
+            ],
+            "call_path": [
+              "langgraph.prebuilt.security.host_router.HostRouter.register",
+              "langgraph.prebuilt.security.host_router.HostRouter.route"
+            ],
+            "function": "langgraph.prebuilt.security.host_router.HostRouter.route",
+            "line": 102,
+            "target": "langgraph.prebuilt.security.host_router.HostRouter.policy.object_permission"
+          }
+        ],
         "call_graph": [
           {
             "callee": "langgraph.prebuilt.security.host_router.HostRouter.route",
@@ -826,6 +1359,26 @@
         ]
       },
       {
+        "authorizations": [
+          {
+            "arguments": [
+              "input:principal",
+              "input:request"
+            ],
+            "bindings": [
+              "framework_object",
+              "input:principal",
+              "result:1.request"
+            ],
+            "call_path": [
+              "langgraph.prebuilt.security.host_router.HostRouter.aregister",
+              "langgraph.prebuilt.security.host_router.HostRouter.aroute"
+            ],
+            "function": "langgraph.prebuilt.security.host_router.HostRouter.aroute",
+            "line": 110,
+            "target": "langgraph.prebuilt.security.host_router.HostRouter.policy.aobject_permission"
+          }
+        ],
         "call_graph": [
           {
             "callee": "langgraph.prebuilt.security.host_router.HostRouter.aroute",
@@ -879,6 +1432,26 @@
         ]
       },
       {
+        "authorizations": [
+          {
+            "arguments": [
+              "input:principal",
+              "input:request"
+            ],
+            "bindings": [
+              "framework_object",
+              "input:principal",
+              "result:1.request"
+            ],
+            "call_path": [
+              "langgraph.prebuilt.security.host_router.HostRouter.state",
+              "langgraph.prebuilt.security.host_router.HostRouter.route"
+            ],
+            "function": "langgraph.prebuilt.security.host_router.HostRouter.route",
+            "line": 102,
+            "target": "langgraph.prebuilt.security.host_router.HostRouter.policy.object_permission"
+          }
+        ],
         "call_graph": [
           {
             "callee": "langgraph.prebuilt.security.host_router.HostRouter.host.dispatch",
@@ -932,6 +1505,26 @@
         ]
       },
       {
+        "authorizations": [
+          {
+            "arguments": [
+              "input:principal",
+              "input:request"
+            ],
+            "bindings": [
+              "framework_object",
+              "input:principal",
+              "result:1.request"
+            ],
+            "call_path": [
+              "langgraph.prebuilt.security.host_router.HostRouter.astate",
+              "langgraph.prebuilt.security.host_router.HostRouter.aroute"
+            ],
+            "function": "langgraph.prebuilt.security.host_router.HostRouter.aroute",
+            "line": 110,
+            "target": "langgraph.prebuilt.security.host_router.HostRouter.policy.aobject_permission"
+          }
+        ],
         "call_graph": [
           {
             "callee": "langgraph.prebuilt.security.host_router.HostRouter.host.adispatch",
@@ -985,6 +1578,26 @@
         ]
       },
       {
+        "authorizations": [
+          {
+            "arguments": [
+              "input:principal",
+              "input:request"
+            ],
+            "bindings": [
+              "framework_object",
+              "input:principal",
+              "result:1.request"
+            ],
+            "call_path": [
+              "langgraph.prebuilt.security.host_router.HostRouter.model_invoke",
+              "langgraph.prebuilt.security.host_router.HostRouter.route"
+            ],
+            "function": "langgraph.prebuilt.security.host_router.HostRouter.route",
+            "line": 102,
+            "target": "langgraph.prebuilt.security.host_router.HostRouter.policy.object_permission"
+          }
+        ],
         "call_graph": [
           {
             "callee": "langgraph.prebuilt.security.host_router.HostRouter.route",
@@ -1038,6 +1651,26 @@
         ]
       },
       {
+        "authorizations": [
+          {
+            "arguments": [
+              "input:principal",
+              "input:request"
+            ],
+            "bindings": [
+              "framework_object",
+              "input:principal",
+              "result:1.request"
+            ],
+            "call_path": [
+              "langgraph.prebuilt.security.host_router.HostRouter.amodel_invoke",
+              "langgraph.prebuilt.security.host_router.HostRouter.aroute"
+            ],
+            "function": "langgraph.prebuilt.security.host_router.HostRouter.aroute",
+            "line": 110,
+            "target": "langgraph.prebuilt.security.host_router.HostRouter.policy.aobject_permission"
+          }
+        ],
         "call_graph": [
           {
             "callee": "langgraph.prebuilt.security.host_router.HostRouter.aroute",
@@ -1091,6 +1724,26 @@
         ]
       },
       {
+        "authorizations": [
+          {
+            "arguments": [
+              "input:principal",
+              "input:request"
+            ],
+            "bindings": [
+              "framework_object",
+              "input:principal",
+              "result:1.request"
+            ],
+            "call_path": [
+              "langgraph.prebuilt.security.host_router.HostRouter.output_emit",
+              "langgraph.prebuilt.security.host_router.HostRouter.route"
+            ],
+            "function": "langgraph.prebuilt.security.host_router.HostRouter.route",
+            "line": 102,
+            "target": "langgraph.prebuilt.security.host_router.HostRouter.policy.object_permission"
+          }
+        ],
         "call_graph": [
           {
             "callee": "langgraph.prebuilt.security.host_router.HostRouter.route",
@@ -1144,6 +1797,26 @@
         ]
       },
       {
+        "authorizations": [
+          {
+            "arguments": [
+              "input:principal",
+              "input:request"
+            ],
+            "bindings": [
+              "framework_object",
+              "input:principal",
+              "result:1.request"
+            ],
+            "call_path": [
+              "langgraph.prebuilt.security.host_router.HostRouter.aoutput_emit",
+              "langgraph.prebuilt.security.host_router.HostRouter.aroute"
+            ],
+            "function": "langgraph.prebuilt.security.host_router.HostRouter.aroute",
+            "line": 110,
+            "target": "langgraph.prebuilt.security.host_router.HostRouter.policy.aobject_permission"
+          }
+        ],
         "call_graph": [
           {
             "callee": "langgraph.prebuilt.security.host_router.HostRouter.aroute",
@@ -1197,6 +1870,27 @@
         ]
       },
       {
+        "authorizations": [
+          {
+            "arguments": [
+              "input:principal",
+              "input:call"
+            ],
+            "bindings": [
+              "tool_call",
+              "input:principal",
+              "input:call",
+              "result:1.constraints"
+            ],
+            "call_path": [
+              "langgraph.prebuilt.security.host_router.HostRouter.run",
+              "langgraph.prebuilt.security.host_router.HostRouter.invoke"
+            ],
+            "function": "langgraph.prebuilt.security.host_router.HostRouter.invoke",
+            "line": 34,
+            "target": "langgraph.prebuilt.security.host_router.HostRouter.policy.permission"
+          }
+        ],
         "call_graph": [
           {
             "callee": "langgraph.prebuilt.security.host_router.HostRouter.host.invoke",
@@ -1252,6 +1946,27 @@
         ]
       },
       {
+        "authorizations": [
+          {
+            "arguments": [
+              "input:principal",
+              "input:call"
+            ],
+            "bindings": [
+              "tool_call",
+              "input:principal",
+              "input:call",
+              "result:1.constraints"
+            ],
+            "call_path": [
+              "langgraph.prebuilt.security.host_router.HostRouter.arun",
+              "langgraph.prebuilt.security.host_router.HostRouter.ainvoke"
+            ],
+            "function": "langgraph.prebuilt.security.host_router.HostRouter.ainvoke",
+            "line": 42,
+            "target": "langgraph.prebuilt.security.host_router.HostRouter.policy.apermission"
+          }
+        ],
         "call_graph": [
           {
             "callee": "langgraph.prebuilt.security.host_router.HostRouter.host.ainvoke",
@@ -1307,6 +2022,27 @@
         ]
       },
       {
+        "authorizations": [
+          {
+            "arguments": [
+              "input:principal",
+              "input:call"
+            ],
+            "bindings": [
+              "tool_call",
+              "input:principal",
+              "input:call",
+              "result:1.constraints"
+            ],
+            "call_path": [
+              "langgraph.prebuilt.security.host_router.HostRouter.__call__",
+              "langgraph.prebuilt.security.host_router.HostRouter.invoke"
+            ],
+            "function": "langgraph.prebuilt.security.host_router.HostRouter.invoke",
+            "line": 34,
+            "target": "langgraph.prebuilt.security.host_router.HostRouter.policy.permission"
+          }
+        ],
         "call_graph": [
           {
             "callee": "langgraph.prebuilt.security.host_router.HostRouter.invoke",
@@ -1658,7 +2394,7 @@
         }
       ]
     },
-    "verifier_sha256": "345a3b8589d4e19f912f58c6e3a2a05c4f8a3f41d6a13d75efe90c7c78e0f675"
+    "verifier_sha256": "8a9f1aba7d9c48fb7e8701325f879ec4566dbc7efb91d3c84df9fcbfc9440c3d"
   },
   "summary": {
     "discovered": 21,

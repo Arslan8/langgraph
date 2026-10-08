@@ -142,83 +142,79 @@
       "reason": "Secured StateGraph compilation replaces this registered node or branch with the HostRouter placement wrapper; completeness tests cover sync and async denial."
     },
     {
-      "fingerprint": "prebuilt/langgraph/prebuilt/chat_agent_executor.py:800:49:<module>:unknown_callback:pre_model_hook",
+      "fingerprint": "prebuilt/langgraph/prebuilt/chat_agent_executor.py:807:49:<module>:unknown_callback:pre_model_hook",
       "reason": "Secured compilation classifies this unresolved imported callback as untrusted and rejects it unless a separate-process node host is configured."
     },
     {
-      "fingerprint": "prebuilt/langgraph/prebuilt/chat_agent_executor.py:800:49:<module>:unmediated_node:pre_model_hook",
+      "fingerprint": "prebuilt/langgraph/prebuilt/chat_agent_executor.py:807:49:<module>:unmediated_node:pre_model_hook",
       "reason": "Secured StateGraph compilation replaces this registered node or branch with the HostRouter placement wrapper; completeness tests cover sync and async denial."
     },
     {
-      "fingerprint": "prebuilt/langgraph/prebuilt/chat_agent_executor.py:809:50:<module>:unknown_callback:post_model_hook",
+      "fingerprint": "prebuilt/langgraph/prebuilt/chat_agent_executor.py:816:50:<module>:unknown_callback:post_model_hook",
       "reason": "Secured compilation classifies this unresolved imported callback as untrusted and rejects it unless a separate-process node host is configured."
     },
     {
-      "fingerprint": "prebuilt/langgraph/prebuilt/chat_agent_executor.py:809:50:<module>:unmediated_node:post_model_hook",
+      "fingerprint": "prebuilt/langgraph/prebuilt/chat_agent_executor.py:816:50:<module>:unmediated_node:post_model_hook",
       "reason": "Secured StateGraph compilation replaces this registered node or branch with the HostRouter placement wrapper; completeness tests cover sync and async denial."
     },
     {
-      "fingerprint": "prebuilt/langgraph/prebuilt/chat_agent_executor.py:815:17:<module>:unmediated_node:RunnableCallable(...)",
+      "fingerprint": "prebuilt/langgraph/prebuilt/chat_agent_executor.py:822:17:<module>:unmediated_node:RunnableCallable(...)",
       "reason": "Secured StateGraph compilation replaces this registered node or branch with the HostRouter placement wrapper; completeness tests cover sync and async denial."
     },
     {
-      "fingerprint": "prebuilt/langgraph/prebuilt/chat_agent_executor.py:825:16:<module>:unprotected_compile:workflow.compile",
-      "reason": "This is the generic StateGraph compile implementation; the system claim requires its security argument, whose structural placement gate rejects uncovered paths."
-    },
-    {
-      "fingerprint": "prebuilt/langgraph/prebuilt/chat_agent_executor.py:854:21:should_continue:unknown_call:langgraph.types.Send",
+      "fingerprint": "prebuilt/langgraph/prebuilt/chat_agent_executor.py:871:21:should_continue:unknown_call:langgraph.types.Send",
       "reason": "This constructs inert dispatch data; each resulting Send is authorized at the branch scheduling point before any child task is released."
     },
     {
-      "fingerprint": "prebuilt/langgraph/prebuilt/chat_agent_executor.py:856:25:should_continue:unknown_call:langgraph.prebuilt.tool_node.ToolCallWithContext",
+      "fingerprint": "prebuilt/langgraph/prebuilt/chat_agent_executor.py:873:25:should_continue:unknown_call:langgraph.prebuilt.tool_node.ToolCallWithContext",
       "reason": "This constructs inert dispatch data; each resulting Send is authorized at the branch scheduling point before any child task is released."
     },
     {
-      "fingerprint": "prebuilt/langgraph/prebuilt/chat_agent_executor.py:873:9:<module>:unmediated_node:RunnableCallable(...)",
+      "fingerprint": "prebuilt/langgraph/prebuilt/chat_agent_executor.py:890:9:<module>:unmediated_node:RunnableCallable(...)",
       "reason": "Secured StateGraph compilation replaces this registered node or branch with the HostRouter placement wrapper; completeness tests cover sync and async denial."
     },
     {
-      "fingerprint": "prebuilt/langgraph/prebuilt/chat_agent_executor.py:886:45:<module>:unknown_callback:pre_model_hook",
+      "fingerprint": "prebuilt/langgraph/prebuilt/chat_agent_executor.py:913:45:<module>:unknown_callback:pre_model_hook",
       "reason": "Secured compilation classifies this unresolved imported callback as untrusted and rejects it unless a separate-process node host is configured."
     },
     {
-      "fingerprint": "prebuilt/langgraph/prebuilt/chat_agent_executor.py:886:45:<module>:unmediated_node:pre_model_hook",
+      "fingerprint": "prebuilt/langgraph/prebuilt/chat_agent_executor.py:913:45:<module>:unmediated_node:pre_model_hook",
       "reason": "Secured StateGraph compilation replaces this registered node or branch with the HostRouter placement wrapper; completeness tests cover sync and async denial."
     },
     {
-      "fingerprint": "prebuilt/langgraph/prebuilt/chat_agent_executor.py:901:46:<module>:unknown_callback:post_model_hook",
+      "fingerprint": "prebuilt/langgraph/prebuilt/chat_agent_executor.py:928:46:<module>:unknown_callback:post_model_hook",
       "reason": "Secured compilation classifies this unresolved imported callback as untrusted and rejects it unless a separate-process node host is configured."
     },
     {
-      "fingerprint": "prebuilt/langgraph/prebuilt/chat_agent_executor.py:901:46:<module>:unmediated_node:post_model_hook",
+      "fingerprint": "prebuilt/langgraph/prebuilt/chat_agent_executor.py:928:46:<module>:unmediated_node:post_model_hook",
       "reason": "Secured StateGraph compilation replaces this registered node or branch with the HostRouter placement wrapper; completeness tests cover sync and async denial."
     },
     {
-      "fingerprint": "prebuilt/langgraph/prebuilt/chat_agent_executor.py:911:13:<module>:unmediated_node:RunnableCallable(...)",
+      "fingerprint": "prebuilt/langgraph/prebuilt/chat_agent_executor.py:938:13:<module>:unmediated_node:RunnableCallable(...)",
       "reason": "Secured StateGraph compilation replaces this registered node or branch with the HostRouter placement wrapper; completeness tests cover sync and async denial."
     },
     {
-      "fingerprint": "prebuilt/langgraph/prebuilt/chat_agent_executor.py:946:31:post_model_hook_router:unknown_call:next",
+      "fingerprint": "prebuilt/langgraph/prebuilt/chat_agent_executor.py:975:31:post_model_hook_router:unknown_call:next",
       "reason": "This model-selection helper executes inside an explicitly placed ModelInvocation node; imported model nodes otherwise require isolation or audited promotion."
     },
     {
-      "fingerprint": "prebuilt/langgraph/prebuilt/chat_agent_executor.py:955:21:post_model_hook_router:unknown_call:langgraph.types.Send",
+      "fingerprint": "prebuilt/langgraph/prebuilt/chat_agent_executor.py:984:21:post_model_hook_router:unknown_call:langgraph.types.Send",
       "reason": "This constructs inert dispatch data; each resulting Send is authorized at the branch scheduling point before any child task is released."
     },
     {
-      "fingerprint": "prebuilt/langgraph/prebuilt/chat_agent_executor.py:957:25:post_model_hook_router:unknown_call:langgraph.prebuilt.tool_node.ToolCallWithContext",
+      "fingerprint": "prebuilt/langgraph/prebuilt/chat_agent_executor.py:986:25:post_model_hook_router:unknown_call:langgraph.prebuilt.tool_node.ToolCallWithContext",
       "reason": "This constructs inert dispatch data; each resulting Send is authorized at the branch scheduling point before any child task is released."
     },
     {
-      "fingerprint": "prebuilt/langgraph/prebuilt/chat_agent_executor.py:974:13:<module>:unmediated_node:post_model_hook_router",
+      "fingerprint": "prebuilt/langgraph/prebuilt/chat_agent_executor.py:1003:13:<module>:unmediated_node:post_model_hook_router",
       "reason": "Secured StateGraph compilation replaces this registered node or branch with the HostRouter placement wrapper; completeness tests cover sync and async denial."
     },
     {
-      "fingerprint": "prebuilt/langgraph/prebuilt/chat_agent_executor.py:980:9:<module>:unmediated_node:should_continue",
+      "fingerprint": "prebuilt/langgraph/prebuilt/chat_agent_executor.py:1009:9:<module>:unmediated_node:should_continue",
       "reason": "Secured StateGraph compilation replaces this registered node or branch with the HostRouter placement wrapper; completeness tests cover sync and async denial."
     },
     {
-      "fingerprint": "prebuilt/langgraph/prebuilt/chat_agent_executor.py:1001:22:<module>:unmediated_node:route_tool_responses",
+      "fingerprint": "prebuilt/langgraph/prebuilt/chat_agent_executor.py:1030:22:<module>:unmediated_node:route_tool_responses",
       "reason": "Secured StateGraph compilation replaces this registered node or branch with the HostRouter placement wrapper; completeness tests cover sync and async denial."
     },
     {

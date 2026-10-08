@@ -8,6 +8,9 @@ from typing_extensions import TypedDict
 
 from langgraph.prebuilt.security import Principal, SecurityConfig, with_principal
 from langgraph.prebuilt.security.checkpoint_security import MediatedCheckpointer
+from langgraph.prebuilt.security.hooks import SecurityModule
+from langgraph.prebuilt.security.objects import StateOperation
+from langgraph.prebuilt.security.types import Decision, Verdict
 
 
 class CheckpointState(TypedDict):
@@ -34,6 +37,30 @@ def _graph(saver: InMemorySaver):
         checkpointer=saver,
         security=SecurityConfig(checkpoint_key=b"checkpoint-test-key"),
     )
+
+
+class RewriteCheckpoint(SecurityModule):
+    name = "rewrite_checkpoint"
+
+    def state_write(self, principal, request):
+        if request.operation is StateOperation.CHECKPOINT_WRITE and isinstance(
+            request.value, dict
+        ):
+            return Decision(
+                Verdict.TRANSFORM,
+                "test:rewrite_checkpoint",
+                new_args={"value": {**request.value, "authorized": True}},
+            )
+        return Decision(Verdict.ALLOW, "test:allow")
+
+
+class DenyCheckpointHistory(SecurityModule):
+    name = "deny_checkpoint_history"
+
+    def state_read(self, principal, request):
+        if request.operation is StateOperation.CHECKPOINT_READ:
+            return Decision(Verdict.DENY, "test:no_checkpoint_history")
+        return Decision(Verdict.ALLOW, "test:allow")
 
 
 @pytest.mark.parametrize("asynchronous", [False, True])
@@ -93,6 +120,50 @@ def test_replayed_checkpoint_is_refused() -> None:
     assert graph.checkpointer.get_tuple(_config()) is not None
     with pytest.raises(PermissionError, match="checkpoint:replay"):
         graph.checkpointer.get_tuple(_config())
+
+
+def test_checkpoint_write_uses_effective_authorized_value() -> None:
+    saver = InMemorySaver()
+    builder = StateGraph(CheckpointState)
+    builder.add_node("increment", increment)
+    builder.add_edge(START, "increment")
+    builder.add_edge("increment", END)
+    graph = builder.compile(
+        checkpointer=saver,
+        security=SecurityConfig(
+            checkpoint_key=b"checkpoint-test-key",
+            modules=(RewriteCheckpoint(),),
+        ),
+    )
+
+    graph.invoke({"value": 1}, _config())
+
+    latest = saver.get_tuple(_config())
+    assert latest is not None
+    assert latest.checkpoint["authorized"] is True  # type: ignore[typeddict-item]
+
+
+def test_checkpoint_history_and_administration_fail_closed() -> None:
+    saver = InMemorySaver()
+    builder = StateGraph(CheckpointState)
+    builder.add_node("increment", increment)
+    builder.add_edge(START, "increment")
+    builder.add_edge("increment", END)
+    graph = builder.compile(
+        checkpointer=saver,
+        security=SecurityConfig(
+            checkpoint_key=b"checkpoint-test-key",
+            modules=(DenyCheckpointHistory(),),
+        ),
+    )
+    graph.invoke({"value": 1}, _config())
+
+    with pytest.raises(PermissionError, match="test:no_checkpoint_history"):
+        next(graph.checkpointer.list(_config()))
+    with pytest.raises(
+        PermissionError, match="administrative_operation_requires_principal"
+    ):
+        graph.checkpointer.delete_thread("thread-1")
 
 
 def test_pending_writes_are_authenticated_and_witness_is_not_exposed() -> None:
