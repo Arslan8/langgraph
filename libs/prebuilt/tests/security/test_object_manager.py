@@ -13,8 +13,11 @@ from langgraph.prebuilt.security.object_manager import (
     MediatedStore,
     ObjectManagerHost,
     ObjectManagerPolicy,
+    StoreResource,
     ToolObjectDac,
+    authenticate_store_resource,
     seal_checkpoint,
+    seal_store_resource,
 )
 from langgraph.prebuilt.security.objects import (
     DispatchKind,
@@ -147,6 +150,40 @@ class RewriteStoreValue(SecurityModule):
                 "test:rewrite_store_value",
                 new_args={"value": {"authorized": True}},
             )
+        return Decision(Verdict.ALLOW, "test:allow")
+
+
+class RewriteStoreRead(SecurityModule):
+    name = "rewrite_store_read"
+
+    def state_read(self, principal, request):
+        if (
+            request.operation is StateOperation.STORE_READ
+            and request.metadata.get("store_envelope") is not None
+        ):
+            return Decision(
+                Verdict.TRANSFORM,
+                "test:rewrite_store_read",
+                new_args={"value": {"authorized": True}},
+            )
+        return Decision(Verdict.ALLOW, "test:allow")
+
+
+class DenyStoreRead(SecurityModule):
+    name = "deny_store_read"
+
+    def state_read(self, principal, request):
+        if request.operation is StateOperation.STORE_READ:
+            return Decision(Verdict.DENY, "test:store_read_denied")
+        return Decision(Verdict.ALLOW, "test:allow")
+
+
+class DenySecretStoreRead(SecurityModule):
+    name = "deny_secret_store_read"
+
+    def state_read(self, principal, request):
+        if "secret" in request.labels.confidentiality:
+            return Decision(Verdict.DENY, "test:secret_store_read_denied")
         return Decision(Verdict.ALLOW, "test:allow")
 
 
@@ -298,6 +335,7 @@ async def test_mediated_store_applies_effective_authorized_write(
         router=router,
         principal=_principal(),
         tool_name="writer",
+        store_key=b"checkpoint-key",
     )
     try:
         if asynchronous:
@@ -306,7 +344,192 @@ async def test_mediated_store_applies_effective_authorized_write(
             store.put(("notes",), "item", {"authorized": False})
         saved = backing.get(("notes",), "item")
         assert saved is not None
-        assert saved.value == {"authorized": True}
+        resource = authenticate_store_resource(
+            b"checkpoint-key", "notes/item", saved.value
+        )
+        assert resource.value == {"authorized": True}
+    finally:
+        stack.close()
+
+
+@pytest.mark.parametrize("asynchronous", [False, True])
+@pytest.mark.asyncio
+async def test_mediated_store_publishes_only_effective_authorized_read(
+    asynchronous: bool,
+) -> None:
+    dacs = {
+        "reader": ToolObjectDac(
+            readable_store_keys=frozenset({"notes/item"}),
+            writable_store_keys=frozenset({"notes/item"}),
+        )
+    }
+    stack, _, router = _router(RewriteStoreRead(), dacs=dacs)
+    backing = InMemoryStore()
+    store = MediatedStore(
+        backing,
+        router=router,
+        principal=_principal(),
+        tool_name="reader",
+        store_key=b"checkpoint-key",
+    )
+    try:
+        if asynchronous:
+            await store.aput(("notes",), "item", {"secret": "raw"})
+            result = await store.aget(("notes",), "item")
+        else:
+            store.put(("notes",), "item", {"secret": "raw"})
+            result = store.get(("notes",), "item")
+        assert result is not None
+        assert result.value == {"authorized": True}
+        raw = backing.get(("notes",), "item")
+        assert raw is not None
+        resource = authenticate_store_resource(
+            b"checkpoint-key", "notes/item", raw.value
+        )
+        assert resource.value == {"secret": "raw"}
+    finally:
+        stack.close()
+
+
+@pytest.mark.parametrize("asynchronous", [False, True])
+@pytest.mark.asyncio
+async def test_mediated_store_rejects_denied_and_wrong_owner_reads(
+    asynchronous: bool,
+) -> None:
+    dacs = {
+        "reader": ToolObjectDac(
+            readable_store_keys=frozenset({"notes/item"}),
+            writable_store_keys=frozenset({"notes/item"}),
+        )
+    }
+    backing = InMemoryStore()
+    deny_stack, _, deny_router = _router(DenyStoreRead(), dacs=dacs)
+    denied = MediatedStore(
+        backing,
+        router=deny_router,
+        principal=_principal(),
+        tool_name="reader",
+        store_key=b"checkpoint-key",
+    )
+    owner_stack, _, owner_router = _router(dacs=dacs)
+    bob_stack, _, bob_router = _router(dacs=dacs)
+    alice = MediatedStore(
+        backing,
+        router=bob_router,
+        principal=_principal(),
+        tool_name="reader",
+        store_key=b"checkpoint-key",
+    )
+    bob = MediatedStore(
+        backing,
+        router=owner_router,
+        principal=_principal("bob"),
+        tool_name="reader",
+        store_key=b"checkpoint-key",
+    )
+    try:
+        if asynchronous:
+            await denied.aput(("notes",), "item", {"secret": "raw"})
+            with pytest.raises(PermissionError, match="test:store_read_denied"):
+                await denied.aget(("notes",), "item")
+            await alice.aput(("notes",), "item", {"secret": "raw"})
+            with pytest.raises(PermissionError, match="store:owner_mismatch"):
+                await bob.aget(("notes",), "item")
+        else:
+            denied.put(("notes",), "item", {"secret": "raw"})
+            with pytest.raises(PermissionError, match="test:store_read_denied"):
+                denied.get(("notes",), "item")
+            alice.put(("notes",), "item", {"secret": "raw"})
+            with pytest.raises(PermissionError, match="store:owner_mismatch"):
+                bob.get(("notes",), "item")
+    finally:
+        deny_stack.close()
+        owner_stack.close()
+        bob_stack.close()
+
+
+@pytest.mark.parametrize("asynchronous", [False, True])
+@pytest.mark.asyncio
+async def test_mediated_store_rejects_unregistered_or_changed_backing_data(
+    asynchronous: bool,
+) -> None:
+    dacs = {
+        "reader": ToolObjectDac(
+            readable_store_keys=frozenset({"notes/item"}),
+            writable_store_keys=frozenset({"notes/item"}),
+        )
+    }
+    stack, _, router = _router(dacs=dacs)
+    backing = InMemoryStore()
+    store = MediatedStore(
+        backing,
+        router=router,
+        principal=_principal(),
+        tool_name="reader",
+        store_key=b"checkpoint-key",
+    )
+    try:
+        backing.put(("notes",), "item", {"secret": "unregistered"})
+        with pytest.raises(PermissionError, match="store:unverifiable_resource"):
+            if asynchronous:
+                await store.aget(("notes",), "item")
+            else:
+                store.get(("notes",), "item")
+
+        if asynchronous:
+            await store.aput(("notes",), "item", {"secret": "registered"})
+        else:
+            store.put(("notes",), "item", {"secret": "registered"})
+        raw = backing.get(("notes",), "item")
+        assert raw is not None
+        changed = dict(raw.value)
+        changed["__slanggraph_value__"] = {"secret": "changed"}
+        backing.put(("notes",), "item", changed)
+        with pytest.raises(
+            PermissionError, match="store:invalid_resource_authentication"
+        ):
+            if asynchronous:
+                await store.aget(("notes",), "item")
+            else:
+                store.get(("notes",), "item")
+    finally:
+        stack.close()
+
+
+@pytest.mark.parametrize("asynchronous", [False, True])
+@pytest.mark.asyncio
+async def test_mediated_store_authorizes_authenticated_backing_labels(
+    asynchronous: bool,
+) -> None:
+    dacs = {"reader": ToolObjectDac(readable_store_keys=frozenset({"notes/item"}))}
+    stack, _, router = _router(DenySecretStoreRead(), dacs=dacs)
+    backing = InMemoryStore()
+    backing.put(
+        ("notes",),
+        "item",
+        seal_store_resource(
+            b"checkpoint-key",
+            "notes/item",
+            StoreResource(
+                "alice",
+                {"secret": "protected"},
+                SecurityLabels(confidentiality=frozenset({"secret"})),
+            ),
+        ),
+    )
+    store = MediatedStore(
+        backing,
+        router=router,
+        principal=_principal(),
+        tool_name="reader",
+        store_key=b"checkpoint-key",
+    )
+    try:
+        with pytest.raises(PermissionError, match="test:secret_store_read_denied"):
+            if asynchronous:
+                await store.aget(("notes",), "item")
+            else:
+                store.get(("notes",), "item")
     finally:
         stack.close()
 

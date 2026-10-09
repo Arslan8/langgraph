@@ -11,7 +11,14 @@ from threading import RLock
 from types import MappingProxyType
 from typing import Any
 
-from langgraph.store.base import BaseStore, GetOp, ListNamespacesOp, PutOp, SearchOp
+from langgraph.store.base import (
+    BaseStore,
+    GetOp,
+    Item,
+    ListNamespacesOp,
+    PutOp,
+    SearchOp,
+)
 
 from langgraph.prebuilt.security.execution import (
     HostExecutionDenied,
@@ -38,6 +45,9 @@ from langgraph.prebuilt.security.types import (
     Tool,
     Verdict,
 )
+
+_STORE_ENVELOPE_METADATA = "__slanggraph_security__"
+_STORE_ENVELOPE_VALUE = "__slanggraph_value__"
 
 
 @dataclass(frozen=True, slots=True)
@@ -298,11 +308,36 @@ class ObjectManagerHost:
             )
             return request.value
         if request.operation is StateOperation.STORE_READ:
+            sealed = request.metadata.get("store_envelope")
+            if sealed is not None:
+                authoritative = authenticate_store_resource(
+                    self._checkpoint_key, request.resource, sealed
+                )
+                if (
+                    authoritative.owner_id != principal.user_id
+                    or request.owner_id != authoritative.owner_id
+                ):
+                    raise PermissionError("store:owner_mismatch")
+                if request.labels != authoritative.labels:
+                    raise PermissionError("store:label_mismatch")
+                registered = self._store.get(request.resource)
+                if registered is not None and registered != authoritative:
+                    raise PermissionError("store:metadata_mismatch")
+                return request.value
             resource = self._store.get(request.resource)
             if resource is None:
-                return None
-            if resource.owner_id != principal.user_id:
+                if request.value is None:
+                    return None
+                raise PermissionError("store:unknown_resource")
+            if (
+                resource.owner_id != principal.user_id
+                or request.owner_id != resource.owner_id
+            ):
                 raise PermissionError("store:owner_mismatch")
+            if request.labels != resource.labels:
+                raise PermissionError("store:label_mismatch")
+            if request.metadata.get("preflight") is True:
+                return None
             return resource.value
         if request.operation is StateOperation.RESTORE:
             if not isinstance(request.value, CheckpointEnvelope):
@@ -352,16 +387,7 @@ class ObjectManagerHost:
     def _verify_checkpoint(
         self, principal: Principal, checkpoint: CheckpointEnvelope
     ) -> None:
-        if (
-            checkpoint.principal_id != principal.user_id
-            or checkpoint.session_id != principal.session_id
-        ):
-            raise PermissionError("checkpoint:principal_mismatch")
-        expected = _checkpoint_digest(self._checkpoint_key, checkpoint)
-        if not checkpoint.digest or not hmac.compare_digest(
-            checkpoint.digest, expected
-        ):
-            raise PermissionError("checkpoint:invalid_hash")
+        authenticate_checkpoint(self._checkpoint_key, checkpoint, principal)
         key = (principal.user_id, principal.session_id)
         prior = self._restored.get(key)
         if prior is not None:
@@ -404,6 +430,22 @@ def seal_checkpoint(
     )
 
 
+def authenticate_checkpoint(
+    checkpoint_key: bytes,
+    checkpoint: CheckpointEnvelope,
+    principal: Principal,
+) -> None:
+    """Authenticate a checkpoint without consuming restore replay state."""
+    if (
+        checkpoint.principal_id != principal.user_id
+        or checkpoint.session_id != principal.session_id
+    ):
+        raise PermissionError("checkpoint:principal_mismatch")
+    expected = _checkpoint_digest(checkpoint_key, checkpoint)
+    if not checkpoint.digest or not hmac.compare_digest(checkpoint.digest, expected):
+        raise PermissionError("checkpoint:invalid_hash")
+
+
 def _checkpoint_digest(key: bytes, checkpoint: CheckpointEnvelope) -> str:
     encoded = json.dumps(
         {
@@ -427,6 +469,95 @@ def _checkpoint_digest(key: bytes, checkpoint: CheckpointEnvelope) -> str:
     return hmac.new(key, encoded, hashlib.sha256).hexdigest()
 
 
+def seal_store_resource(
+    store_key: bytes, resource: str, value: StoreResource
+) -> dict[str, Any]:
+    """Encode owner, labels, and value in a key-bound authenticated envelope."""
+    metadata = {
+        "version": 1,
+        "owner_id": value.owner_id,
+        "confidentiality": sorted(value.labels.confidentiality),
+        "integrity": value.labels.integrity,
+    }
+    metadata["digest"] = _store_resource_digest(
+        store_key, resource, metadata, value.value
+    )
+    return {
+        _STORE_ENVELOPE_METADATA: metadata,
+        _STORE_ENVELOPE_VALUE: value.value,
+    }
+
+
+def authenticate_store_resource(
+    store_key: bytes, resource: str, sealed: Any
+) -> StoreResource:
+    """Decode one backing-store value only after authenticating all metadata."""
+    if not isinstance(sealed, Mapping) or set(sealed) != {
+        _STORE_ENVELOPE_METADATA,
+        _STORE_ENVELOPE_VALUE,
+    }:
+        raise PermissionError("store:unverifiable_resource")
+    metadata = sealed[_STORE_ENVELOPE_METADATA]
+    value = sealed[_STORE_ENVELOPE_VALUE]
+    if not isinstance(metadata, Mapping) or set(metadata) != {
+        "version",
+        "owner_id",
+        "confidentiality",
+        "integrity",
+        "digest",
+    }:
+        raise PermissionError("store:malformed_resource_metadata")
+    owner_id = metadata["owner_id"]
+    confidentiality = metadata["confidentiality"]
+    integrity = metadata["integrity"]
+    digest = metadata["digest"]
+    if (
+        metadata["version"] != 1
+        or not isinstance(owner_id, str)
+        or not owner_id
+        or not isinstance(confidentiality, list)
+        or not all(isinstance(label, str) and label for label in confidentiality)
+        or len(confidentiality) != len(set(confidentiality))
+        or not isinstance(integrity, str)
+        or not integrity
+        or not isinstance(digest, str)
+    ):
+        raise PermissionError("store:malformed_resource_metadata")
+    expected = _store_resource_digest(store_key, resource, metadata, value)
+    if not hmac.compare_digest(digest, expected):
+        raise PermissionError("store:invalid_resource_authentication")
+    return StoreResource(
+        owner_id,
+        value,
+        SecurityLabels(frozenset(confidentiality), integrity),
+    )
+
+
+def _store_resource_digest(
+    key: bytes, resource: str, metadata: Mapping[str, Any], value: Any
+) -> str:
+    encoded = json.dumps(
+        {
+            "domain": "slanggraph-store-resource-v1",
+            "resource": resource,
+            "owner_id": metadata["owner_id"],
+            "confidentiality": metadata["confidentiality"],
+            "integrity": metadata["integrity"],
+            "value_hash": hashlib.sha256(
+                json.dumps(
+                    value,
+                    sort_keys=True,
+                    default=repr,
+                    separators=(",", ":"),
+                ).encode()
+            ).hexdigest(),
+        },
+        sort_keys=True,
+        separators=(",", ":"),
+    ).encode()
+    return hmac.new(key, encoded, hashlib.sha256).hexdigest()
+
+
 class MediatedStore(BaseStore):
     """Exact-key store facade that authorizes every operation through HostRouter."""
 
@@ -437,11 +568,15 @@ class MediatedStore(BaseStore):
         router: Any,
         principal: Principal,
         tool_name: str,
+        store_key: bytes,
     ) -> None:
+        if not store_key:
+            raise ValueError("store_key must be non-empty")
         self._store = store
         self._router = router
         self._principal = principal
         self._tool_name = tool_name
+        self._store_key = bytes(store_key)
         self.supports_ttl = store.supports_ttl
         self.ttl_config = store.ttl_config
 
@@ -450,7 +585,8 @@ class MediatedStore(BaseStore):
         effective = tuple(
             self._authorize(operation, asynchronous=False) for operation in operations
         )
-        return self._store.batch(effective)
+        results = self._store.batch(effective)
+        return self._authorize_results(operations, results, asynchronous=False)
 
     async def abatch(self, ops):
         operations = tuple(ops)
@@ -458,17 +594,46 @@ class MediatedStore(BaseStore):
             await self._authorize(operation, asynchronous=True)
             for operation in operations
         ]
-        return await self._store.abatch(tuple(effective))
+        results = await self._store.abatch(tuple(effective))
+        return await self._authorize_results(operations, results, asynchronous=True)
+
+    def _authorize_results(
+        self, operations: Sequence[Any], results: Sequence[Any], *, asynchronous: bool
+    ):
+        if len(operations) != len(results):
+            raise PermissionError("store:result_count_mismatch")
+        if asynchronous:
+            return _authorize_store_results_async(
+                operations,
+                results,
+                router=self._router,
+                principal=self._principal,
+                tool_name=self._tool_name,
+                store_key=self._store_key,
+            )
+        return [
+            _authorize_store_result(
+                operation,
+                result,
+                router=self._router,
+                principal=self._principal,
+                tool_name=self._tool_name,
+                store_key=self._store_key,
+            )
+            for operation, result in zip(operations, results, strict=True)
+        ]
 
     def _authorize(self, operation: Any, *, asynchronous: bool):
         if isinstance(operation, GetOp):
             state_operation = StateOperation.STORE_READ
             resource = _store_resource(operation.namespace, operation.key)
             value = None
+            metadata = {"preflight": True}
         elif isinstance(operation, PutOp):
             state_operation = StateOperation.STORE_WRITE
             resource = _store_resource(operation.namespace, operation.key)
             value = operation.value
+            metadata = {}
         elif isinstance(operation, (SearchOp, ListNamespacesOp)):
             raise PermissionError("store:enumeration_not_granted")
         else:
@@ -479,28 +644,145 @@ class MediatedStore(BaseStore):
             self._principal.user_id,
             tool_name=self._tool_name,
             value=value,
+            metadata=metadata,
         )
         if asynchronous:
             return _aeffective_store_operation(
-                operation, self._router.astate(self._principal, request)
+                operation,
+                self._router.astate(self._principal, request),
+                principal=self._principal,
+                resource=resource,
+                store_key=self._store_key,
             )
         return _effective_store_operation(
             operation,
             self._router.state(self._principal, request),
+            principal=self._principal,
+            resource=resource,
+            store_key=self._store_key,
         )
 
 
-def _effective_store_operation(operation: Any, routed: Any) -> Any:
+def _effective_store_operation(
+    operation: Any,
+    routed: Any,
+    *,
+    principal: Principal,
+    resource: str,
+    store_key: bytes,
+) -> Any:
     """Apply a narrowed write value; reads carry no value to transform."""
     if isinstance(operation, PutOp):
-        return (
-            operation if routed is operation.value else operation._replace(value=routed)
+        if routed is None:
+            return operation._replace(value=None)
+        if not isinstance(routed, Mapping):
+            raise PermissionError("store:invalid_effective_write_value")
+        sealed = seal_store_resource(
+            store_key,
+            resource,
+            StoreResource(principal.user_id, dict(routed)),
         )
+        return operation._replace(value=sealed)
     return operation
 
 
-async def _aeffective_store_operation(operation: Any, routed: Any) -> Any:
-    return _effective_store_operation(operation, await routed)
+async def _aeffective_store_operation(
+    operation: Any,
+    routed: Any,
+    *,
+    principal: Principal,
+    resource: str,
+    store_key: bytes,
+) -> Any:
+    return _effective_store_operation(
+        operation,
+        await routed,
+        principal=principal,
+        resource=resource,
+        store_key=store_key,
+    )
+
+
+def _authorize_store_result(
+    operation: Any,
+    result: Any,
+    *,
+    router: Any,
+    principal: Principal,
+    tool_name: str,
+    store_key: bytes,
+) -> Any:
+    if not isinstance(operation, GetOp):
+        return result
+    if result is None:
+        return None
+    if not isinstance(result, Item):
+        raise PermissionError("store:invalid_read_result")
+    if result.namespace != operation.namespace or result.key != operation.key:
+        raise PermissionError("store:result_identity_mismatch")
+    resource = _store_resource(result.namespace, result.key)
+    authoritative = authenticate_store_resource(store_key, resource, result.value)
+    effective = router.state(
+        principal,
+        StateRequest(
+            StateOperation.STORE_READ,
+            resource,
+            authoritative.owner_id,
+            tool_name=tool_name,
+            labels=authoritative.labels,
+            value=authoritative.value,
+            metadata={"store_envelope": result.value},
+        ),
+    )
+    return _effective_store_item(result, effective)
+
+
+async def _authorize_store_results_async(
+    operations: Sequence[Any],
+    results: Sequence[Any],
+    *,
+    router: Any,
+    principal: Principal,
+    tool_name: str,
+    store_key: bytes,
+) -> list[Any]:
+    authorized: list[Any] = []
+    for operation, result in zip(operations, results, strict=True):
+        if not isinstance(operation, GetOp) or result is None:
+            authorized.append(result)
+            continue
+        if not isinstance(result, Item):
+            raise PermissionError("store:invalid_read_result")
+        if result.namespace != operation.namespace or result.key != operation.key:
+            raise PermissionError("store:result_identity_mismatch")
+        resource = _store_resource(result.namespace, result.key)
+        authoritative = authenticate_store_resource(store_key, resource, result.value)
+        effective = await router.astate(
+            principal,
+            StateRequest(
+                StateOperation.STORE_READ,
+                resource,
+                authoritative.owner_id,
+                tool_name=tool_name,
+                labels=authoritative.labels,
+                value=authoritative.value,
+                metadata={"store_envelope": result.value},
+            ),
+        )
+        authorized.append(_effective_store_item(result, effective))
+    return authorized
+
+
+def _effective_store_item(item: Item, effective: Any) -> Item:
+    if not isinstance(effective, Mapping):
+        raise PermissionError("store:invalid_effective_read_value")
+    return Item(
+        value=dict(effective),
+        key=item.key,
+        namespace=item.namespace,
+        created_at=item.created_at,
+        updated_at=item.updated_at,
+    )
 
 
 def _state_key(

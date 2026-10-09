@@ -2389,7 +2389,8 @@ class ToolNode(RunnableCallable):
         """Expose only profile-declared channels to a secured tool."""
         principal = principal_from(runtime.config)
         router = self._security_object_router
-        if principal is None or router is None:
+        security_config = self._security_config
+        if principal is None or router is None or security_config is None:
             raise PermissionError("security:missing_object_context")
         dac = self._security_object_dacs.get(tool_name, ToolObjectDac())
         state = runtime.state
@@ -2433,6 +2434,7 @@ class ToolNode(RunnableCallable):
                 router=router,
                 principal=principal,
                 tool_name=tool_name,
+                store_key=(security_config.checkpoint_key or b""),
             )
 
         def stream_writer(delta: Any) -> None:

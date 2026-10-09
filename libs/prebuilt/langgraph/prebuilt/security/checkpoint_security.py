@@ -20,7 +20,10 @@ from langgraph.checkpoint.base import (
 
 from langgraph.prebuilt.security.binding import principal_from
 from langgraph.prebuilt.security.host_router import HostRouter
-from langgraph.prebuilt.security.object_manager import seal_checkpoint
+from langgraph.prebuilt.security.object_manager import (
+    authenticate_checkpoint,
+    seal_checkpoint,
+)
 from langgraph.prebuilt.security.objects import StateOperation, StateRequest
 from langgraph.prebuilt.security.types import Principal
 
@@ -75,12 +78,13 @@ class MediatedCheckpointer(BaseCheckpointSaver):
             ),
         )
         options = _checkpoint_options(effective)
-        yield from self.inner.list(
+        for value in self.inner.list(
             config,
             filter=options["filter"],
             before=options["before"],
             limit=options["limit"],
-        )
+        ):
+            yield self._verify_history(config, value)
 
     async def alist(
         self,
@@ -109,7 +113,7 @@ class MediatedCheckpointer(BaseCheckpointSaver):
             before=options["before"],
             limit=options["limit"],
         ):
-            yield value
+            yield await self._averify_history(config, value)
 
     def put(
         self,
@@ -320,6 +324,50 @@ class MediatedCheckpointer(BaseCheckpointSaver):
         )
         return value._replace(checkpoint=effective)
 
+    def _verify_history(
+        self, config: RunnableConfig, value: CheckpointTuple
+    ) -> CheckpointTuple:
+        principal = _principal(config)
+        envelope = _envelope(value, principal)
+        authenticate_checkpoint(self.checkpoint_key, envelope, principal)
+        value = self._verify_pending_writes(value, principal)
+        resource = _history_resource(config, value, envelope.checkpoint_id)
+        effective = _history_checkpoint(
+            self.router.state(
+                principal,
+                StateRequest(
+                    StateOperation.CHECKPOINT_READ,
+                    resource,
+                    principal.user_id,
+                    value=envelope.payload,
+                ),
+            ),
+            envelope.checkpoint_id,
+        )
+        return value._replace(checkpoint=effective)
+
+    async def _averify_history(
+        self, config: RunnableConfig, value: CheckpointTuple
+    ) -> CheckpointTuple:
+        principal = _principal(config)
+        envelope = _envelope(value, principal)
+        authenticate_checkpoint(self.checkpoint_key, envelope, principal)
+        value = self._verify_pending_writes(value, principal)
+        resource = _history_resource(config, value, envelope.checkpoint_id)
+        effective = _history_checkpoint(
+            await self.router.astate(
+                principal,
+                StateRequest(
+                    StateOperation.CHECKPOINT_READ,
+                    resource,
+                    principal.user_id,
+                    value=envelope.payload,
+                ),
+            ),
+            envelope.checkpoint_id,
+        )
+        return value._replace(checkpoint=effective)
+
     def _write_witness(
         self,
         config: RunnableConfig,
@@ -437,13 +485,17 @@ def _checkpoint_id(config: RunnableConfig) -> str:
 
 
 def _checkpoint_resource(config: RunnableConfig, suffix: str) -> str:
+    return f"checkpoint:{_thread_id(config)}:{suffix}"
+
+
+def _thread_id(config: RunnableConfig) -> str:
     configurable = config.get("configurable")
     thread_id = (
         configurable.get("thread_id") if isinstance(configurable, dict) else None
     )
     if not isinstance(thread_id, str) or not thread_id:
         raise PermissionError("checkpoint:missing_thread_id")
-    return f"checkpoint:{thread_id}:{suffix}"
+    return thread_id
 
 
 def _checkpoint(value: Any) -> Checkpoint:
@@ -453,6 +505,28 @@ def _checkpoint(value: Any) -> Checkpoint:
     if not isinstance(checkpoint_id, str) or not checkpoint_id:
         raise PermissionError("checkpoint:invalid_effective_value")
     return cast(Checkpoint, value)
+
+
+def _history_checkpoint(value: Any, checkpoint_id: str) -> Checkpoint:
+    effective = _checkpoint(value)
+    if effective["id"] != checkpoint_id:
+        raise PermissionError("checkpoint:history_identity_mismatch")
+    return effective
+
+
+def _history_resource(
+    config: RunnableConfig, value: CheckpointTuple, checkpoint_id: str
+) -> str:
+    requested_thread = _thread_id(config)
+    if _thread_id(value.config) != requested_thread:
+        raise PermissionError("checkpoint:history_identity_mismatch")
+    configurable = value.config.get("configurable")
+    returned_id = (
+        configurable.get("checkpoint_id") if isinstance(configurable, dict) else None
+    )
+    if returned_id != checkpoint_id:
+        raise PermissionError("checkpoint:history_identity_mismatch")
+    return f"checkpoint:{requested_thread}:{checkpoint_id}"
 
 
 def _checkpoint_options(value: Any) -> dict[str, Any]:
