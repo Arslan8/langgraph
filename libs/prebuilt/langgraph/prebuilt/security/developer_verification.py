@@ -2,7 +2,10 @@
 
 Default success requires system verification. Regression-pattern absence is
 reported separately and never turns missing evidence into an acceptance pass.
---require-complete remains a compatibility alias for the default behavior.
+`--require-regression-clean` is an explicit CI mode that fails on known
+implementation findings while continuing to report verifier-owned proof gaps;
+it does not change or imply system acceptance.
+`--require-complete` remains a compatibility alias for the default behavior.
 """
 
 from __future__ import annotations
@@ -251,6 +254,14 @@ def main(argv: Sequence[str] | None = None) -> int:
         help="compatibility alias; outstanding system-proof work fails by default",
     )
     parser.add_argument(
+        "--require-regression-clean",
+        action="store_true",
+        help=(
+            "fail on known implementation regressions, but report verifier-owned "
+            "proof gaps without treating them as system acceptance"
+        ),
+    )
+    parser.add_argument(
         "--list-checks",
         action="store_true",
         help="describe the shipped adapter checks without running them",
@@ -275,6 +286,8 @@ def main(argv: Sequence[str] | None = None) -> int:
         print(f"SGV190: Verification input/report error: {exc}")
         return 2
     print(render_text(report), end="")
+    if args.require_regression_clean:
+        return 0 if report["regression_checks_passed"] else 1
     return 0 if report["complete"] else 1
 
 

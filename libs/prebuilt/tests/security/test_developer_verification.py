@@ -78,6 +78,19 @@ def test_cli_exit_contract_and_json(monkeypatch, tmp_path, evidence, strict, exp
     assert json.loads(output.read_text())["complete"] is False
 
 
+def test_regression_clean_mode_does_not_claim_completeness(
+    monkeypatch, tmp_path, evidence
+):
+    monkeypatch.setattr(gate, "verify_layers", lambda repo: evidence)
+    output = tmp_path / "report.json"
+    assert gate.main(["--require-regression-clean", "--output", str(output)]) == 0
+    report = json.loads(output.read_text())
+    assert report["regression_checks_passed"]
+    assert not report["acceptance_passed"]
+    evidence["placement"]["issues"] = ["missing source"]
+    assert gate.main(["--require-regression-clean"]) == 1
+
+
 def test_forged_top_level_success_cannot_hide_missing_proofs(evidence):
     evidence["complete"] = True
     report = gate.developer_report(evidence)

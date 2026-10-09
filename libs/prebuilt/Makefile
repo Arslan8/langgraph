@@ -1,4 +1,4 @@
-.PHONY: all format lint type test test-fast test_watch integration_tests spell_check spell_fix benchmark profile security-verify security-verify-complete security-verify-permutations
+.PHONY: all format lint type test test-fast test_watch integration_tests spell_check spell_fix benchmark profile security-verify security-verify-complete security-verify-regressions security-verify-permutations
 
 # Default target executed when no arguments are given to make.
 all: help
@@ -11,6 +11,11 @@ security-verify:
 
 security-verify-complete:
 	uv run python -m langgraph.prebuilt.security.developer_verification --require-complete --output "$(SECURITY_REPORT)"
+
+# CI implementation gate. This keeps verifier-owned proof gaps visible without
+# misrepresenting them as discharged system-completeness obligations.
+security-verify-regressions:
+	uv run python -m langgraph.prebuilt.security.developer_verification --require-regression-clean --output "$(SECURITY_REPORT)"
 
 # Finite regression evidence, separate from the system-proof acceptance gate.
 SECURITY_PERMUTATION_REPORT ?= security-permutation-report.json

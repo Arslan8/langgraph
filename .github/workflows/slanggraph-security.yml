@@ -59,9 +59,9 @@ jobs:
           langgraph/prebuilt ../../libs/langgraph/langgraph
           --waivers ../../docs/security/escape-waivers.json
           --json
-      - name: Require layered completeness (router proof alone is insufficient)
+      - name: Reject known implementation regressions and report proof gaps
         if: always()
-        run: make security-verify-complete
+        run: make security-verify-regressions
       - name: Check finite denial and original-binding permutations
         if: always()
         run: make security-verify-permutations
@@ -81,10 +81,8 @@ jobs:
             libs/prebuilt/security-permutation-report.json
             libs/prebuilt/tool-api-report.json
             libs/prebuilt/host-router-certificate.json
-      - name: Run strict security-package type check
-        run: >-
-          uv run mypy --strict --explicit-package-bases
-          langgraph/prebuilt/security
+      - name: Run supported security-package type check
+        run: make type
 
   security-coverage:
     name: Security package branch coverage

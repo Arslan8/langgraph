@@ -8,6 +8,13 @@ From `libs/prebuilt`, run:
 make security-verify
 ```
 
+CI uses `make security-verify-regressions` to reject every known
+implementation-owned finding while still emitting the unresolved
+verifier-owned proof gaps. This mode does not set `acceptance_passed` and is not
+a system-completeness claim. `make security-verify` and
+`make security-verify-complete` remain the strict acceptance gates and fail
+until all proof obligations are discharged.
+
 This source-only command recomputes the router proof and adapter checks,
 prints an actionable repair queue, and writes `security-verification-report.json`.
 Each finding has a stable rule ID, source location, structural fingerprint,
