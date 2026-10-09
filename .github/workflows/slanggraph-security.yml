@@ -101,6 +101,9 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install --yes bubblewrap libseccomp2
+          if [ "$(sysctl -n kernel.apparmor_restrict_unprivileged_userns 2>/dev/null || true)" = "1" ]; then
+            sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0
+          fi
       - name: Enforce security-package branch coverage
         # Ratchet from the measured phase-one branch-coverage baseline.
         run: >-
