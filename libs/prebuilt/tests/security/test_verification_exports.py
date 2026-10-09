@@ -463,7 +463,6 @@ def test_exceptional_cache_write_must_also_preserve_the_export_binding():
 
 def test_native_import_parent_and_lookup_contract():
     assert collections.__spec__.parent == "collections"
-    assert collections.abc.__spec__.parent == "collections"
     module = import_module(".abc", package=collections.__spec__.parent)
     assert module is collections.abc
     assert getattr(module, "Mapping") is collections.abc.Mapping

@@ -192,6 +192,7 @@ class LandlockSandboxExecutor:
         python = Path(python_executable or sys.executable).resolve()
         if not python.is_file():
             raise ValueError("python_executable must resolve to a file")
+        python_runtime_root = python.parent.parent
         roots = tuple(_canonical_existing_path(item) for item in runtime_roots)
         if not roots:
             raise ValueError("at least one runtime root is required")
@@ -225,6 +226,7 @@ class LandlockSandboxExecutor:
         )
         self.policy_backend = policy_backend or CedarPolicyBackend()
         self.python_executable = python
+        self.python_runtime_root = python_runtime_root
         self.worker_script = Path(__file__).with_name("_linux_worker.py").resolve()
         self.python_digest = _file_digest(python)
         self.worker_digest = _file_digest(self.worker_script)
@@ -401,7 +403,7 @@ class LandlockSandboxExecutor:
                     raise HostExecutionDenied("host:cgroup_assignment_failed") from exc
             try:
                 pidfd = os.pidfd_open(process.pid)
-            except OSError:
+            except (AttributeError, OSError):
                 pidfd = None
             ruleset.close()
             if process.stdin is None or process.stdout is None:
@@ -536,6 +538,12 @@ class LandlockSandboxExecutor:
             ("runtime:worker", "read", os.fspath(self.worker_script), False),
             ("runtime:artifact", "read", os.fspath(spec.artifact_path), False),
             ("runtime:interpreter", "read", os.fspath(self.python_executable), False),
+            (
+                "runtime:interpreter-root",
+                "read",
+                os.fspath(self.python_runtime_root),
+                True,
+            ),
         ]
         paths.extend(
             (f"runtime:root:{index}", "read", os.fspath(root), root.is_dir())
@@ -850,7 +858,7 @@ def _add_rule(
                         SupportLevel.UNSUPPORTED,
                         "device baseline requires ABI 5",
                     )
-                access = _IOCTL_DEV
+                access = _READ_FILE | _IOCTL_DEV
             if rule.operation in {"create", "delete"} and not stat.S_ISDIR(mode):
                 return RuleLowering(
                     rule.rule_id,

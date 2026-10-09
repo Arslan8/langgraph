@@ -165,6 +165,7 @@ class LinuxSandboxExecutor:
         python = Path(python_executable or sys.executable).resolve()
         if not python.is_file():
             raise ValueError("python_executable must resolve to an existing file")
+        python_runtime_root = python.parent.parent
         roots = tuple(_canonical_existing_path(item) for item in runtime_roots)
         if not roots:
             raise ValueError("at least one explicit runtime root is required")
@@ -224,6 +225,7 @@ class LinuxSandboxExecutor:
         self.policy_backend = policy_backend or CedarPolicyBackend()
         self.bubblewrap_path = bwrap
         self.python_executable = python
+        self.python_runtime_root = python_runtime_root
         self._worker_script = Path(__file__).with_name("_linux_worker.py").resolve()
         self._python_digest = _file_digest(self.python_executable)
         self._worker_digest = _file_digest(self._worker_script)
@@ -443,6 +445,13 @@ class LinuxSandboxExecutor:
                 baseline=True,
             ),
             GrantRule(
+                "runtime:urandom",
+                AuthorityDomain.RUNTIME,
+                "read",
+                "/dev/urandom",
+                baseline=True,
+            ),
+            GrantRule(
                 "runtime:worker",
                 AuthorityDomain.RUNTIME,
                 "read",
@@ -464,6 +473,14 @@ class LinuxSandboxExecutor:
                 "read",
                 os.fspath(self.python_executable),
                 {"sha256": self._python_digest},
+                baseline=True,
+            ),
+            GrantRule(
+                "runtime:interpreter-root",
+                AuthorityDomain.RUNTIME,
+                "read",
+                os.fspath(self.python_runtime_root),
+                {"subtree": True},
                 baseline=True,
             ),
             GrantRule(
@@ -866,6 +883,10 @@ class LinuxSandboxExecutor:
                 raise HostExecutionDenied("host:noncanonical_mount")
             if canonical.is_dir() and _nested_mount_points(canonical):
                 raise HostExecutionDenied("host:nested_mount_changed")
+            if path == "/dev/urandom":
+                destinations.add(path)
+                mount_args.extend(["--dev-bind", path, path])
+                continue
             descriptor = (
                 artifact_descriptor
                 if canonical == spec.artifact_path
@@ -1212,6 +1233,12 @@ def _assess_path_obligation(
         path = _canonical_existing_path(obligation.selector)
     except (OSError, ValueError):
         return SupportLevel.UNSUPPORTED, "path_missing_or_noncanonical"
+    if (
+        obligation.domain is AuthorityDomain.RUNTIME
+        and obligation.operation == "read"
+        and path == Path("/dev/urandom")
+    ):
+        return SupportLevel.EXACT, "stable_urandom_bind_mount"
     if not _is_supported_mount_type(path):
         return SupportLevel.UNSUPPORTED, "special_file_requires_broker"
     if path.is_dir() and not bool(obligation.conditions.get("subtree")):

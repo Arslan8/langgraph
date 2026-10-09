@@ -308,7 +308,7 @@ principal alice {
         {"github": handler},
     )
     runtime_roots = tuple(
-        Path(item)
+        Path(item).resolve()
         for item in (fixture.parent, *sys.path)
         if item and Path(item).exists()
     )

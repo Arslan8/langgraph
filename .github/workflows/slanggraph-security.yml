@@ -97,6 +97,10 @@ jobs:
           working-directory: libs/prebuilt
       - name: Install dependencies
         run: uv sync --frozen --group test --no-dev
+      - name: Install Linux sandbox dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install --yes bubblewrap libseccomp2
       - name: Enforce security-package branch coverage
         # Ratchet from the measured phase-one branch-coverage baseline.
         run: >-
