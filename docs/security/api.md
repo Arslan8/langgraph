@@ -196,6 +196,16 @@ constraint interface above. See [resource boundaries](users/resource-boundary.md
 | `ResourceAllowance` | Maximum filesystem operations for one exact path or subtree inside the scope. |
 | `resource_path` | Normalizes a policy selector with the `.slp` path grammar and the `realpath` argument normalizer. |
 
+`ConfinementPolicy` builds AppArmor-style, tool-attached profiles on the same
+forbid-only interface. It is framework policy rather than a Linux AppArmor
+profile; native enforcement is still supplied by the configured host executor.
+
+| Name | Purpose |
+| --- | --- |
+| `ConfinementDeny` | One named typed deny rule over a grant domain, operation, selector, and conditions. |
+| `ConfinementProfile` | Versioned tool attachment with a default-deny path scope, path permission ceilings, and explicit deny rules. |
+| `ConfinementPolicy` | Mandatory module that intersects every matching wildcard and tool-specific profile and denies unprofiled tools by default. |
+
 Session IFC uses a conservative program-counter label: after a classified source
 may run, the entire session remains at least that sensitive. This deliberately
 over-taints model context and graph state so it does not depend on inference.

@@ -32,6 +32,11 @@ from langgraph.prebuilt.security.cedar import CedarPolicyBackend
 from langgraph.prebuilt.security.check import ProfileSupport, check_profiles
 from langgraph.prebuilt.security.checkpoint_security import MediatedCheckpointer
 from langgraph.prebuilt.security.config import SecurityConfig
+from langgraph.prebuilt.security.confinement import (
+    ConfinementDeny,
+    ConfinementPolicy,
+    ConfinementProfile,
+)
 from langgraph.prebuilt.security.dac import dac_check
 from langgraph.prebuilt.security.descriptor import (
     NORMALIZERS,
@@ -248,6 +253,9 @@ __all__ = (
     "CheckpointEnvelope",
     "Confidentiality",
     "ConstructiveGrant",
+    "ConfinementDeny",
+    "ConfinementPolicy",
+    "ConfinementProfile",
     "CredentialBroker",
     "CredentialIssuer",
     "DacOverrides",
