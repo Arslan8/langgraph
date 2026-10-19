@@ -416,6 +416,7 @@ class ToolCall:
     call_id: str
     call_index: int
     history: Sequence[AuditRecord] = ()
+    execution_binding: Mapping[str, Any] = field(default_factory=dict)
 
     def __post_init__(self) -> None:
         if not self.call_id or self.call_index < 0:
@@ -423,3 +424,6 @@ class ToolCall:
         object.__setattr__(self, "args", MappingProxyType(dict(self.args)))
         object.__setattr__(self, "normalized", MappingProxyType(dict(self.normalized)))
         object.__setattr__(self, "history", tuple(self.history))
+        object.__setattr__(
+            self, "execution_binding", MappingProxyType(dict(self.execution_binding))
+        )

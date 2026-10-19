@@ -747,6 +747,7 @@ class SecurityStack:
             "args": dict(call.args),
             "call_id": call.call_id,
             "delegated_by": principal.delegated_by,
+            "execution_binding": dict(call.execution_binding),
             "module": module.name,
             "normalized": dict(call.normalized),
             "roles": sorted(principal.roles),

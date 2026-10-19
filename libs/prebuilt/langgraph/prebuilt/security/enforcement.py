@@ -106,6 +106,8 @@ class Grant:
     normalized_intent_digest: str
     policy_digest: str
     rules: tuple[GrantRule, ...]
+    deployment_digest: str = ""
+    runtime_digest: str = ""
 
     def __post_init__(self) -> None:
         identifiers = (
@@ -140,6 +142,16 @@ class Grant:
                 ],
                 "session_id": self.session_id,
                 "tool_name": self.tool_name,
+                **(
+                    {"deployment_digest": self.deployment_digest}
+                    if self.deployment_digest
+                    else {}
+                ),
+                **(
+                    {"runtime_digest": self.runtime_digest}
+                    if self.runtime_digest
+                    else {}
+                ),
             }
         )
 
@@ -215,6 +227,8 @@ def compile_grant(
     normalized_intent_digest: str,
     policy_digest: str,
     baseline_rules: Sequence[GrantRule] = (),
+    deployment_digest: str = "",
+    runtime_digest: str = "",
 ) -> GrantCompilation:
     """Materialize an attributed, exact grant from a successful DAC result."""
     if evaluation.denied:
@@ -356,6 +370,8 @@ def compile_grant(
         normalized_intent_digest,
         policy_digest,
         tuple(rules),
+        deployment_digest,
+        runtime_digest,
     )
     ledger = RequirementLedger(
         tuple(
@@ -743,6 +759,9 @@ class ActivationReceipt:
     activated_obligations: frozenset[str]
     valid_until: float
     rule_enforcement: tuple[RuleEnforcement, ...] = ()
+    artifact_digest: str = ""
+    deployment_digest: str = ""
+    runtime_digest: str = ""
 
     def __post_init__(self) -> None:
         if self.valid_until <= 0:
@@ -783,6 +802,17 @@ class ActivationReceipt:
                 )
             ],
             "valid_until": self.valid_until,
+            **(
+                {"artifact_digest": self.artifact_digest}
+                if self.artifact_digest
+                else {}
+            ),
+            **(
+                {"deployment_digest": self.deployment_digest}
+                if self.deployment_digest
+                else {}
+            ),
+            **({"runtime_digest": self.runtime_digest} if self.runtime_digest else {}),
         }
 
     @property
@@ -925,6 +955,9 @@ class EnforcementCoordinator:
                 if assignment.obligation_id.startswith("rule:")
                 and assignment.obligation_id.endswith(":operate")
             ),
+            grant.artifact_digest,
+            grant.deployment_digest,
+            grant.runtime_digest,
         )
 
     def validate_receipt(
@@ -949,6 +982,9 @@ class EnforcementCoordinator:
             or receipt.host_digest != host.digest
             or receipt.context_digest != context.digest
             or receipt.mode is not plan.mode
+            or receipt.artifact_digest != grant.artifact_digest
+            or receipt.deployment_digest != grant.deployment_digest
+            or receipt.runtime_digest != grant.runtime_digest
         ):
             return False
         expected = {assignment.obligation_id for assignment in plan.assignments}

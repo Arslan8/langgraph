@@ -1268,6 +1268,7 @@ def test_worker_cleanup_is_independent_and_preserves_active_error(
     executor = object.__new__(LinuxSandboxExecutor)
     executor._termination_lock = RLock()
     executor._unresolved = {}
+    executor._recovery_leases = {}
     process = Mock()
     process.poll.side_effect = RuntimeError("poll failed")
     process.kill.side_effect = RuntimeError("kill failed")
@@ -1300,6 +1301,7 @@ def test_worker_cleanup_is_independent_and_preserves_active_error(
         artifact_directory=tmp_path,
         host=Mock(boot_id="boot"),
         receipt=receipt,
+        leases=(),
         active_error=active_error,
     )
 

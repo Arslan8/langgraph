@@ -502,6 +502,48 @@ def test_escalation_subject_binds_normalized_intent() -> None:
     assert first.escalation.subject_digest != second.escalation.subject_digest
 
 
+def test_escalation_subject_binds_executable_deployment() -> None:
+    """An approval for one selected commit cannot authorize another commit."""
+    module = FixedModule(
+        "review",
+        Decision(
+            Verdict.ESCALATE,
+            "review",
+            escalation=EscalationRequest("request", "review", "read_file", "call"),
+        ),
+    )
+    stack = SecurityStack([module])
+    try:
+        first = stack.permission(
+            _principal(),
+            ToolCall(
+                _call().tool,
+                {"path": "/safe"},
+                {"path": "/safe"},
+                "call",
+                0,
+                execution_binding={"tool_commit": "a" * 64},
+            ),
+        )
+        second = stack.permission(
+            _principal(),
+            ToolCall(
+                _call().tool,
+                {"path": "/safe"},
+                {"path": "/safe"},
+                "call",
+                0,
+                execution_binding={"tool_commit": "b" * 64},
+            ),
+        )
+    finally:
+        stack.close()
+
+    assert first.escalation is not None
+    assert second.escalation is not None
+    assert first.escalation.subject_digest != second.escalation.subject_digest
+
+
 def test_expired_approval_cannot_match() -> None:
     """Approval expiry is enforced during the resumed permission check."""
     call = _call()

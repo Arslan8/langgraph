@@ -1,0 +1,7 @@
+{
+  "format_version": 1,
+  "tool_id": "demo",
+  "entrypoint": "tool:run",
+  "primary_file": "tool.py",
+  "import_roots": ["."]
+}

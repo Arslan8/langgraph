@@ -145,7 +145,18 @@ TCB component and must pass its platform contract suite.
 | `HostExecutionResult` | Successful host result paired with the verified receipt that must enter durable audit before its value is accepted. |
 | `HostToolExecutor` | Portable execution bridge used by `ToolNode` and `guarded_tool` after authorization. |
 | `LinuxSandboxExecutor` | Linux implementation that lowers supported filesystem and resource grants into a fresh bubblewrap worker. Before releasing the startup barrier, it verifies the payload process's namespace, capability, seccomp, no-new-privileges, thread, mount-table, credential, and process state. Frames are capped at 1 MiB, response structure is bounded, and termination is confirmed by boot ID, PID, and start time. The defaults name `RLIMIT_AS` as `address_space_bytes` and per-file `RLIMIT_FSIZE` as `file_size_bytes`; profile `memory_bytes` is unsupported. `activation_receipts()` exposes a bounded operational snapshot. |
-| `LinuxToolSpec` | Trusted manifest binding a tool name to an importable entry point and operator-verified primary-source digest. Dependencies and runtime roots are not covered by this digest; they enter `sys.path` only after confinement. |
+| `LinuxToolSpec` | Trusted manifest binding a tool name to an importable entry point and operator-verified primary-source digest. `from_deployment` and `from_selection` additionally bind validated OSTree content before authorization. Legacy dependencies and runtime roots are not covered by the primary digest; they enter `sys.path` only after confinement. |
+| `BundleManifest` | Closed versioned `bundle.json` schema naming the tool, entry point, primary file, import roots, and optional dependency lock. |
+| `CleanupReport` | Reference-aware cleanup result listing retained commits and removed materialized checkouts. |
+| `DeploymentBinding` | Framework-owned exact tool commit, manifest digest, and primary artifact digest selected before preparation and approval. |
+| `DeploymentError` | Fail-closed publication, selection, checkout-validation, or recovery failure. |
+| `DeploymentLease` | Durable set of exact commits retained while a worker is live or termination remains uncertain. |
+| `RuntimeManifest` | Closed manifest naming a runtime identity, interpreter, and import roots supplied by an OSTree root. |
+| `RuntimeBinding` | Exact runtime commit and manifest digest included in approval, grant, and activation identities. |
+| `RuntimeDeployment` | Validated runtime-root checkout with host and guest interpreter locations. |
+| `ToolDeployment` | Validated exact-commit checkout with its manifest, authority binding, primary source, and import roots. |
+| `TrustedRemote` | Immutable operator-approved remote identity containing its URL and pinned public-key digest. |
+| `OstreeDeploymentManager` | Trusted publisher, immutable-release selector, verified remote importer, channel manager, force-copy materializer, checkout validator, durable per-call binding store, and reference-aware cleanup coordinator. |
 | `LinuxCapabilities` | Direct per-boot probe result for Landlock ABI, cgroup v2 delegation and `cgroup.kill`, unprivileged user namespaces, BPF LSM, Landlock audit, and pidfd support. |
 | `probe_landlock_abi` | Calls `landlock_create_ruleset(NULL, 0, LANDLOCK_CREATE_RULESET_VERSION)` and returns the kernel-reported ABI number. |
 | `probe_linux_capabilities` | Runs the direct host capability probes used by checks and execution attestation. |

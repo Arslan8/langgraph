@@ -1028,6 +1028,27 @@ class ToolNode(RunnableCallable):
             call_index,
             history,
         )
+        binder = getattr(self._security_host_executor, "bind_call", None)
+        if binder is not None:
+            try:
+                bound_call = binder(principal, security_call)
+            except Exception:
+                decision = Decision(Verdict.DENY, "host:deployment_binding_failed")
+                self._audit_security(principal, security_call, "prepare", decision)
+                return decision, request, security_call
+            if (
+                not isinstance(bound_call, SecurityToolCall)
+                or bound_call.tool != security_call.tool
+                or bound_call.args != security_call.args
+                or bound_call.normalized != security_call.normalized
+                or bound_call.call_id != security_call.call_id
+                or bound_call.call_index != security_call.call_index
+                or bound_call.history != security_call.history
+            ):
+                decision = Decision(Verdict.DENY, "host:invalid_execution_binding")
+                self._audit_security(principal, security_call, "prepare", decision)
+                return decision, request, security_call
+            security_call = bound_call
         prepared, security_call = stack.prepare(principal, security_call)
         if prepared.verdict is not Verdict.ALLOW:
             self._audit_security(principal, security_call, "prepare", prepared)

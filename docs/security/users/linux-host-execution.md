@@ -144,6 +144,153 @@ The snapshot is bounded to the most recent 1,024 receipts and is not an audit
 archive. Production deployments must use `SqliteAuditSink` and retain externally
 witnessed chain seals.
 
+## Versioned OSTree tool deployments
+
+Use `OstreeDeploymentManager` when executable identity must cover imported
+helpers, packaged dependencies, and read-only tool data in addition to the
+primary source file. The manager uses a local `bare-user-only` OSTree
+repository, rejects symlinks and special files, normalizes bundle modes, and
+publishes exact commits under immutable release refs. It retains all releases
+and materialized checkouts; automated pruning is intentionally unsupported.
+
+Each source tree contains `bundle.json`:
+
+```json
+{
+  "format_version": 1,
+  "tool_id": "demo",
+  "entrypoint": "tool:run",
+  "primary_file": "tool.py",
+  "import_roots": ["."],
+  "dependency_lock": "requirements.lock"
+}
+```
+
+`dependency_lock` is optional. All paths are normalized relative POSIX paths.
+The primary file, import roots, and optional lock must exist. Publication
+rejects path traversal, duplicate or unknown manifest fields, symlinks,
+privileged mode bits, devices, sockets, FIFOs, and a source tree that changes
+while it is copied.
+
+```python
+from pathlib import Path
+
+from langgraph.prebuilt.security import (
+    LinuxSandboxExecutor,
+    LinuxToolSpec,
+    OstreeDeploymentManager,
+)
+
+manager = OstreeDeploymentManager(Path("/var/lib/slanggraph/tools"))
+release = manager.publish_bundle(
+    Path("./demo-bundle"), "tools/demo/releases/2026-10-18"
+)
+manager.update_channel("tools/demo/stable", release.binding.tool_commit)
+
+executor = LinuxSandboxExecutor(
+    profiles,
+    {
+        "demo": LinuxToolSpec.from_selection(
+            manager,
+            tool_id="demo",
+            selection="tools/demo/stable",
+        )
+    },
+    runtime_roots=(Path("/opt/slanggraph/runtime"),),
+)
+```
+
+For every new physical call, the host selects the channel before policy
+preparation and records the exact commit in the manager's operator-controlled
+binding database. The approval subject includes that binding. Replaying an
+approval, retrying the call, or restoring it after restart therefore recovers
+the original commit instead of resolving the channel again. A different call
+may select a newly published channel value.
+
+The grant retains `artifact_digest` as the primary-file SHA-256 and separately
+binds the full OSTree commit as `deployment_digest`. Both values are included
+in activation receipts and durable activation audit evidence. The checkout is
+mounted read-only by descriptor, and validated bundle import roots precede
+operator-configured fixed runtime roots. Imported bundle files execute only
+after the existing `GO` barrier.
+
+The repository, checkout parent, and selection database must remain controlled
+by the trusted operator account. Read-only modes and the worker's read-only
+mount prevent worker modification, but they do not defend against a malicious
+process with the deployment manager's own host identity. Production systems
+should put that identity in a separate service account or privilege boundary.
+Configure a durable graph checkpointer and reuse an operator-managed
+`SecurityConfig.checkpoint_key` across restarts; the deployment database does
+not replace checkpoint principal, session, and ancestry authentication.
+The deployment regression suite interrupts a call for approval, closes its
+SQLite checkpointer, moves the channel, reconstructs the manager, executor, and
+graph, and verifies that the authenticated resume still executes the original
+commit.
+
+Remote ingestion is opt-in. `configure_remote` copies an operator-selected GPG
+public key into the protected manager root, records its digest and immutable
+remote URL, and configures OSTree commit verification. `pull_verified_release`
+and `pull_verified_runtime_release` accept content only from such a remote,
+request bare-user-only file checks, validate and materialize the fetched tree,
+and create the local immutable release ref only after those checks succeed. A
+checksum without this trusted publisher configuration is not accepted as
+remote publication authority.
+
+Cleanup is explicit and reference-aware. `release_invocation` removes one
+completed principal/session/tool/call reference only when the supplied exact
+binding matches. `retire_release` refuses to remove a release still named by an
+invocation. `cleanup` retains every commit reachable from an OSTree ref or the
+durable binding database, removes only other checkouts, and then asks OSTree to
+prune objects unreachable from refs. Prepared, pending-approval, retried, and
+suspended calls therefore retain their deployments until an operator declares
+the invocation complete. Channel refs also retain their current target. The
+executor additionally creates a durable `DeploymentLease` immediately before
+worker launch. Normal confirmed termination releases it; indeterminate
+termination retains it with the recovery record. `active_leases` lets an
+operator reconcile those conservative records after supervisor restart, and
+cleanup treats every leased commit as reachable even if an invocation or
+release is finalized concurrently.
+
+### Independently versioned runtimes
+
+A runtime root contains `runtime.json`, the selected interpreter, its standard
+library, native libraries, and explicitly required runtime data. The closed
+manifest has `format_version`, `runtime_id`, a relative `interpreter`, and
+relative `import_roots`. Runtime publication preserves only normalized
+read-only or read-executable regular files and rejects symlinks, special files,
+and privileged bits.
+
+Publish it with `publish_runtime`, then pass the resulting
+`RuntimeDeployment` and its manager to
+`LinuxSandboxExecutor.runtime_deployment` and `runtime_manager`, optionally set
+`runtime_selection` to a trusted runtime channel, and pass an empty
+`runtime_roots` sequence. The manager resolves that channel before security
+preparation and retains the exact runtime commit under the same
+principal/session/call identity used for the tool deployment. At launch, the
+executor mounts each committed
+top-level runtime directory into the guest root by verified read-only
+descriptor and starts the guest interpreter path. It does not mount host
+`/usr`, `/lib`, or `/lib64` in this mode. The worker receives only the runtime's
+declared guest import roots. Reserved mutable or kernel-backed roots such as
+`/tmp`, `/dev`, `/proc`, and `/sys` cannot be supplied by a runtime; the adapter
+creates its private `/tmp` and narrowly binds `/dev/urandom` itself.
+
+The complete approval subject contains both the tool and runtime bindings. The
+grant and activation receipt record the tool commit as `deployment_digest` and
+the runtime commit as `runtime_digest`. The interpreter bytes are also measured
+in host attestation. To update a runtime, publish and materialize the new
+runtime release and move the trusted runtime channel with
+`update_runtime_channel`. New calls select the new value. Prepared,
+pending-approval, retried, and checkpoint-restored calls recover their original
+runtime even when a restarted executor seeds itself from the moved channel.
+
+The trusted worker shim remains operator code outside the runtime commit and is
+mounted separately only after its digest is checked. Kernel enforcement
+capabilities remain host evidence and continue through normal negotiation.
+
+See [OSTree deployment measurements](../ostree-deployment-measurements.md) for
+the initial A/B fixture costs and measurement boundary.
+
 ## Supported authority
 
 The reference adapter currently supports:

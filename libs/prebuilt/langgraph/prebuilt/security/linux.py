@@ -27,6 +27,15 @@ from typing import Any
 
 from langgraph.prebuilt.security.capabilities import probe_linux_capabilities
 from langgraph.prebuilt.security.cedar import CedarPolicyBackend
+from langgraph.prebuilt.security.deployment import (
+    DeploymentBinding,
+    DeploymentError,
+    DeploymentLease,
+    OstreeDeploymentManager,
+    RuntimeBinding,
+    RuntimeDeployment,
+    ToolDeployment,
+)
 from langgraph.prebuilt.security.enforcement import (
     ActivationEvidence,
     ActivationReceipt,
@@ -102,6 +111,9 @@ class LinuxToolSpec:
     entrypoint: str
     artifact_path: Path
     artifact_digest: str
+    deployment: ToolDeployment | None = None
+    deployment_manager: OstreeDeploymentManager | None = None
+    deployment_selection: str | None = None
 
     def __post_init__(self) -> None:
         module, separator, attribute = self.entrypoint.partition(":")
@@ -125,6 +137,52 @@ class LinuxToolSpec:
         ):
             raise ValueError("Linux tool artifact digest does not match artifact_path")
         object.__setattr__(self, "artifact_path", artifact)
+        if self.deployment is not None:
+            if (
+                self.entrypoint != self.deployment.manifest.entrypoint
+                or artifact != self.deployment.artifact_path
+                or self.artifact_digest != self.deployment.binding.artifact_digest
+            ):
+                raise ValueError("Linux tool spec does not match deployment")
+        dynamic = self.deployment_manager is not None
+        if dynamic != (self.deployment_selection is not None):
+            raise ValueError(
+                "deployment_manager and deployment_selection must be provided together"
+            )
+        if dynamic and self.deployment is None:
+            raise ValueError("dynamic deployment specs require a validated seed")
+
+    @classmethod
+    def from_deployment(
+        cls,
+        deployment: ToolDeployment,
+        *,
+        manager: OstreeDeploymentManager | None = None,
+        selection: str | None = None,
+    ) -> LinuxToolSpec:
+        """Create a trusted tool spec from a validated deployment."""
+        return cls(
+            deployment.manifest.entrypoint,
+            deployment.artifact_path,
+            deployment.binding.artifact_digest,
+            deployment,
+            manager,
+            selection,
+        )
+
+    @classmethod
+    def from_selection(
+        cls,
+        manager: OstreeDeploymentManager,
+        *,
+        tool_id: str,
+        selection: str,
+    ) -> LinuxToolSpec:
+        """Create a channel-backed spec whose first per-call choice is retained."""
+        deployment = manager.materialize(manager.resolve_ref(selection))
+        if deployment.manifest.tool_id != tool_id:
+            raise ValueError("Linux deployment selection has the wrong tool_id")
+        return cls.from_deployment(deployment, manager=manager, selection=selection)
 
 
 class LinuxSandboxExecutor:
@@ -150,6 +208,9 @@ class LinuxSandboxExecutor:
         default_wall_timeout_s: float = 30.0,
         default_limits: Mapping[str, int] | None = None,
         attestation_key: bytes | None = None,
+        runtime_deployment: RuntimeDeployment | None = None,
+        runtime_manager: OstreeDeploymentManager | None = None,
+        runtime_selection: str | None = None,
     ) -> None:
         if platform.system() != "Linux":
             raise RuntimeError("LinuxSandboxExecutor requires Linux")
@@ -162,14 +223,55 @@ class LinuxSandboxExecutor:
         bwrap = shutil.which(os.fspath(bubblewrap_path))
         if bwrap is None:
             raise RuntimeError("bubblewrap is required for Linux host execution")
-        python = Path(python_executable or sys.executable).resolve()
+        if runtime_manager is not None:
+            if runtime_selection is None:
+                if runtime_deployment is None:
+                    raise ValueError(
+                        "runtime_selection is required with runtime_manager"
+                    )
+                runtime_selection = runtime_deployment.binding.runtime_commit
+            selected_runtime = runtime_manager.materialize_runtime(
+                runtime_manager.resolve_ref(runtime_selection)
+            )
+            if (
+                runtime_deployment is not None
+                and selected_runtime.manifest.runtime_id
+                != runtime_deployment.manifest.runtime_id
+            ):
+                raise ValueError("runtime selection has the wrong runtime_id")
+            runtime_deployment = selected_runtime
+        elif runtime_deployment is not None or runtime_selection is not None:
+            raise ValueError("runtime deployments require an OstreeDeploymentManager")
+        if runtime_deployment is not None and python_executable is not None:
+            raise ValueError(
+                "python_executable is supplied by runtime_deployment when configured"
+            )
+        python = Path(
+            runtime_deployment.interpreter_path
+            if runtime_deployment is not None
+            else python_executable or sys.executable
+        ).resolve()
         if not python.is_file():
             raise ValueError("python_executable must resolve to an existing file")
-        python_runtime_root = python.parent.parent
-        roots = tuple(_canonical_existing_path(item) for item in runtime_roots)
+        python_runtime_root = (
+            runtime_deployment.checkout_path
+            if runtime_deployment is not None
+            else python.parent.parent
+        )
+        if runtime_deployment is not None and runtime_roots:
+            raise ValueError(
+                "runtime_roots must be empty when runtime_deployment is configured"
+            )
+        roots = (
+            runtime_deployment.guest_import_roots
+            if runtime_deployment is not None
+            else tuple(_canonical_existing_path(item) for item in runtime_roots)
+        )
         if not roots:
             raise ValueError("at least one explicit runtime root is required")
-        if any(not _is_supported_mount_type(root) for root in roots):
+        if runtime_deployment is None and any(
+            not _is_supported_mount_type(root) for root in roots
+        ):
             raise ValueError("runtime roots must be regular files or directories")
         if startup_timeout_s <= 0 or default_wall_timeout_s <= 0:
             raise ValueError("Linux sandbox timeouts must be positive")
@@ -226,25 +328,35 @@ class LinuxSandboxExecutor:
         self.bubblewrap_path = bwrap
         self.python_executable = python
         self.python_runtime_root = python_runtime_root
+        self.runtime_deployment = runtime_deployment
+        self.runtime_manager = runtime_manager
+        self.runtime_selection = runtime_selection
         self._worker_script = Path(__file__).with_name("_linux_worker.py").resolve()
         self._python_digest = _file_digest(self.python_executable)
         self._worker_digest = _file_digest(self._worker_script)
         self.startup_timeout_s = startup_timeout_s
         self.default_wall_timeout_s = default_wall_timeout_s
         self.default_limits = MappingProxyType(limits)
-        self._adapter = _LinuxBubblewrapAdapter(
-            bwrap,
-            attestation_key or secrets.token_bytes(32),
-            self.python_executable,
-            self._worker_script,
+        self._attestation_key = attestation_key or secrets.token_bytes(32)
+        self._adapter_lease_s = (
             startup_timeout_s
             + max(default_wall_timeout_s, limits["wall_ms"] / 1000)
-            + 5.0,
+            + 5.0
+        )
+        self._adapter = _LinuxBubblewrapAdapter(
+            bwrap,
+            self._attestation_key,
+            self.python_executable,
+            self._worker_script,
+            self._adapter_lease_s,
         )
         self._coordinator = EnforcementCoordinator([self._adapter], self._adapter)
         self._receipts: deque[ActivationReceipt] = deque(maxlen=1024)
         self._receipt_lock = RLock()
         self._unresolved: dict[str, TerminationRecovery] = {}
+        self._recovery_leases: dict[
+            str, tuple[tuple[OstreeDeploymentManager, DeploymentLease], ...]
+        ] = {}
         self._termination_lock = RLock()
 
     def validate_tools(self, tool_names: Sequence[str]) -> None:
@@ -259,6 +371,46 @@ class LinuxSandboxExecutor:
         """Return a bounded snapshot of worker-specific activation evidence."""
         with self._receipt_lock:
             return tuple(self._receipts)
+
+    def bind_call(self, principal: Principal, call: ToolCall) -> ToolCall:
+        """Select executable content before policy preparation and approval."""
+        spec = self.tools.get(call.tool.name)
+        if spec is None:
+            raise HostExecutionDenied("host:tool_manifest_missing")
+        deployment = spec.deployment
+        if spec.deployment_manager is not None:
+            assert spec.deployment_selection is not None
+            assert deployment is not None
+            try:
+                deployment = spec.deployment_manager.bind_invocation(
+                    tool_id=deployment.manifest.tool_id,
+                    selection=spec.deployment_selection,
+                    principal_id=principal.user_id,
+                    session_id=principal.session_id,
+                    call_id=call.call_id,
+                )
+            except DeploymentError as exc:
+                raise HostExecutionDenied("host:deployment_selection_failed") from exc
+        binding = dict(call.execution_binding)
+        if deployment is not None:
+            binding.update(deployment.binding.canonical())
+        if self.runtime_deployment is not None:
+            assert self.runtime_manager is not None
+            assert self.runtime_selection is not None
+            try:
+                runtime = self.runtime_manager.bind_runtime_selection(
+                    runtime_id=self.runtime_deployment.manifest.runtime_id,
+                    selection=self.runtime_selection,
+                    principal_id=principal.user_id,
+                    session_id=principal.session_id,
+                    call_id=call.call_id,
+                )
+            except DeploymentError as exc:
+                raise HostExecutionDenied("host:runtime_selection_failed") from exc
+            binding.update(runtime.binding.canonical())
+        if not binding:
+            return call
+        return replace(call, execution_binding=binding)
 
     def unresolved_terminations(self) -> tuple[TerminationRecovery, ...]:
         """Return workers still awaiting reliable termination evidence."""
@@ -315,6 +467,8 @@ class LinuxSandboxExecutor:
         if confirmed:
             with self._termination_lock:
                 self._unresolved.pop(recovery.recovery_id, None)
+                leases = self._recovery_leases.pop(recovery.recovery_id, ())
+            self._release_deployment_leases(leases)
         return confirmed
 
     def _invoke(
@@ -325,18 +479,22 @@ class LinuxSandboxExecutor:
         *,
         asynchronous: bool,
     ) -> HostExecutionResult:
-        spec = self.tools.get(call.tool.name)
-        if spec is None:
+        configured = self.tools.get(call.tool.name)
+        if configured is None:
             raise HostExecutionDenied("host:tool_manifest_missing")
-        grant, ledger = self._compile_grant(principal, call, spec)
+        spec = self._bound_spec(principal, call, configured)
+        runtime = self._bound_runtime(principal, call)
+        grant, ledger = self._compile_grant(principal, call, spec, runtime)
         filtered = self.policy_backend.filter(grant, ledger, constraints)
         if not filtered.allowed or filtered.grant is None:
             raise HostExecutionDenied(f"host:{filtered.reason}")
         grant = filtered.grant
         obligations = compile_obligations(grant)
         challenge = secrets.token_hex(16)
-        host = self._adapter.attest(challenge)
-        negotiation = self._coordinator.negotiate(
+        adapter = self._adapter_for_runtime(runtime)
+        coordinator = EnforcementCoordinator([adapter], adapter)
+        host = adapter.attest(challenge)
+        negotiation = coordinator.negotiate(
             grant,
             filtered.ledger,
             obligations,
@@ -345,18 +503,189 @@ class LinuxSandboxExecutor:
         )
         if not negotiation.allowed or negotiation.plan is None:
             raise HostExecutionDenied(f"host:{negotiation.reason}")
-        return self._run_worker(
-            principal,
-            call,
-            spec,
-            grant,
-            host,
-            negotiation.plan,
-            asynchronous=asynchronous,
+        leases = self._acquire_deployment_leases(
+            principal, call, configured, spec, runtime
+        )
+        try:
+            return self._run_worker(
+                principal,
+                call,
+                spec,
+                grant,
+                host,
+                negotiation.plan,
+                runtime,
+                adapter,
+                coordinator,
+                leases,
+                asynchronous=asynchronous,
+            )
+        except BaseException:
+            self._release_unretained_deployment_leases(leases)
+            raise
+
+    def _acquire_deployment_leases(
+        self,
+        principal: Principal,
+        call: ToolCall,
+        configured: LinuxToolSpec,
+        spec: LinuxToolSpec,
+        runtime: RuntimeDeployment | None,
+    ) -> tuple[tuple[OstreeDeploymentManager, DeploymentLease], ...]:
+        commits: dict[OstreeDeploymentManager, list[str]] = {}
+        if configured.deployment_manager is not None and spec.deployment is not None:
+            commits.setdefault(configured.deployment_manager, []).append(
+                spec.deployment.binding.tool_commit
+            )
+        if self.runtime_manager is not None and runtime is not None:
+            commits.setdefault(self.runtime_manager, []).append(
+                runtime.binding.runtime_commit
+            )
+        leases: list[tuple[OstreeDeploymentManager, DeploymentLease]] = []
+        try:
+            for manager, selected in commits.items():
+                leases.append(
+                    (
+                        manager,
+                        manager.acquire_lease(
+                            selected,
+                            principal_id=principal.user_id,
+                            session_id=principal.session_id,
+                            call_id=call.call_id,
+                        ),
+                    )
+                )
+        except DeploymentError as exc:
+            self._release_deployment_leases(leases)
+            raise HostExecutionDenied("host:deployment_lease_failed") from exc
+        return tuple(leases)
+
+    @staticmethod
+    def _release_deployment_leases(
+        leases: Sequence[tuple[OstreeDeploymentManager, DeploymentLease]],
+    ) -> None:
+        for manager, lease in leases:
+            try:
+                manager.release_lease(lease)
+            except DeploymentError:
+                pass
+
+    def _release_unretained_deployment_leases(
+        self,
+        leases: Sequence[tuple[OstreeDeploymentManager, DeploymentLease]],
+    ) -> None:
+        with self._termination_lock:
+            retained_ids = {
+                lease.lease_id
+                for recovery_leases in self._recovery_leases.values()
+                for _, lease in recovery_leases
+            }
+        self._release_deployment_leases(
+            tuple(item for item in leases if item[1].lease_id not in retained_ids)
+        )
+
+    def _bound_spec(
+        self, principal: Principal, call: ToolCall, configured: LinuxToolSpec
+    ) -> LinuxToolSpec:
+        """Recover the exact deployment selected before authorization."""
+        if configured.deployment is None:
+            if any(
+                key in call.execution_binding
+                for key in {
+                    "artifact_digest",
+                    "format_version",
+                    "manifest_digest",
+                    "tool_commit",
+                    "tool_id",
+                }
+            ):
+                raise HostExecutionDenied("host:unexpected_execution_binding")
+            return configured
+        try:
+            binding = DeploymentBinding(
+                int(call.execution_binding["format_version"]),
+                str(call.execution_binding["tool_id"]),
+                str(call.execution_binding["tool_commit"]),
+                str(call.execution_binding["manifest_digest"]),
+                str(call.execution_binding["artifact_digest"]),
+            )
+        except (KeyError, TypeError, ValueError) as exc:
+            raise HostExecutionDenied("host:invalid_deployment_binding") from exc
+        if configured.deployment_manager is None:
+            deployment = configured.deployment
+            if deployment.binding != binding:
+                raise HostExecutionDenied("host:deployment_substitution")
+        else:
+            try:
+                deployment = configured.deployment_manager.recover_invocation(
+                    binding,
+                    principal_id=principal.user_id,
+                    session_id=principal.session_id,
+                    call_id=call.call_id,
+                )
+            except DeploymentError as exc:
+                raise HostExecutionDenied("host:missing_deployment") from exc
+        return LinuxToolSpec.from_deployment(deployment)
+
+    def _bound_runtime(
+        self, principal: Principal, call: ToolCall
+    ) -> RuntimeDeployment | None:
+        """Require the configured runtime to match the pre-authorization binding."""
+        runtime = self.runtime_deployment
+        keys = {
+            "runtime_commit",
+            "runtime_format_version",
+            "runtime_id",
+            "runtime_manifest_digest",
+        }
+        present = keys.intersection(call.execution_binding)
+        if runtime is None:
+            if present:
+                raise HostExecutionDenied("host:unexpected_runtime_binding")
+            return None
+        if present != keys:
+            raise HostExecutionDenied("host:invalid_runtime_binding")
+        try:
+            binding = RuntimeBinding(
+                int(call.execution_binding["runtime_format_version"]),
+                str(call.execution_binding["runtime_id"]),
+                str(call.execution_binding["runtime_commit"]),
+                str(call.execution_binding["runtime_manifest_digest"]),
+            )
+        except (KeyError, TypeError, ValueError) as exc:
+            raise HostExecutionDenied("host:invalid_runtime_binding") from exc
+        if binding.runtime_id != runtime.binding.runtime_id:
+            raise HostExecutionDenied("host:runtime_substitution")
+        assert self.runtime_manager is not None
+        try:
+            return self.runtime_manager.recover_runtime_invocation(
+                binding,
+                principal_id=principal.user_id,
+                session_id=principal.session_id,
+                call_id=call.call_id,
+            )
+        except DeploymentError as exc:
+            raise HostExecutionDenied("host:missing_runtime") from exc
+
+    def _adapter_for_runtime(
+        self, runtime: RuntimeDeployment | None
+    ) -> _LinuxBubblewrapAdapter:
+        if runtime is None or runtime.binding == self.runtime_deployment.binding:
+            return self._adapter
+        return _LinuxBubblewrapAdapter(
+            self.bubblewrap_path,
+            self._attestation_key,
+            runtime.interpreter_path,
+            self._worker_script,
+            self._adapter_lease_s,
         )
 
     def _compile_grant(
-        self, principal: Principal, call: ToolCall, spec: LinuxToolSpec
+        self,
+        principal: Principal,
+        call: ToolCall,
+        spec: LinuxToolSpec,
+        runtime: RuntimeDeployment | None,
     ) -> tuple[Grant, Any]:
         profile = self.profiles.principals.get(principal.user_id)
         if profile is None:
@@ -390,20 +719,22 @@ class LinuxSandboxExecutor:
                 }
             ),
             policy_digest=_digest({"stage": "pre-mac"}),
-            baseline_rules=self._baseline_rules(spec),
+            baseline_rules=self._baseline_rules(spec, runtime),
+            deployment_digest=(
+                spec.deployment.binding.tool_commit
+                if spec.deployment is not None
+                else ""
+            ),
+            runtime_digest=(
+                runtime.binding.runtime_commit if runtime is not None else ""
+            ),
         )
         return compiled.grant, compiled.ledger
 
-    def _baseline_rules(self, spec: LinuxToolSpec) -> tuple[GrantRule, ...]:
+    def _baseline_rules(
+        self, spec: LinuxToolSpec, runtime: RuntimeDeployment | None
+    ) -> tuple[GrantRule, ...]:
         rules = [
-            GrantRule(
-                "runtime:usr",
-                AuthorityDomain.RUNTIME,
-                "read",
-                "/usr",
-                {"subtree": True},
-                baseline=True,
-            ),
             GrantRule(
                 "runtime:tmp:read",
                 AuthorityDomain.RUNTIME,
@@ -471,15 +802,29 @@ class LinuxSandboxExecutor:
                 "runtime:interpreter",
                 AuthorityDomain.RUNTIME,
                 "read",
-                os.fspath(self.python_executable),
-                {"sha256": self._python_digest},
+                os.fspath(
+                    runtime.interpreter_path
+                    if runtime is not None
+                    else self.python_executable
+                ),
+                {
+                    "sha256": _file_digest(
+                        runtime.interpreter_path
+                        if runtime is not None
+                        else self.python_executable
+                    )
+                },
                 baseline=True,
             ),
             GrantRule(
                 "runtime:interpreter-root",
                 AuthorityDomain.RUNTIME,
                 "read",
-                os.fspath(self.python_runtime_root),
+                os.fspath(
+                    runtime.checkout_path
+                    if runtime is not None
+                    else self.python_runtime_root
+                ),
                 {"subtree": True},
                 baseline=True,
             ),
@@ -564,7 +909,46 @@ class LinuxSandboxExecutor:
                 baseline=True,
             ),
         ]
-        for index, root in enumerate(self.runtime_roots):
+        if runtime is None:
+            rules.append(
+                GrantRule(
+                    "runtime:usr",
+                    AuthorityDomain.RUNTIME,
+                    "read",
+                    "/usr",
+                    {"subtree": True},
+                    baseline=True,
+                )
+            )
+        else:
+            rules.append(
+                GrantRule(
+                    "runtime:deployment-root",
+                    AuthorityDomain.RUNTIME,
+                    "read",
+                    os.fspath(runtime.checkout_path),
+                    {
+                        "ostree_commit": runtime.binding.runtime_commit,
+                        "subtree": True,
+                    },
+                    baseline=True,
+                )
+            )
+        if spec.deployment is not None:
+            rules.append(
+                GrantRule(
+                    "runtime:deployment",
+                    AuthorityDomain.RUNTIME,
+                    "read",
+                    os.fspath(spec.deployment.checkout_path),
+                    {
+                        "ostree_commit": spec.deployment.binding.tool_commit,
+                        "subtree": True,
+                    },
+                    baseline=True,
+                )
+            )
+        for index, root in enumerate(self.runtime_roots if runtime is None else ()):
             if root == Path("/usr") or Path("/usr") in root.parents:
                 continue
             rules.append(
@@ -598,13 +982,20 @@ class LinuxSandboxExecutor:
         grant: Grant,
         host: HostAttestation,
         plan: EnforcementPlan,
+        runtime: RuntimeDeployment | None,
+        adapter: _LinuxBubblewrapAdapter,
+        coordinator: EnforcementCoordinator,
+        leases: tuple[tuple[OstreeDeploymentManager, DeploymentLease], ...],
         *,
         asynchronous: bool,
     ) -> HostExecutionResult:
         adapter_plan = next(
             item for item in plan.adapter_plans if item.adapter_id == _ADAPTER_ID
         )
-        if _file_digest(self.python_executable) != self._python_digest:
+        interpreter = (
+            runtime.interpreter_path if runtime is not None else self.python_executable
+        )
+        if _file_digest(interpreter) != adapter.python_digest:
             raise HostExecutionDenied("host:interpreter_changed")
         if _file_digest(self._worker_script) != self._worker_digest:
             raise HostExecutionDenied("host:worker_shim_changed")
@@ -618,7 +1009,19 @@ class LinuxSandboxExecutor:
                 "entrypoint": spec.entrypoint,
                 "limits": _plain_mapping(adapter_plan.payload.get("limits", {})),
                 "plan_digest": adapter_plan.native_plan_digest,
-                "runtime_roots": [os.fspath(item) for item in self.runtime_roots],
+                "runtime_roots": [
+                    os.fspath(item)
+                    for item in (
+                        runtime.guest_import_roots
+                        if runtime is not None
+                        else self.runtime_roots
+                    )
+                ],
+                "tool_import_roots": (
+                    [os.fspath(item) for item in spec.deployment.import_roots]
+                    if spec.deployment is not None
+                    else []
+                ),
                 "startup_challenge": startup_challenge,
                 "tool_name": call.tool.name,
             }
@@ -627,7 +1030,7 @@ class LinuxSandboxExecutor:
             raise HostExecutionDenied("host:request_not_serializable") from exc
         artifact_directory: Path | None
         command, inherited_fds, status_read, status_write, artifact_directory = (
-            self._worker_command(adapter_plan, spec)
+            self._worker_command(adapter_plan, spec, runtime)
         )
         process: subprocess.Popen[bytes] | None = None
         receipt: ActivationReceipt | None = None
@@ -669,18 +1072,16 @@ class LinuxSandboxExecutor:
             )
             context = _execution_context(child_pid)
             child_start_time = context.process_identity.rpartition(":")[2]
-            self._adapter.register_pending(adapter_plan, context)
+            adapter.register_pending(adapter_plan, context)
             activation_nonce = secrets.token_hex(16)
-            receipt = self._coordinator.activate(
+            receipt = coordinator.activate(
                 grant,
                 plan,
                 host,
                 context,
                 nonce=activation_nonce,
             )
-            if not self._coordinator.validate_receipt(
-                receipt, grant, plan, host, context
-            ):
+            if not coordinator.validate_receipt(receipt, grant, plan, host, context):
                 raise HostExecutionDenied("host:activation_receipt_invalid")
             with self._receipt_lock:
                 self._receipts.append(receipt)
@@ -742,6 +1143,7 @@ class LinuxSandboxExecutor:
                 artifact_directory=artifact_directory,
                 host=host,
                 receipt=receipt,
+                leases=leases,
                 active_error=sys.exc_info()[1],
             )
 
@@ -757,6 +1159,7 @@ class LinuxSandboxExecutor:
         artifact_directory: Path | None,
         host: HostAttestation,
         receipt: ActivationReceipt | None,
+        leases: tuple[tuple[OstreeDeploymentManager, DeploymentLease], ...],
         active_error: BaseException | None,
     ) -> None:
         """Clean up independently and retain recovery evidence when uncertain."""
@@ -801,6 +1204,7 @@ class LinuxSandboxExecutor:
                 pass
 
         if termination_confirmed:
+            self._release_deployment_leases(leases)
             if isinstance(active_error, HostExecutionError):
                 active_error.termination_confirmed = True
             return
@@ -816,6 +1220,7 @@ class LinuxSandboxExecutor:
         )
         with self._termination_lock:
             self._unresolved[recovery.recovery_id] = recovery
+            self._recovery_leases[recovery.recovery_id] = leases
         if isinstance(active_error, HostExecutionError):
             active_error.outcome = ExecutionOutcome.INDETERMINATE
             active_error.recovery = recovery
@@ -831,7 +1236,10 @@ class LinuxSandboxExecutor:
             raise HostExecutionDenied("host:worker_termination_unconfirmed")
 
     def _worker_command(
-        self, plan: AdapterPlan, spec: LinuxToolSpec
+        self,
+        plan: AdapterPlan,
+        spec: LinuxToolSpec,
+        runtime: RuntimeDeployment | None,
     ) -> tuple[list[str], tuple[int, ...], int, int, Path]:
         mounts = tuple(plan.payload.get("mounts", ()))
         environment = _plain_mapping(plan.payload.get("environment", {}))
@@ -860,6 +1268,20 @@ class LinuxSandboxExecutor:
         mount_args: list[str] = []
         destinations: set[str] = set()
         artifact_descriptor, artifact_directory = _verified_artifact_fd(spec)
+        if runtime is not None:
+            runtime_root = runtime.checkout_path
+            for child in sorted(runtime_root.iterdir(), key=lambda item: item.name):
+                if child.name == "runtime.json":
+                    continue
+                if child.name in {"dev", "proc", "sys", "tmp"}:
+                    raise HostExecutionDenied("host:reserved_runtime_root")
+                if not child.is_dir() or child.is_symlink():
+                    raise HostExecutionDenied("host:invalid_runtime_root")
+                descriptor = _verified_resource_fd(child)
+                descriptors.append(descriptor)
+                destination = f"/{child.name}"
+                destinations.add(destination)
+                mount_args.extend(["--ro-bind-fd", str(descriptor), destination])
         ordered_mounts = sorted(
             mounts,
             key=lambda item: (
@@ -886,6 +1308,11 @@ class LinuxSandboxExecutor:
             if path == "/dev/urandom":
                 destinations.add(path)
                 mount_args.extend(["--dev-bind", path, path])
+                continue
+            if runtime is not None and (
+                canonical == runtime.checkout_path
+                or runtime.checkout_path in canonical.parents
+            ):
                 continue
             descriptor = (
                 artifact_descriptor
@@ -917,23 +1344,32 @@ class LinuxSandboxExecutor:
             "--clearenv",
             "--cap-drop",
             "ALL",
-            "--ro-bind",
-            "/usr",
-            "/usr",
-            "--symlink",
-            "usr/bin",
-            "/bin",
-            "--symlink",
-            "usr/lib",
-            "/lib",
-            "--symlink",
-            "usr/lib64",
-            "/lib64",
-            "--size",
-            str(limits["tmpfs_bytes"]),
-            "--tmpfs",
-            "/tmp",
         ]
+        if runtime is None:
+            command.extend(
+                [
+                    "--ro-bind",
+                    "/usr",
+                    "/usr",
+                    "--symlink",
+                    "usr/bin",
+                    "/bin",
+                    "--symlink",
+                    "usr/lib",
+                    "/lib",
+                    "--symlink",
+                    "usr/lib64",
+                    "/lib64",
+                ]
+            )
+        command.extend(
+            [
+                "--size",
+                str(limits["tmpfs_bytes"]),
+                "--tmpfs",
+                "/tmp",
+            ]
+        )
         for directory in directories:
             command.extend(["--dir", directory])
         command.extend(mount_args)
@@ -946,7 +1382,11 @@ class LinuxSandboxExecutor:
                 "--json-status-fd",
                 str(status_write),
                 "--",
-                os.fspath(self.python_executable),
+                os.fspath(
+                    runtime.guest_interpreter_path
+                    if runtime is not None
+                    else self.python_executable
+                ),
                 "-I",
                 "-S",
                 "-B",
@@ -993,6 +1433,11 @@ class _LinuxBubblewrapAdapter:
     def adapter_id(self) -> str:
         """Return the versioned Linux adapter identity."""
         return _ADAPTER_ID
+
+    @property
+    def python_digest(self) -> str:
+        """Return the interpreter digest authenticated by this adapter."""
+        return self._python_digest
 
     def attest(self, nonce: str) -> HostAttestation:
         """Return fresh locally authenticated host evidence."""

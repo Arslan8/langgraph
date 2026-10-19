@@ -280,7 +280,13 @@ def _invoke(
         type(item) is not str for item in runtime_roots
     ):
         raise TypeError("runtime_roots must be a list of paths")
-    sys.path[:0] = runtime_roots
+    tool_import_roots = request.get("tool_import_roots", [])
+    if not isinstance(tool_import_roots, list) or any(
+        type(item) is not str for item in tool_import_roots
+    ):
+        raise TypeError("tool_import_roots must be a list of paths")
+    fixed_runtime_roots = list(sys.path)
+    sys.path[:] = tool_import_roots + runtime_roots + fixed_runtime_roots
     module = ModuleType(module_name)
     module.__file__ = artifact_path
     module.__package__ = module_name.rpartition(".")[0]
