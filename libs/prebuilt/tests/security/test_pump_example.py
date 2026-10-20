@@ -67,7 +67,9 @@ def test_pump_demo_enforces_operations_before_socket_dispatch() -> None:
         )
         assert completed.returncode == 0, completed.stdout + completed.stderr
         assert completed.stdout.count("Authorization: ALLOW") == 4
-        assert completed.stdout.count("Authorization: DENY") == 4
+        assert completed.stdout.count("Authorization: DENY") == 5
+        assert "Manifest coverage: partial (4/5 operations)" in completed.stdout
+        assert "Manifest coverage: none (0/5 operations)" in completed.stdout
         assert "Derived: rejected; operation is not in the manifest's closed map" in (
             completed.stdout
         )
@@ -80,9 +82,11 @@ def test_pump_demo_enforces_operations_before_socket_dispatch() -> None:
         ]
         # Every Cedar evaluation is retained. The unknown operation is rejected
         # by the closed manifest map before Cedar and therefore has no bundle.
-        assert len(artifact_paths) == 7
+        assert len(artifact_paths) == 8
         pump_entity_ids = set()
         for artifact_path in artifact_paths:
+            envelope = (artifact_path / "envelope.cedar").read_text(encoding="utf-8")
+            assert 'action == slangGraph::Action::"call"' not in envelope
             entities = json.loads(
                 (artifact_path / "entities.json").read_text(encoding="utf-8")
             )

@@ -27,8 +27,21 @@ python3 workspace/05_custom_class_quickstart.py
 
 The controller accepts `inspect`, `start`, `stop`, `set_flow NUMBER`, and
 `calibrate NUMBER`. Enter `principal alice`, `principal bob`, or
-`principal charlie` to switch the demonstration identity. Principal selection
-is a teaching substitute for authentication, not an authentication mechanism.
+`principal charlie` to switch the demonstration identity; `principal mallory`
+shows the no-coverage denial. Principal selection is a teaching substitute for
+authentication, not an authentication mechanism.
+
+Example 5 deliberately has no caller-side Cedar `Action::"call"` permit. For a
+resource-bearing tool, caller eligibility is derived from manifest coverage:
+
+- full coverage permits the complete manifest authority;
+- partial coverage requires the invocation's mapped operation to be allowed;
+- no coverage denies before dispatch.
+
+Alice, Bob, and Charlie all have partial coverage, with their exact operations
+written directly against their Cedar principal identities rather than through
+demo roles. Mallory has no coverage. The framework still generates an internal
+owner/tool call ceiling; users do not repeat that binding in caller policy.
 
 Run the complete permission matrix and its assertions with:
 

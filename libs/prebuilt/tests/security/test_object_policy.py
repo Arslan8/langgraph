@@ -400,6 +400,65 @@ def test_authorizer_uses_cedar_cli_request_encoding() -> None:
     ]
 
 
+def test_resource_access_derives_call_but_resource_free_tool_requires_call() -> None:
+    cedar = shutil.which("cedar")
+    if cedar is None:
+        pytest.skip("Cedar CLI is not installed")
+    manifest = parse_security_manifest(
+        MANIFEST,
+        enforcers={EnforcementKind.BROKER: _Broker()},
+    )
+    owner = "permit(principal, action, resource);"
+    operation_only = (
+        'permit(principal, action == slangGraph::Action::"db::select", resource);'
+    )
+    grant = CedarObjectAuthorizer(
+        manifest,
+        CedarPolicySet({"run_report": owner}, operation_only),
+        executable=cedar,
+    ).authorize(
+        principal_id="alice",
+        roles=(),
+        tool_name="run_report",
+        tool_owner="reporting",
+        call_id="call-1",
+        arguments={"quarter": "Q4"},
+    )
+
+    assert [(line.class_name, line.operation) for line in grant.lines] == [
+        ("db", "select")
+    ]
+
+    resource_free = parse_security_manifest(
+        """
+        class db {
+          operations select
+          object table
+          normalizer sql.table_ref
+          attrs schema
+          enforced_by broker
+        }
+        tool status {
+          runs inprocess
+          returns normal
+        }
+        """
+    )
+    with pytest.raises(ObjectPolicyDenied, match="dac:envelope_call:status"):
+        CedarObjectAuthorizer(
+            resource_free,
+            CedarPolicySet({"status": owner}, operation_only),
+            executable=cedar,
+        ).authorize(
+            principal_id="alice",
+            roles=(),
+            tool_name="status",
+            tool_owner="reporting",
+            call_id="call-2",
+            arguments={},
+        )
+
+
 def test_mac_removal_of_need_denies_and_want_is_removed(tmp_path: Path) -> None:
     cedar = _fake_cedar(tmp_path)
     manifest = parse_security_manifest(

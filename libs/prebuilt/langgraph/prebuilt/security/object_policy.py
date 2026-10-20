@@ -595,7 +595,13 @@ class CedarObjectAuthorizer:
                 call_request,
             ):
                 raise ObjectPolicyDenied(f"dac:call:{tool_name}")
-            if not self._allows(
+            # For a resource-bearing manifest, caller eligibility is derived
+            # from the manifest operations authorized below. Requiring a
+            # separate principal-side `call` permit would duplicate that
+            # authority. Resource-free tools still need an explicit call
+            # permit because they have no finer-grained operation to derive it
+            # from.
+            if not candidates and not self._allows(
                 executable,
                 root,
                 entities_path,
@@ -647,6 +653,8 @@ class CedarObjectAuthorizer:
                         raise ObjectPolicyDenied(f"mac:forbid:{line.line_id}")
                     continue
                 retained.append(line)
+            if candidates and not retained:
+                raise ObjectPolicyDenied(f"dac:no_manifest_access:{tool_name}")
         except BaseException:
             # Retain failed bundles too; their exact inputs are useful when
             # reviewing or experimenting with a policy denial.
@@ -1084,8 +1092,11 @@ def cedar_security(
     `manifest` is an unnamed SLP tool body. The tool's internal name is derived
     from `tool`, and exact owner permits are generated automatically. `classes`
     contains any class declarations used by resource rules. `policy` is the
-    caller-facing Cedar permit policy. Resource grants are enforced by the
-    explicit trusted-tool/host-permission intersection contract.
+    caller-facing Cedar permit policy. For resource-bearing manifests, access
+    to the derived operations also determines caller eligibility; resource-free
+    manifests require an explicit caller-side `call` permit. Resource grants
+    are enforced by the explicit trusted-tool/host-permission intersection
+    contract.
     """
     if not isinstance(tool, BaseTool):
         raise TypeError("cedar_security requires a @tool-decorated BaseTool")

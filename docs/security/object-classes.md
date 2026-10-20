@@ -159,15 +159,18 @@ security = SecurityConfig(host_executor=executor)
 ```
 
 Pass `security` to `ToolNode` or `StateGraph.compile`. The executor replaces the
-legacy descriptor DAC for that ToolNode: Cedar must permit the call and every
-candidate line in both the tool-owner and principal/share policy sets. MAC can
-only remove lines. Removing a `need` line denies the call; removing a `want`
-line omits it from the grant.
+legacy descriptor DAC for that ToolNode. The generated owner ceiling must
+permit the bound tool call, while caller eligibility is derived from the
+principal/share policy's access to the manifest-derived resource lines. A
+resource-free manifest still requires an explicit caller-side `call` permit.
+MAC can only remove lines. Removing a `need` line denies the call; removing a
+`want` line omits it from the grant, and a resource-bearing call with no
+surviving lines is denied.
 
 Normalizers and label providers are trusted code. Policy sees only their
 canonical selector and declared attributes, never the raw argument. The built-in
-normalizers are `identity`, `sql.table_ref`, and `mail.domain`. A normalizer may
-only return attributes listed by its class.
+normalizers are `identity`, `fs.realpath`, `sql.table_ref`, and `mail.domain`. A
+normalizer may only return attributes listed by its class.
 
 The dispatcher is also trusted. It receives the finite `ObjectGrant`, activates
 the declared kernel, broker, resource-side, or framework controls, and returns

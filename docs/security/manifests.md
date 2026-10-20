@@ -302,7 +302,7 @@ Normalizers are part of the trusted computing base. Cedar and the enforcer see
 the normalized result, not the original argument text. Returning an undeclared
 attribute is an error.
 
-Three normalizers are built in:
+Four normalizers are built in:
 
 | Name | Accepted input | Canonical output and attributes |
 | --- | --- | --- |
@@ -376,9 +376,13 @@ For each tool call, the object-policy path performs these steps:
 2. Bind argument variables and normalize every object.
 3. Add trusted labels and create finite candidate grant lines.
 4. Validate Cedar policy sets against the generated schema.
-5. Require both the tool-owner permit set and the principal envelope/share
-   permit set to allow the tool call.
-6. Require both permit sides to allow each candidate resource line.
+5. Require the tool-owner permit set to allow the bound tool call. For a
+   resource-free manifest, also require the principal permit set to allow
+   `Action::"call"`.
+6. For a resource-bearing manifest, derive caller eligibility from the
+   principal's access to the candidate resource lines instead of requiring a
+   duplicate caller-side `Action::"call"` permit. Require both the owner and
+   principal/share permit sides to allow each `need` line.
 7. Apply operator and module `forbid` policies; forbids can only remove lines.
 8. Deny the call if a `need` line was removed; omit a removed `want` line.
 9. Require an enforcer or explicit waiver for every surviving line.
@@ -391,8 +395,10 @@ check. For `trusted_tool` resource manifests, it performs the complete expansion
 and grant construction sequence, canonicalizes descriptor-declared resource
 arguments before executing the trusted tool, and records each issued grant and
 an exact trusted-tool/host-intersection receipt. It generates the owner ceiling
-internally; the caller-facing `policy` must permit both the tool call and every
-required resource operation.
+internally. The caller-facing `policy` permits the resource operations; access
+to those manifest-derived operations determines whether the invocation may be
+dispatched. Resource-free manifests still require an explicit caller-facing
+`Action::"call"` permit.
 
 Every evaluation also leaves a private bundle below
 `CedarObjectAuthorizer.artifact_root`. Each directory returned by

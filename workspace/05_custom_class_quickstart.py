@@ -32,20 +32,39 @@ from langgraph.prebuilt.security import (
 )
 
 DEVICE_ID = "pump-1"
-ROLES = {
-    "alice": frozenset({"Operator"}),
-    "bob": frozenset({"Technician"}),
-    "charlie": frozenset({"Observer"}),
-}
 OPERATIONS = frozenset({"inspect", "start", "stop", "set_flow", "calibrate"})
+PRINCIPAL_OPERATIONS = {
+    "alice": frozenset({"inspect", "start", "stop", "set_flow"}),
+    "bob": frozenset({"inspect", "calibrate"}),
+    "charlie": frozenset({"inspect"}),
+}
+# This table is only a review display for the example. Cedar policy below is
+# authoritative; the integration test keeps the displayed coverage and actual
+# decisions aligned.
 
-# Adding a class extends both the manifest vocabulary and generated Cedar schema.
+# This is an SLP object-class declaration, not Cedar policy. It extends the
+# manifest vocabulary and causes slangGraph to generate the corresponding Cedar
+# actions and resource entity type used by the policy below.
 CLASSES = """
 class pump {
+  # The complete set of operations manifests may request for this class.
   operations inspect start stop set_flow calibrate
+
+  # The kind of resource named by a selector such as "pump-1". Together with
+  # the class name, this produces the Cedar entity type PumpDevice.
   object device
+
+  # Convert a raw selector into its canonical identity. "identity" is safe here
+  # because pump IDs are already canonical; production classes can register a
+  # trusted domain-specific normalizer instead.
   normalizer identity
+
+  # Resource attributes exposed to Cedar policies. This demo needs none, so the
+  # list is empty; a real device class might declare site, owner, or risk_level.
   attrs
+
+  # The surviving grant is enforced by reviewed in-process adapter code. Giving
+  # ordinary tool code direct socket access would bypass this trust boundary.
   enforced_by trusted_tool
 }
 """
@@ -63,17 +82,13 @@ returns sensitive
 """
 
 POLICY = """
-// Authentication supplies the principal and roles. All three roles may call.
-permit (principal, action == slangGraph::Action::"call", resource)
-when {
-  principal.roles.contains("Operator") ||
-  principal.roles.contains("Technician") ||
-  principal.roles.contains("Observer")
-};
+// There is deliberately no caller-side Action::"call" permit here. For this
+// resource-bearing tool, permission to invoke is derived from whether the
+// selected manifest operation is authorized for the principal.
 
-// Alice / Operator: inspect, start, stop, and set flow.
+// Alice: inspect, start, stop, and set flow.
 permit (
-  principal,
+  principal == slangGraph::User::"alice",
   action in [
     slangGraph::Action::"pump::inspect",
     slangGraph::Action::"pump::start",
@@ -82,28 +97,28 @@ permit (
   ],
   resource
 ) when {
-  principal.roles.contains("Operator") && resource.selector == "pump-1"
+  resource.selector == "pump-1"
 };
 
-// Bob / Technician: inspect and calibrate.
+// Bob: inspect and calibrate.
 permit (
-  principal,
+  principal == slangGraph::User::"bob",
   action in [
     slangGraph::Action::"pump::inspect",
     slangGraph::Action::"pump::calibrate"
   ],
   resource
 ) when {
-  principal.roles.contains("Technician") && resource.selector == "pump-1"
+  resource.selector == "pump-1"
 };
 
-// Charlie / Observer: inspect only.
+// Charlie: inspect only.
 permit (
-  principal,
+  principal == slangGraph::User::"charlie",
   action == slangGraph::Action::"pump::inspect",
   resource
 ) when {
-  principal.roles.contains("Observer") && resource.selector == "pump-1"
+  resource.selector == "pump-1"
 };
 """
 
@@ -222,15 +237,25 @@ def invoke(
     call_number: int,
 ) -> InvocationResult:
     """Invoke once and print the complete derivation and decision."""
-    roles = ROLES.get(principal_id, frozenset())
-    principal = Principal(principal_id, roles, frozenset(), "demo-session")
+    allowed_operations = PRINCIPAL_OPERATIONS.get(principal_id, frozenset())
+    if allowed_operations == OPERATIONS:
+        coverage = "full"
+    elif allowed_operations.isdisjoint(OPERATIONS):
+        coverage = "none"
+    else:
+        coverage = "partial"
+    principal = Principal(principal_id, frozenset(), frozenset(), "demo-session")
     config = with_principal({}, principal, modules=security.modules)
     executor = security.host_executor
     assert isinstance(executor, ObjectPolicyHostExecutor)
     grants_before = len(executor.authorization_grants())
     artifacts_before = len(executor.authorizer.authorization_artifacts())
 
-    print(f"\nPrincipal: {principal_id} roles={sorted(roles)}")
+    print(f"\nPrincipal: {principal_id}")
+    print(
+        f"Manifest coverage: {coverage} "
+        f"({len(allowed_operations)}/{len(OPERATIONS)} operations)"
+    )
     print(f"Request: device={DEVICE_ID} operation={operation} value={value!r}")
     if operation in OPERATIONS:
         print(
@@ -308,7 +333,7 @@ def invoke(
 
 
 def run_automated_demo(graph: Any, security: Any, log_path: Path) -> None:
-    """Exercise the role matrix and prove denied commands never reached the pump."""
+    """Exercise the permission matrix and prove denials never reached the pump."""
     before = _read_log(log_path)
     cases = [
         ("alice", "set_flow", 25.0, True, True),
@@ -317,6 +342,8 @@ def run_automated_demo(graph: Any, security: Any, log_path: Path) -> None:
         ("bob", "start", None, False, False),
         ("charlie", "inspect", None, True, True),
         ("charlie", "stop", None, False, False),
+        # No manifest-operation coverage means immediate pre-dispatch denial.
+        ("mallory", "inspect", None, False, False),
         # Input validation is a separate gate after operation authorization.
         ("alice", "set_flow", 1000.0, True, False),
         # This string cannot become a Cedar action because it is not mapped.
@@ -359,7 +386,7 @@ def _read_log(path: Path) -> list[dict[str, Any]]:
 
 def run_interactive(graph: Any, security: Any) -> None:
     print("Principal selection is a demo substitute for real authentication.")
-    principal = input("Principal [alice, bob, or charlie]: ").strip().lower()
+    principal = input("Principal [alice, bob, charlie, or mallory]: ").strip().lower()
     print("Commands: inspect, start, stop, set_flow NUMBER, calibrate NUMBER")
     print("Also: principal NAME, help, quit")
     call_number = 1
