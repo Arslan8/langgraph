@@ -13,6 +13,7 @@ python3 workspace/01_quickstart.py
 python3 workspace/02_dac_quickstart.py
 python3 workspace/03_dac_principal_quickstart.py
 python3 workspace/04_resource_grant_quickstart.py
+python3 workspace/05_custom_class_quickstart.py
 ```
 
 The examples introduce these ideas in order:
@@ -22,6 +23,8 @@ The examples introduce these ideas in order:
 3. An authenticated principal supplied when invoking the graph.
 4. A tool argument mapped to a normalized resource operation, authorized by
    Cedar, converted into an exact grant, and enforced during execution.
+5. A custom `record` class with programmable operations, trusted `owner` and
+   `department` attributes, attribute-based Cedar policy, and a narrow grant.
 
 Example 4 also prints the retained temporary directory containing the generated
 Cedar schema, entities, policies, and requests. These artifacts can be copied or
