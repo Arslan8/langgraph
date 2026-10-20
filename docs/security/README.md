@@ -43,15 +43,32 @@ trust assumption.
 
 ## Policy and enforcement
 
-The default input is one `.slp` file with `tool`, `principal`, and forbid-only
-`policy` blocks. Cedar is the default hidden mandatory-policy engine; OPA may be
-provided behind `Policy`. Modules return verdicts, forbid policies, and labels
-only, and use `ESCALATE` for approval.
+The open-class input is one `.slp` manifest with `class` and `tool` blocks.
+The manifest enumerates finite candidate authority; Cedar supplies tool-owner
+and principal `permit` policies for DAC and operator `forbid` policies for MAC.
+See the exhaustive [manifest language reference](manifests.md) for everything
+accepted by the parser and [open object classes](object-classes.md) for the
+architecture and ToolNode wiring.
+Modules remain independently restrictive and use `ESCALATE` for approval.
 
 An allowed operation produces a canonical grant. Host enforcement must
 implement each rule exactly or more tightly. A looser lowering denies;
 unsupported classes deny unless explicitly waived, and waived calls are stamped
 `unenforced`. Runtime baseline authority is visible in every grant.
+
+For a trusted tool declared with `runs inprocess`, effective permission is the
+intersection of the surviving slangGraph authorization and the coordinator's
+existing host permission:
+
+`effective = slangGraph allow ∩ host allow`
+
+A slangGraph allow cannot override a Unix mode, ACL, credential, database role,
+or other host denial. A host allow cannot override a slangGraph denial. The host
+normally sees the coordinator's service identity rather than the application
+`Principal`; the trusted tool is part of the TCB and must exercise ambient host
+authority only through operations allowed by slangGraph. A language sandbox may
+enforce that obligation in process. This mode does not claim per-call kernel
+confinement.
 
 `model_invoke` and `output_emit` ship label-only. Reference
 non-exfiltration, integrity, and compartmentalization policies ship off by

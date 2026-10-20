@@ -6,7 +6,7 @@ import hashlib
 import json
 import secrets
 from collections.abc import Iterable, Mapping, Sequence
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from types import MappingProxyType
 from typing import Any
 
@@ -148,6 +148,10 @@ class SecurityConfig:
         placement_router = make_host_router(
             ObjectManagerPolicy(placement_stack, self.object_dacs), object_host
         )
+        inprocess_tool_policy = any(
+            getattr(module, "authorizes_inprocess_tools", False)
+            for module in self.modules
+        )
         for name, node_spec in graph.nodes.items():
             contains_tool_node = any(_find_tool_nodes(node_spec.runnable))
             try:
@@ -157,14 +161,21 @@ class SecurityConfig:
             except ValueError as exc:
                 placement_stack.close()
                 raise SecurityConfigurationError(str(exc)) from exc
-            if contains_tool_node and self.host_executor is not None:
+            if contains_tool_node and (
+                self.host_executor is not None or inprocess_tool_policy
+            ):
                 placement = PlacementSpec(
                     name,
                     NodeTrust.TRUSTED,
                     NodeKind.STANDARD,
                     promoted=True,
                     promotion_reason=(
-                        "reviewed ToolNode coordinator; tool bodies use host execution"
+                        (
+                            "reviewed ToolNode coordinator; tool bodies use host "
+                            "execution"
+                        )
+                        if self.host_executor is not None
+                        else "Cedar-authorized operator tool runs in process"
                     ),
                 )
             if (
@@ -290,6 +301,10 @@ class SecurityConfig:
                     "host execution does not support injected tool arguments: "
                     + ", ".join(sorted(injected))
                 )
+        external_dac = bool(
+            self.host_executor is not None
+            and getattr(self.host_executor, "authorizes_dac", False)
+        )
         stack = SecurityStack(
             self.modules,
             policy_timeout_s=self.policy_timeout_s,
@@ -301,6 +316,13 @@ class SecurityConfig:
             object_dacs = dict(self.object_dacs)
             for name, security_tool in tuple(node._security_tools_by_name.items()):
                 policy = overrides.get(name, security_tool.dac)
+                if external_dac:
+                    policy = replace(
+                        policy,
+                        grants={"*": "x"},
+                        required_scopes=frozenset(),
+                        arg_grants={},
+                    )
                 configured_tool = Tool(
                     name=security_tool.name,
                     dac=policy,

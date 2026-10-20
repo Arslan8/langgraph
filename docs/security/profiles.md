@@ -1,5 +1,10 @@
 # slangGraph profile grammar
 
+This page documents the older constructive profile grammar accepted by
+`parse_profiles`. It is not the open-class `SecurityManifest` grammar accepted
+by `parse_security_manifest`. Both currently use the `.slp` suffix. For the
+open-class language, see [security manifest language](manifests.md).
+
 Profile files use the `.slp` suffix. They describe constructive discretionary
 authority: a tool says what a call needs or wants, and a principal says which
 resources they may use or share. Evaluation computes:

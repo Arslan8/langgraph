@@ -47,6 +47,33 @@ An undeclared tool is inferred as critical, irreversible execution with a
 default-deny DAC. A declaration describes intended behavior; it does not
 confine the implementation.
 
+## Open object-class policy
+
+| Name | Contract |
+| --- | --- |
+| `EnforcementKind` | Declares whether a class is enforced by the kernel, a broker, a remote resource, or the framework. |
+| `NormalizedObject` | Canonical selector and trusted attributes returned by an object normalizer. |
+| `ObjectNormalizer` | Callable contract that converts one raw bound argument into a `NormalizedObject`. |
+| `ObjectClass` | Immutable class vocabulary: operations, object kind, normalizer, attributes, enforcement locus, and optional lowering. |
+| `ObjectClassEnforcer` | Trusted adapter contract that identifies support for normalized grant lines. |
+| `ObjectClassRegistry` | Registers preloaded and open classes, normalizers, and enforcers and generates their Cedar schema. `cedar_security` preloads its context-specific core vocabulary; plugins may pre-register `ObjectClass` values through `parse_security_manifest(classes=...)`. |
+| `ManifestRule` | One unbound class-operation-pattern authority request with `need` or `want` semantics. |
+| `ToolManifest` | Finite collection of manifest rules for one tool. |
+| `SecurityManifest` | Parsed class registry and tool manifests; expands bound arguments into normalized candidate lines. |
+| `parse_security_manifest` | Parses `.slp` `class` and `tool` blocks and rejects unknown classes, operations, directives, and normalizers. |
+| `CedarPolicySet` | Separates tool-owner, principal, and share permits from operator MAC forbids and rejects mixed effects. |
+| `CedarObjectAuthorizer` | Intersects owner and principal/share DAC, applies MAC, preserves `need`/`want`, and returns a finite grant. Explicit class enforcement waivers require reasons and are bound into the grant. `artifact_root` and `authorization_artifacts()` expose retained private Cedar bundles for review and experimentation. |
+| `CedarCallPolicy` | Restrictive policy module that applies Cedar DAC to ordinary tools whose manifests contain no resource lines. |
+| `cedar_security` | Binds class declarations, an unnamed SLP manifest body, and one caller-facing Cedar policy directly to a trusted in-process tool. It derives the internal identity and owner ceiling, authorizes resource operations, constructs inspectable grants, and dispatches `trusted_tool` classes under host-intersection semantics. |
+| `ObjectGrantLine` | One exact normalized and policy-authorized object capability. |
+| `ObjectGrant` | Complete call-bound object authority with a canonical digest. |
+| `ObjectGrantDispatcher` | Trusted host contract that activates a grant and executes the tool outside the coordinator. |
+| `ObjectPolicyHostExecutor` | ToolNode host bridge that authorizes with Cedar and verifies complete per-line activation evidence. `authorization_grants()` exposes a bounded snapshot of exact grants issued for execution. |
+| `ObjectPolicyDenied` | Fail-closed denial raised by manifest expansion, Cedar evaluation, or enforcement negotiation. |
+
+See the exhaustive [manifest language reference](manifests.md) for accepted
+syntax and [open object classes](object-classes.md) for the wiring model.
+
 ## Identity, calls, and private module state
 
 | Name | Contract |

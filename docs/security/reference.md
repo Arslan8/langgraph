@@ -102,6 +102,15 @@ lowering denies. Unsupported classes deny unless waived per class with a reason;
 affected calls are always stamped `unenforced`. A class introduced by a module
 is rechecked at grant time and denies the call if unsupported.
 
+Trusted `inprocess` tools use intersection semantics. Let `S` be the authority
+surviving slangGraph DAC and MAC, and let `H` be the authority available to the
+coordinator under host DAC and resource credentials. The effective permission
+is `S ∩ H`: denial by either side denies the operation. Host authority is a
+ceiling and never supplies a missing slangGraph grant; slangGraph authorization
+never bypasses a host denial. Because no per-call OS identity is implied, the
+trusted tool or its language sandbox is responsible for honoring `S` while the
+host independently enforces `H`.
+
 Use `slanggraph check --backend X profiles/`; unsupported, unwaived rules produce
 a nonzero exit.
 

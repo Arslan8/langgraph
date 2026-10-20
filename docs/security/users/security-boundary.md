@@ -69,6 +69,14 @@ The host implements each grant rule exactly or more tightly and records
 classes deny unless explicitly waived with a reason; every affected audit record
 is stamped `unenforced`.
 
+Trusted `inprocess` tools do not receive a per-call kernel sandbox. Their
+effective permission is the intersection of the authority surviving slangGraph
+policy and the coordinator's existing host authority. slangGraph cannot bypass
+a host denial, and host access cannot override a slangGraph denial. The host
+usually authorizes the coordinator service identity, not the application
+principal. Preserving the slangGraph half of the intersection is therefore a
+trusted-tool or language-sandbox obligation.
+
 Capabilities are probed per boot. Landlock support is detected through its ABI
 query, not the kernel version. The audit records the actual confinement
 mechanism, runtime baseline, attestation, and per-rule lowering.
