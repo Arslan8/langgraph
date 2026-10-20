@@ -57,7 +57,7 @@ confine the implementation.
 | `ObjectClass` | Immutable class vocabulary: operations, object kind, normalizer, attributes, enforcement locus, and optional lowering. |
 | `ObjectClassEnforcer` | Trusted adapter contract that identifies support for normalized grant lines. |
 | `ObjectClassRegistry` | Registers preloaded and open classes, normalizers, and enforcers and generates their Cedar schema. `cedar_security` preloads its context-specific core vocabulary; plugins may pre-register `ObjectClass` values through `parse_security_manifest(classes=...)`. |
-| `ManifestRule` | One unbound class-operation-pattern authority request with `need` or `want` semantics. |
+| `ManifestRule` | One unbound class-operation-pattern authority request with `need` or `want` semantics and an optional closed argument-value selector. |
 | `ToolManifest` | Finite collection of manifest rules for one tool. |
 | `SecurityManifest` | Parsed class registry and tool manifests; expands bound arguments into normalized candidate lines. |
 | `parse_security_manifest` | Parses `.slp` `class` and `tool` blocks and rejects unknown classes, operations, directives, and normalizers. |

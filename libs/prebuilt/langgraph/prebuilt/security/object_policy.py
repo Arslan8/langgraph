@@ -267,10 +267,18 @@ class ManifestRule:
     pattern: str
     requirement: Requirement
     source: str = ""
+    selector_arg: str | None = None
+    selector_value: str | None = None
 
     def __post_init__(self) -> None:
         _text(self.pattern, "object pattern")
         _validate_template(self.pattern)
+        if (self.selector_arg is None) != (self.selector_value is None):
+            raise ValueError("manifest selector requires both argument and value")
+        if self.selector_arg is not None:
+            if not _NAME.fullmatch(self.selector_arg):
+                raise ValueError("manifest selector argument must be an identifier")
+            _atom(self.selector_value, "manifest selector value")
 
 
 @dataclass(frozen=True, slots=True)
@@ -314,7 +322,28 @@ class SecurityManifest:
             raise ObjectPolicyDenied(f"unknown_tool:{tool_name}") from exc
         output: list[ObjectGrantLine] = []
         label_values = labels or {}
+        selector_args = {
+            rule.selector_arg for rule in tool.rules if rule.selector_arg is not None
+        }
+        if selector_args:
+            selector_arg = next(iter(selector_args))
+            if selector_arg not in arguments:
+                raise ObjectPolicyDenied(f"missing_binding:{selector_arg}")
+            selector_value = str(arguments[selector_arg])
+            if not any(
+                rule.selector_arg == selector_arg
+                and rule.selector_value == selector_value
+                for rule in tool.rules
+            ):
+                raise ObjectPolicyDenied(
+                    f"unmapped_selector:{selector_arg}:{selector_value}"
+                )
         for index, rule in enumerate(tool.rules):
+            if (
+                rule.selector_arg is not None
+                and str(arguments[rule.selector_arg]) != rule.selector_value
+            ):
+                continue
             try:
                 bound = _bind(rule.pattern, arguments)
                 normalized = self.registry.normalize(rule.class_name, bound)
@@ -1213,33 +1242,69 @@ def _parse_manifest_tool(
             else:
                 returns = words[1]
             continue
+        selector_arg: str | None = None
+        selector_value: str | None = None
+        if directive == "map":
+            if len(words) != 6 or "=" not in words[1]:
+                raise ProfileSyntaxError(
+                    source,
+                    statement_line,
+                    1,
+                    "map line expects map ARG=VALUE CLASS OPERATION "
+                    "OBJECT-PATTERN need|want",
+                )
+            selector_arg, selector_value = words[1].split("=", 1)
+            if (
+                not _NAME.fullmatch(selector_arg)
+                or not selector_value
+                or any(character.isspace() for character in selector_value)
+            ):
+                raise ProfileSyntaxError(
+                    source, statement_line, 1, "invalid map argument selector"
+                )
+            directive = words[2]
+            resource_words = words[2:]
+        else:
+            resource_words = words
         object_class = registry.classes.get(directive)
         if object_class is None:
             raise ProfileSyntaxError(
                 source, statement_line, 1, f"unknown object class: {directive}"
             )
-        if len(words) != 4 or words[-1] not in {"need", "want"}:
+        if len(resource_words) != 4 or resource_words[-1] not in {"need", "want"}:
             raise ProfileSyntaxError(
                 source,
                 statement_line,
                 1,
                 "resource line expects CLASS OPERATION OBJECT-PATTERN need|want",
             )
-        if words[1] not in object_class.operations:
+        if resource_words[1] not in object_class.operations:
             raise ProfileSyntaxError(
                 source,
                 statement_line,
                 1,
-                f"operation {words[1]!r} is not declared by class {directive}",
+                f"operation {resource_words[1]!r} is not declared by class {directive}",
             )
         rules.append(
             ManifestRule(
                 directive,
-                words[1],
-                words[2],
-                Requirement(words[3]),
+                resource_words[1],
+                resource_words[2],
+                Requirement(resource_words[3]),
                 f"{source}:{statement_line}",
+                selector_arg,
+                selector_value,
             )
+        )
+    selector_args = {
+        rule.selector_arg for rule in rules if rule.selector_arg is not None
+    }
+    if len(selector_args) > 1:
+        raise ProfileSyntaxError(
+            source,
+            line,
+            1,
+            "one tool manifest may select operations from only one argument",
         )
     return ToolManifest(name, runs, tuple(rules), returns)
 

@@ -180,6 +180,7 @@ A standalone tool block has this form:
 tool TOOL_NAME {
   runs RUN_LOCUS
   CLASS OPERATION OBJECT_PATTERN need|want
+  map ARGUMENT=VALUE CLASS OPERATION OBJECT_PATTERN need|want
   returns RETURN_CLASS
 }
 ```
@@ -193,6 +194,7 @@ optional and repeatable.
 | `returns RETURN_CLASS` | Zero or one | `normal` | Identifier classifying the tool result, such as `normal` or `sensitive`. The manifest parser records the identifier; downstream policy gives it meaning. |
 | `CLASS OPERATION OBJECT_PATTERN need` | Zero or more | None | Required resource capability. Removing or denying it denies the complete call. |
 | `CLASS OPERATION OBJECT_PATTERN want` | Zero or more | None | Optional resource capability. Removing or denying it omits the line but does not by itself deny the call. |
+| `map ARGUMENT=VALUE CLASS OPERATION OBJECT_PATTERN need\|want` | Zero or more | None | Include this fixed resource rule only when the named invocation argument exactly equals the literal value. |
 
 `RUN_LOCUS` and `RETURN_CLASS` are syntactically open identifiers. The parser
 does not maintain a global enumeration for them. The selected execution path
@@ -234,6 +236,29 @@ CLASS OPERATION OBJECT_PATTERN REQUIREMENT
 Rules are retained in source order. Their stable grant-line identifiers are
 `TOOL_NAME:INDEX`, where `INDEX` is zero-based among that tool's resource
 rules.
+
+### Closed operation maps
+
+An interactive tool may expose several operations through one argument while
+keeping the Cedar vocabulary closed:
+
+```slp
+map operation=inspect   pump inspect   @{device_id} need
+map operation=set_flow  pump set_flow  @{device_id} need
+map operation=calibrate pump calibrate @{device_id} need
+```
+
+The selector has the form `ARGUMENT=VALUE`, with an identifier argument and a
+non-empty, whitespace-free literal value. A tool may select on only one
+argument, although several rules may share one selector value when an operation
+requires several resources. Unconditional rules may coexist with mapped rules.
+
+At expansion time, exactly matching mapped rules are retained alongside all
+unconditional rules. A missing selector argument or a value absent from the
+closed map denies before Cedar evaluation and before dispatch. The value never
+becomes an action name: the class and operation remain fixed, parser-validated
+tokens in each manifest rule. Consequently an argument cannot inject a Cedar
+action, entity type, or policy fragment.
 
 ## Object patterns and argument binding
 
@@ -391,6 +416,8 @@ Manifest parsing rejects:
 - duplicate `runs` or `returns` directives;
 - unknown resource classes or undeclared operations;
 - resource rules that do not have exactly four fields;
+- malformed `map` rules, multiple selector arguments in one tool, or mapped
+  operations not declared by their class;
 - requirements other than `need` and `want`; and
 - malformed object-variable syntax.
 

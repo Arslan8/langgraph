@@ -13,7 +13,27 @@ python3 workspace/01_quickstart.py
 python3 workspace/02_dac_quickstart.py
 python3 workspace/03_dac_principal_quickstart.py
 python3 workspace/04_resource_grant_quickstart.py
+```
+
+Example 5 uses two terminals and a Unix-domain socket:
+
+```bash
+# Terminal 1: device behavior and accepted-command log
+python3 workspace/05_pump_simulator.py
+
+# Terminal 2: interactive authorized controller
 python3 workspace/05_custom_class_quickstart.py
+```
+
+The controller accepts `inspect`, `start`, `stop`, `set_flow NUMBER`, and
+`calibrate NUMBER`. Enter `principal alice`, `principal bob`, or
+`principal charlie` to switch the demonstration identity. Principal selection
+is a teaching substitute for authentication, not an authentication mechanism.
+
+Run the complete permission matrix and its assertions with:
+
+```bash
+python3 workspace/05_custom_class_quickstart.py --demo
 ```
 
 The examples introduce these ideas in order:
@@ -23,8 +43,8 @@ The examples introduce these ideas in order:
 3. An authenticated principal supplied when invoking the graph.
 4. A tool argument mapped to a normalized resource operation, authorized by
    Cedar, converted into an exact grant, and enforced during execution.
-5. A custom `record` class with programmable operations, trusted `owner` and
-   `department` attributes, attribute-based Cedar policy, and a narrow grant.
+5. A custom `pump` class whose device operations are authorized independently
+   even though every accepted command uses the same Unix-domain socket.
 
 Example 4 also prints the retained temporary directory containing the generated
 Cedar schema, entities, policies, and requests. These artifacts can be copied or
@@ -95,27 +115,28 @@ power user can introduce another resource class without changing the manifest
 grammar:
 
 ```slp
-class record {
-  operations read update
-  object item
+class pump {
+  operations inspect start stop set_flow calibrate
+  object device
   normalizer identity
-  attrs owner department
+  attrs
   enforced_by trusted_tool
 }
 ```
 
-A useful follow-up exercise is to provide separate tools with deliberately
-narrow requirements:
+A closed manifest map lets one interactive tool select only fixed, declared
+operations:
 
 ```text
-read_record(record_id)          -> record read   @{record_id} need
-update_record(record_id, value) -> record update @{record_id} need
+operation=inspect   -> pump::inspect   on @{device_id}
+operation=set_flow  -> pump::set_flow  on @{device_id}
+operation=calibrate -> pump::calibrate on @{device_id}
 ```
 
-The inferred manifest for `read_record` must not grant `update`. The manifest
-for `update_record` must not grant access to unrelated record identifiers.
-Ownership and department restrictions belong in Cedar; required resource
-operations belong in the manifest.
+An argument chooses among those mappings; it cannot supply a Cedar action name,
+entity type, or policy. The pump example demonstrates that socket access is not
+device-operation authority: `set_flow` and `calibrate` traverse the same socket
+but produce different Cedar actions and grants.
 
 ## Defining a class is not enforcement
 

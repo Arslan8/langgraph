@@ -123,6 +123,71 @@ def test_manifest_registers_classes_and_expands_normalized_lines() -> None:
     manifest.registry.require_enforceable(lines)
 
 
+def test_manifest_maps_a_closed_argument_set_to_fixed_operations() -> None:
+    manifest = parse_security_manifest(
+        """
+        class pump {
+          operations inspect start stop set_flow calibrate
+          object device
+          normalizer identity
+          attrs
+          enforced_by trusted_tool
+        }
+        tool control_pump {
+          runs inprocess
+          map operation=inspect pump inspect pump-1 need
+          map operation=start pump start pump-1 need
+          map operation=stop pump stop pump-1 need
+          map operation=set_flow pump set_flow pump-1 need
+          map operation=calibrate pump calibrate pump-1 need
+          returns sensitive
+        }
+        """
+    )
+
+    selectors = []
+    for operation in ("inspect", "start", "stop", "set_flow", "calibrate"):
+        lines = manifest.expand(
+            "control_pump",
+            {"device_id": "pump-1", "operation": operation},
+        )
+        assert len(lines) == 1
+        assert lines[0].operation == operation
+        selectors.append(lines[0].selector)
+
+    assert selectors == ["pump-1"] * 5
+    with pytest.raises(
+        ObjectPolicyDenied,
+        match="unmapped_selector:operation:arbitrary::Cedar::Action",
+    ):
+        manifest.expand(
+            "control_pump",
+            {"device_id": "pump-1", "operation": "arbitrary::Cedar::Action"},
+        )
+
+
+def test_manifest_rejects_multiple_operation_selector_arguments() -> None:
+    with pytest.raises(
+        ProfileSyntaxError,
+        match="select operations from only one argument",
+    ):
+        parse_security_manifest(
+            """
+            class pump {
+              operations inspect start
+              object device
+              normalizer identity
+              attrs
+              enforced_by trusted_tool
+            }
+            tool control_pump {
+              map operation=inspect pump inspect pump-1 need
+              map mode=start pump start pump-1 need
+            }
+            """
+        )
+
+
 def test_unknown_class_operation_fails_during_manifest_parsing() -> None:
     with pytest.raises(ProfileSyntaxError, match="is not declared by class db"):
         parse_security_manifest(
