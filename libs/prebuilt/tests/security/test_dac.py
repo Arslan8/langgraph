@@ -111,10 +111,30 @@ def test_dac_table(
     assert (decision.verdict, decision.reason) == (verdict, reason)
 
 
-def test_missing_normalized_argument_does_not_invent_a_dependency() -> None:
-    """Argument grants apply only when the named normalized value is present."""
+def test_missing_normalized_argument_fails_closed() -> None:
+    """A missing resource must not bypass an explicitly configured grant."""
     tool = _tool(owner="alice", arg_grants={"path": {"*": "-"}})
-    assert dac_check(_principal(), tool, {}).verdict is Verdict.ALLOW
+    assert dac_check(_principal(), tool, {}).verdict is Verdict.DENY
+
+
+@pytest.mark.parametrize(
+    "grants,roles,expected",
+    [
+        ({"alice": "x", "*": "-"}, (), Verdict.ALLOW),
+        ({"alice": "-", "*": "x"}, (), Verdict.DENY),
+        ({"guest": "-", "*": "x"}, ("guest",), Verdict.DENY),
+        ({"guest": "-", "analyst": "x"}, ("guest", "analyst"), Verdict.DENY),
+        ({"alice": "x", "guest": "-"}, ("guest",), Verdict.ALLOW),
+        ({"alice": "-", "analyst": "x"}, ("analyst",), Verdict.DENY),
+        ({"analyst": "x", "*": "-"}, ("analyst",), Verdict.ALLOW),
+        ({"analyst": "-", "*": "x"}, ("unmatched",), Verdict.ALLOW),
+    ],
+)
+def test_named_acl_precedence(grants, roles, expected):
+    assert (
+        dac_check(_principal(roles=frozenset(roles)), _tool(grants=grants), {}).verdict
+        is expected
+    )
 
 
 @given(

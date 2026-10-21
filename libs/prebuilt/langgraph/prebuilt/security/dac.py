@@ -20,9 +20,15 @@ def dac_check(
 
     owner = tool.dac.owner
     owns_tool = principal.user_id == owner or owner in principal.roles
-    role_granted = any(tool.dac.grants.get(role) == "x" for role in principal.roles)
-    fallback_granted = tool.dac.grants.get("*") == "x"
-    if not (owns_tool or role_granted or fallback_granted):
+    grants = tool.dac.grants
+    if principal.user_id in grants and principal.user_id != "*":
+        granted = grants[principal.user_id] == "x"
+    else:
+        role_entries = [
+            grants[role] for role in principal.roles if role != "*" and role in grants
+        ]
+        granted = "-" not in role_entries if role_entries else grants.get("*") == "x"
+    if not (owns_tool or granted):
         return Decision(Verdict.DENY, "dac:grant")
 
     if not tool.dac.required_scopes.issubset(principal.scopes):
@@ -30,7 +36,7 @@ def dac_check(
 
     for arg_name, grants in tool.dac.arg_grants.items():
         if arg_name not in normalized:
-            continue
+            return Decision(Verdict.DENY, f"dac:arg_missing:{arg_name}")
         value_key = str(normalized[arg_name])
         if grants.get(value_key, grants.get("*", "-")) != "x":
             return Decision(Verdict.DENY, f"dac:arg:{arg_name}")

@@ -51,9 +51,20 @@ def send_email(to: str, subject: str, body: str) -> str:
 
 The call is allowed by DAC only when all of these hold:
 
-- the user or one of its roles is the owner, has `x`, or matches fallback `*`;
+- the user or one of its roles is the owner, or its ACL lookup permits execution;
 - every required scope is present; and
-- every applicable normalized argument grant is `x`.
+- every configured argument grant has a normalized value and permits it.
+
+For non-owners, a named user entry takes precedence over role entries. Otherwise,
+any matching role denial wins over matching role allows. The `*` entry is used
+only when no user or role entry matches. Scope and argument restrictions apply
+to owners as well as other callers.
+
+A missing normalized argument fails closed. Callers should supply protected
+arguments explicitly rather than relying on tool defaults. Wrappers that
+materialize defaults before authorization check those values normally. A
+misspelled argument-grant name or missing resource descriptor also denies;
+it does not silently disable the restriction.
 
 DAC executes before mandatory modules. A DAC denial stops the chain, and no
 module can convert it to an allow. An undeclared tool defaults to owner
@@ -82,6 +93,12 @@ security = SecurityConfig(dac_overrides=overrides)
 Overrides are trusted configuration, equivalent to an operator changing file
 permissions. Unknown tool names fail configuration, and an audit sink records
 each applied override.
+
+When a Cedar host executor handles authorization, explicit author DAC and
+operator overrides remain additional gates. Only the inferred default-deny DAC
+is replaced by Cedar authorization. The `cedar_security` helper likewise
+preserves explicit author DAC. An operator override still replaces author DAC
+wholesale, as described above; Cedar cannot silently erase that override.
 
 For constructive resource grants, use the frozen `.slp` grammar described in
 [profiles](../profiles.md). The ordinary trusted runtime path uses `ToolDac`.

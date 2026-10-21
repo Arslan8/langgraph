@@ -29,7 +29,12 @@ from typing import Protocol, runtime_checkable
 from langchain_core.tools import BaseTool
 
 from langgraph.prebuilt.security.config import SecurityConfig
-from langgraph.prebuilt.security.descriptor import DacOverrides, ToolDac
+from langgraph.prebuilt.security.descriptor import (
+    DacOverrides,
+    ToolDac,
+    _has_declared_dac,
+    security_for_tool,
+)
 from langgraph.prebuilt.security.enforcement import (
     ActivationReceipt,
     EnforcementMode,
@@ -1135,7 +1140,13 @@ def cedar_security(
         "",
         mac_forbids,
     )
-    overrides = DacOverrides({tool_name: ToolDac("__cedar__", {"*": "x"})})
+    # Cedar replaces only inferred DAC defaults, never an explicit author gate.
+    local_policy = (
+        security_for_tool(tool)[1]
+        if _has_declared_dac(tool)
+        else ToolDac("__cedar__", {"*": "x"})
+    )
+    overrides = DacOverrides({tool_name: local_policy})
     authorizer = CedarObjectAuthorizer(parsed, policies, executable=executable)
     if not tool_manifest.rules:
         module = CedarCallPolicy(authorizer, {tool_name: owner})

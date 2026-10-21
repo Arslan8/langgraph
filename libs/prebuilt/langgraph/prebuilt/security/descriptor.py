@@ -107,9 +107,12 @@ class ToolDac:
     Args:
         owner: User or role that owns the tool.
         grants: Principal or role names mapped to `x` (execute) or `-` (deny).
-            The special name `*` is the fallback for all other principals.
+            Owners retain execute permission. Otherwise a user entry takes
+            precedence over roles; any matching role denial beats role allows.
+            `*` applies only when no user or role entry matches.
         required_scopes: Scopes every caller must hold.
         arg_grants: Normalized argument names mapped to value-specific grants.
+            Missing normalized values deny the call, including for owners.
     """
 
     owner: str
@@ -240,6 +243,11 @@ def dac(
         return target
 
     return decorator
+
+
+def _has_declared_dac(tool: Any) -> bool:
+    """Distinguish an author policy from the inferred default-deny policy."""
+    return isinstance(_tool_declarations(tool).get("dac"), ToolDac)
 
 
 def security_for_tool(tool: Any) -> tuple[ToolDescriptor, ToolDac]:

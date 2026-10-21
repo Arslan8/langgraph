@@ -13,7 +13,7 @@ from typing import Any
 from langgraph.checkpoint.base import BaseCheckpointSaver
 
 from langgraph.prebuilt.security.checkpoint_security import MediatedCheckpointer
-from langgraph.prebuilt.security.descriptor import DacOverrides
+from langgraph.prebuilt.security.descriptor import DacOverrides, _has_declared_dac
 from langgraph.prebuilt.security.errors import SecurityConfigurationError
 from langgraph.prebuilt.security.execution import HostToolExecutor
 from langgraph.prebuilt.security.flow import SessionFlowPolicy
@@ -316,7 +316,11 @@ class SecurityConfig:
             object_dacs = dict(self.object_dacs)
             for name, security_tool in tuple(node._security_tools_by_name.items()):
                 policy = overrides.get(name, security_tool.dac)
-                if external_dac:
+                if (
+                    external_dac
+                    and name not in overrides
+                    and not _has_declared_dac(node.tools_by_name[name])
+                ):
                     policy = replace(
                         policy,
                         grants={"*": "x"},
