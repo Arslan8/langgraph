@@ -15,7 +15,8 @@ python3 workspace/03_dac_principal_quickstart.py
 python3 workspace/04_resource_grant_quickstart.py
 ```
 
-Example 5 uses two terminals and a Unix-domain socket:
+Example 5 requires Linux with Landlock, `libseccomp.so.2`, and the Cedar CLI.
+It uses two terminals and a Unix-domain socket:
 
 ```bash
 # Terminal 1: device behavior and accepted-command log
@@ -133,7 +134,7 @@ class pump {
   object device
   normalizer identity
   attrs
-  enforced_by trusted_tool
+  enforced_by broker
 }
 ```
 
@@ -161,10 +162,13 @@ A production-quality class requires all of the following:
 - an enforcement mechanism for every surviving grant line; and
 - positive, negative, malformed-input, and adversarial tests.
 
-The examples use `enforced_by trusted_tool`. This means a reviewed in-process
+The earlier examples use `enforced_by trusted_tool`. This means a reviewed in-process
 implementation, or its language sandbox, must honor the slangGraph grant. Its
 effective permission is the intersection of the slangGraph grant and the
 coordinator process's existing host permission.
+
+Example 5 uses `enforced_by broker` and an isolated Linux worker instead. Its
+trusted adapter checks exact object grants outside the tool process.
 
 For untrusted or production integrations, a project may instead require:
 
@@ -194,3 +198,41 @@ The open-class mechanism makes the model extensible to database tables,
 secrets, queues, API endpoints, browser origins, devices, and other enumerable
 resources. Designing the domain-specific inference and enforcement boundary is
 part of the student project.
+
+
+## Example 5: enforced runtime boundary
+
+`05_pump_worker.py` is the untrusted tool implementation. A fresh Linux worker
+activates Landlock, seccomp, resource limits, and a cleared environment before
+importing that file. It receives only its arguments and an inherited broker
+channel. It cannot open a device socket, create a subprocess, or access files
+outside its configured runtime roots and private temporary directory.
+
+`05_custom_class_quickstart.py` owns the trusted pump adapter and socket path.
+Its manifest uses `runs linux` and `enforced_by broker`. Cedar authorizes the
+requested operation and device before a worker starts. Every worker request is
+then checked against that exact invocation grant. Changing `inspect` to
+`calibrate`, changing the device, or supplying an identity in the wire request
+cannot acquire additional authority. Denied optional grants are absent from the
+broker's authority too.
+
+The adapter receives the operation and resource from the grant, not from an
+untrusted payload. It only accepts `value` in the payload and validates that
+value before contacting the simulator. The small adapter and device protocol
+remain reviewed semantic dependencies: the runtime cannot discover what a
+physical device command means.
+
+There is no in-process fallback if confinement is unavailable. Runtime roots
+are trusted readable code; do not put secrets in those directories. The demo
+uses the application's Python import directories as runtime roots. Adapters must
+bound their external I/O; terminating a worker cannot undo an already-started
+external operation. The pump adapter uses a socket timeout. Permissions cover
+operations and objects, not invocation counts or rate limits.
+
+The reusable API is `ObjectBrokerDispatcher`, connected to
+`ObjectPolicyHostExecutor`, plus the worker-side `object_request` helper in
+`langgraph.prebuilt.security.object_broker`. Register the dispatcher as the
+manifest's `EnforcementKind.BROKER` enforcer. Register handlers explicitly by
+`(class_name, operation)`; unregistered handlers and enforcement waivers fail
+closed. This runtime complements the static checker; static analysis is not
+required to enforce the worker's object capabilities.

@@ -1,16 +1,18 @@
 """Example 5: authorize device operations independently of socket access.
 
-Start `05_pump_simulator.py` in another terminal before running this file. This
-is a trusted in-process demonstration: only `PumpSocketAdapter` holds the socket
-path. Giving ordinary tool code direct access to that socket would bypass the
-authorization boundary demonstrated here.
+Start `05_pump_simulator.py` in another terminal before running this file.
+Tool code runs in a Landlock/seccomp worker. Only the parent-owned
+`PumpSocketAdapter` can contact the device; the broker checks every request
+against the exact Cedar-authorized object grant.
 """
 
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import socket
+import sys
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
@@ -18,18 +20,25 @@ from typing import Any
 from langchain_core.messages import AIMessage
 from langchain_core.tools import tool
 from langgraph.graph import START, MessagesState, StateGraph
-
 from langgraph.prebuilt import ToolNode
 from langgraph.prebuilt.security import (
+    CedarObjectAuthorizer,
+    CedarPolicySet,
+    DacOverrides,
     Effect,
+    EnforcementKind,
     HostExecutionDenied,
     ObjectPolicyHostExecutor,
     Principal,
     ResourceArg,
-    cedar_security,
+    SecurityConfig,
+    ToolDac,
     effects,
+    parse_security_manifest,
     with_principal,
 )
+from langgraph.prebuilt.security.linux import LinuxToolSpec
+from langgraph.prebuilt.security.object_broker import ObjectBrokerDispatcher
 
 DEVICE_ID = "pump-1"
 OPERATIONS = frozenset({"inspect", "start", "stop", "set_flow", "calibrate"})
@@ -63,16 +72,16 @@ class pump {
   # list is empty; a real device class might declare site, owner, or risk_level.
   attrs
 
-  # The surviving grant is enforced by reviewed in-process adapter code. Giving
-  # ordinary tool code direct socket access would bypass this trust boundary.
-  enforced_by trusted_tool
+  # The parent broker enforces the exact grant. Isolated tool code cannot
+  # contact the device socket directly.
+  enforced_by broker
 }
 """
 
 # `map` is a closed dispatch table. The argument selects among fixed manifest
 # lines; it never becomes a Cedar action, entity type, or policy fragment.
 MANIFEST = """
-runs inprocess
+runs linux
 map operation=inspect   pump inspect   @{device_id} need
 map operation=start     pump start     @{device_id} need
 map operation=stop      pump stop      @{device_id} need
@@ -213,14 +222,55 @@ def build_demo(socket_path: Path, cedar: str) -> tuple[Any, Any]:
         device_id: str, operation: str, value: float | None = None
     ) -> dict[str, Any]:
         """Perform one operation on a simulated pump."""
-        return adapter.execute(device_id, operation, value)
+        raise RuntimeError("tool must execute in the confined worker")
 
-    security = cedar_security(
-        control_pump,
-        classes=CLASSES,
-        manifest=MANIFEST,
-        policy=POLICY,
+    worker_path = Path(__file__).with_name("05_pump_worker.py").resolve()
+
+    def dispatch(line, payload):
+        if set(payload) != {"value"}:
+            raise ValueError("unexpected pump payload fields")
+        try:
+            return adapter.execute(line.selector, line.operation, payload["value"])
+        except ValueError as exc:
+            # Explicit public validation response, not arbitrary broker exceptions.
+            return {"ok": False, "error": str(exc)}
+
+    dispatcher = ObjectBrokerDispatcher(
+        {
+            "control_pump": LinuxToolSpec(
+                "pump_worker:control_pump",
+                worker_path,
+                hashlib.sha256(worker_path.read_bytes()).hexdigest(),
+            )
+        },
+        {("pump", operation): dispatch for operation in OPERATIONS},
+        # These are trusted code roots. Never include credential directories.
+        runtime_roots=tuple(
+            Path(path).resolve() for path in sys.path if path and Path(path).is_dir()
+        ),
+    )
+    manifest = parse_security_manifest(
+        CLASSES + "\ntool control_pump {\n" + MANIFEST + "\n}",
+        enforcers={EnforcementKind.BROKER: dispatcher},
+    )
+    owner_policy = 'permit(principal, action == slangGraph::Action::"call", resource == slangGraph::Tool::"control_pump");\n'
+    owner_policy += "\n".join(
+        f'permit(principal, action == slangGraph::Action::"pump::{operation}", resource) '
+        'when { context.tool == slangGraph::Tool::"control_pump" };'
+        for operation in sorted(OPERATIONS)
+    )
+    authorizer = CedarObjectAuthorizer(
+        manifest,
+        CedarPolicySet({"control_pump": owner_policy}, POLICY),
         executable=cedar,
+    )
+    security = SecurityConfig(
+        host_executor=ObjectPolicyHostExecutor(
+            authorizer,
+            dispatcher,
+            tool_owners={"control_pump": "application"},
+        ),
+        dac_overrides=DacOverrides({"control_pump": ToolDac("__cedar__", {"*": "x"})}),
     )
     builder = StateGraph(MessagesState)
     builder.add_node("tools", ToolNode([control_pump]))
@@ -290,6 +340,10 @@ def invoke(
             config=config,
         )
         message = result["messages"][-1]
+        if getattr(message, "status", None) != "error":
+            device_result = json.loads(str(message.content))
+            if device_result.get("ok") is False:
+                dispatch_error = device_result.get("error", "adapter rejected request")
     except HostExecutionDenied as exc:
         # A manifest or Cedar denial happens before a grant exists.
         dispatch_error = str(exc)

@@ -5,6 +5,10 @@ language parsed by `parse_security_manifest`. A manifest describes the finite
 set of object capabilities a tool requests. Cedar policies separately decide
 which principals may receive those capabilities.
 
+Use the [static consistency checker](manifest-consistency.md) to compare a
+tool function's modeled resource effects with these declarations. Unsupported
+source is reported as unknown rather than accepted as consistent.
+
 This language uses the `.slp` suffix, but it is not the older constructive
 profile grammar documented in [slangGraph profile grammar](profiles.md). In
 particular, this manifest language has `class` and `tool` blocks and does not

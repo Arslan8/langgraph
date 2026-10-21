@@ -133,6 +133,10 @@ from langgraph.prebuilt.security.mcp_proxy import (
     McpStdioProxy,
     mcp_service_map,
 )
+from langgraph.prebuilt.security.object_broker import (
+    ObjectBrokerDispatcher,
+    object_request,
+)
 from langgraph.prebuilt.security.object_manager import (
     CheckpointEnvelope,
     ObjectManagerHost,
@@ -366,6 +370,8 @@ __all__ = (
     "ObjectClass",
     "ObjectClassEnforcer",
     "ObjectClassRegistry",
+    "ObjectBrokerDispatcher",
+    "object_request",
     "ObjectGrant",
     "ObjectGrantDispatcher",
     "ObjectGrantLine",

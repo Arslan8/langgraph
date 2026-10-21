@@ -12,11 +12,16 @@ import time
 import uuid
 from pathlib import Path
 
+import pytest
+
+from langgraph.prebuilt.security.capabilities import probe_landlock_abi
+
 REPOSITORY = Path(__file__).resolve().parents[4]
 SIMULATOR = REPOSITORY / "workspace" / "05_pump_simulator.py"
 CONTROLLER = REPOSITORY / "workspace" / "05_custom_class_quickstart.py"
 
 
+@pytest.mark.skipif(probe_landlock_abi() < 1, reason="pump runtime requires Landlock")
 def test_pump_demo_enforces_operations_before_socket_dispatch() -> None:
     """Use real Cedar and prove denied operations never reach the simulator."""
     cedar = shutil.which("cedar")
