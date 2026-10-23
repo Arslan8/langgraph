@@ -20,6 +20,7 @@ from typing import Any
 from langchain_core.messages import AIMessage
 from langchain_core.tools import tool
 from langgraph.graph import START, MessagesState, StateGraph
+
 from langgraph.prebuilt import ToolNode
 from langgraph.prebuilt.security import (
     CedarObjectAuthorizer,
@@ -31,7 +32,10 @@ from langgraph.prebuilt.security import (
     ObjectPolicyHostExecutor,
     Principal,
     ResourceArg,
+    ResourceMediatorAdapter,
+    ResourceSupport,
     SecurityConfig,
+    SupportLevel,
     ToolDac,
     effects,
     parse_security_manifest,
@@ -75,6 +79,7 @@ class pump {
   # The parent broker enforces the exact grant. Isolated tool code cannot
   # contact the device socket directly.
   enforced_by broker
+  lowering pump.socket.v1
 }
 """
 
@@ -226,7 +231,27 @@ def build_demo(socket_path: Path, cedar: str) -> tuple[Any, Any]:
 
     worker_path = Path(__file__).with_name("05_pump_worker.py").resolve()
 
-    def dispatch(line, payload):
+    def assess(line, host):
+        if (
+            line.class_name != "pump"
+            or line.enforcer is not EnforcementKind.BROKER
+            or line.selector != DEVICE_ID
+            or line.operation not in OPERATIONS
+            or line.attributes
+            or line.lowering != "pump.socket.v1"
+        ):
+            return ResourceSupport(
+                SupportLevel.UNSUPPORTED, "unsupported pump semantics"
+            )
+        return ResourceSupport(
+            SupportLevel.EXACT,
+            "fixed pump identity and operation; payload validated by PumpSocketAdapter",
+            witness="tests/security/test_pump_example.py",
+            protected_paths=(str(socket_path.resolve()),),
+            required_capabilities=frozenset({"broker:spawn-bound", "seccomp:minimal"}),
+        )
+
+    def dispatch(line, payload, context):
         if set(payload) != {"value"}:
             raise ValueError("unexpected pump payload fields")
         try:
@@ -243,7 +268,7 @@ def build_demo(socket_path: Path, cedar: str) -> tuple[Any, Any]:
                 hashlib.sha256(worker_path.read_bytes()).hexdigest(),
             )
         },
-        {("pump", operation): dispatch for operation in OPERATIONS},
+        mediators=(ResourceMediatorAdapter("pump.socket.v1", assess, dispatch),),
         # These are trusted code roots. Never include credential directories.
         runtime_roots=tuple(
             Path(path).resolve() for path in sys.path if path and Path(path).is_dir()

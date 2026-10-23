@@ -161,6 +161,7 @@ from langgraph.prebuilt.security.object_policy import (
     ObjectNormalizer,
     ObjectPolicyDenied,
     ObjectPolicyHostExecutor,
+    ObjectSandboxDispatcher,
     SecurityManifest,
     ToolManifest,
     cedar_security,
@@ -378,6 +379,14 @@ __all__ = (
     "ObjectNormalizer",
     "ObjectPolicyDenied",
     "ObjectPolicyHostExecutor",
+    "ObjectSandboxDispatcher",
+    "ObjectLoweringRecord",
+    "ResourceMediatorAdapter",
+    "ResourceSupport",
+    "ResourceInvocation",
+    "negotiate_object_grant",
+    "SQLITE_RECORD_SCHEMA",
+    "sqlite_record_mediator",
     "OstreeDeploymentManager",
     "ObjectManagerHost",
     "ObjectManagerPolicy",
@@ -482,4 +491,16 @@ __all__ = (
     "resource_path",
     "seal_checkpoint",
     "with_principal",
+)
+
+from langgraph.prebuilt.security.resource_mediator import (
+    ObjectLoweringRecord,
+    ResourceInvocation,
+    ResourceMediatorAdapter,
+    ResourceSupport,
+    negotiate_object_grant,
+)
+from langgraph.prebuilt.security.sqlite_mediator import (
+    SQLITE_RECORD_SCHEMA,
+    sqlite_record_mediator,
 )

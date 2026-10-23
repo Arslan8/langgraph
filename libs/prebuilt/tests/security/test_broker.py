@@ -138,3 +138,50 @@ def test_broker_rejects_worker_supplied_identity() -> None:
         "error": "broker:worker_identity_rejected",
         "status": "denied",
     }
+
+
+@pytest.mark.parametrize(
+    "result",
+    [object(), "x" * 1_048_576, float("nan")],
+    ids=["non-json", "oversized", "non-finite"],
+)
+def test_broker_response_does_not_leak_repr_or_unbounded_data(monkeypatch, result):
+    grant = _grant()
+    broker = CredentialBroker(
+        {"github_app": GitHubAppIssuer(lambda spawn, scope: "secret")},
+        {"github": lambda *args: result},
+    )
+    session = broker.open_session(_spawn(grant), grant)
+    monkeypatch.setenv("SLANGGRAPH_BROKER_FD", str(session.worker_fd))
+    try:
+        with pytest.raises(PermissionError, match="broker:invalid_response"):
+            broker_request("github", "invoke")
+    finally:
+        session.close()
+    assert session.terminated
+
+
+def test_oversized_frame_cannot_smuggle_second_request():
+    grant = _grant()
+    seen = []
+    broker = CredentialBroker(
+        {"github_app": GitHubAppIssuer(lambda spawn, scope: "secret")},
+        {"github": lambda *args: seen.append(args)},
+    )
+    session = broker.open_session(_spawn(grant), grant)
+    channel = socket.socket(fileno=os.dup(session.worker_fd))
+    channel.settimeout(2)
+    valid = b'{"service":"github","operation":"invoke","payload":{}}\n'
+    try:
+        try:
+            channel.sendall(b" " * 1_048_577 + valid)
+        except (BrokenPipeError, ConnectionResetError):
+            pass
+        try:
+            assert channel.recv(1024) == b""
+        except ConnectionResetError:
+            pass
+    finally:
+        channel.close()
+        session.close()
+    assert not seen

@@ -64,7 +64,17 @@ confine the implementation.
 | `CedarPolicySet` | Separates tool-owner, principal, and share permits from operator MAC forbids and rejects mixed effects. |
 | `CedarObjectAuthorizer` | Intersects owner and principal/share DAC, applies MAC, preserves `need`/`want`, and returns a finite grant. Explicit class enforcement waivers require reasons and are bound into the grant. `artifact_root` and `authorization_artifacts()` expose retained private Cedar bundles for review and experimentation. |
 | `CedarCallPolicy` | Restrictive policy module that applies Cedar DAC to ordinary tools whose manifests contain no resource lines. |
-| `cedar_security` | Binds class declarations, an unnamed SLP manifest body, and one caller-facing Cedar policy directly to a trusted in-process tool. It derives the internal identity and owner ceiling, authorizes resource operations, constructs inspectable grants, and dispatches `trusted_tool` classes under host-intersection semantics. |
+| `cedar_security` | Binds an unnamed SLP manifest and caller-facing Cedar policy to a tool. In-process mode uses the trusted-tool contract; `dispatcher=ObjectBrokerDispatcher(...)` with `runs linux` or `runs broker` uses an isolated worker with kernel and broker enforcement. Derives identity and owner ceilings and constructs inspectable grants. |
+| `ObjectSandboxDispatcher` | Protocol combining isolated dispatch, exact-line support checks, and pinned-tool configuration validation. |
+| `ObjectBrokerDispatcher` | Linux Landlock/seccomp dispatcher negotiating host and semantic obligations for custom broker classes and exact-file kernel grants; records optional reductions and refuses missing required authority. |
+| `ResourceMediatorAdapter` | Operator-supplied exact resource assessment and invocation, with optional activation/release hooks. Semantic implementation is trusted. |
+| `ResourceSupport` | Exact/stricter/unsupported assessment, reviewed contract reference, protected paths, and required host capabilities. |
+| `sqlite_record_mediator` | Concrete parent-owned SQLite adapter for exact `db_record` read/write/delete grants with `lowering sqlite.record.v1`; fixed parameterized SQL and protected database directory. Requires Python 3.11+. |
+| `SQLITE_RECORD_SCHEMA` | Exact operator-created records-table schema required by the SQLite mediator. |
+| `ResourceInvocation` | Parent-authenticated principal, session, tool, call, grant, and worker context passed to mediator callbacks. |
+| `ObjectLoweringRecord` | Candidate and retained grants, host attestation, obligation graph, and negotiated plan returned by `lowering_records()`. |
+| `negotiate_object_grant` | Platform-neutral obligation negotiation that drops unsupported optional authority and rechecks the requirement ledger; required authority and default-deny obligations fail closed. |
+| `object_request` | Worker-side request for a concrete class, operation, and object over the invocation-bound broker channel. |
 | `ObjectGrantLine` | One exact normalized and policy-authorized object capability. |
 | `ObjectGrant` | Complete call-bound object authority with a canonical digest. |
 | `ObjectGrantDispatcher` | Trusted host contract that activates a grant and executes the tool outside the coordinator. |

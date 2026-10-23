@@ -8,7 +8,7 @@ import socket
 from collections import deque
 from collections.abc import Callable, Mapping
 from dataclasses import dataclass, field
-from threading import RLock, Thread
+from threading import Event, RLock, Thread
 from types import MappingProxyType
 from typing import Any, Protocol, runtime_checkable
 
@@ -110,10 +110,17 @@ class BrokerSession:
         parent: socket.socket,
         worker: socket.socket,
         thread: Thread,
+        stopped: Event | None = None,
     ) -> None:
         self._parent = parent
         self._worker = worker
         self._thread = thread
+        self._stopped = stopped if stopped is not None else Event()
+
+    @property
+    def terminated(self) -> bool:
+        """Whether the channel's active handler has finished executing."""
+        return not self._thread.is_alive()
 
     @property
     def worker_fd(self) -> int:
@@ -128,6 +135,7 @@ class BrokerSession:
 
     def close_parent(self) -> None:
         """Close the parent endpoint and wait briefly for its broker thread."""
+        self._stopped.set()
         try:
             self._parent.shutdown(socket.SHUT_RDWR)
         except OSError:
@@ -173,38 +181,55 @@ class CredentialBroker:
         parent, worker = socket.socketpair(socket.AF_UNIX, socket.SOCK_STREAM)
         parent.set_inheritable(False)
         worker.set_inheritable(False)
+        stopped = Event()
         thread = Thread(
             target=self._serve,
-            args=(parent, spawn, grant),
+            args=(parent, spawn, grant, stopped),
             name=f"slanggraph-broker-{spawn.nonce[:8]}",
             daemon=True,
         )
         thread.start()
-        return BrokerSession(parent, worker, thread)
+        return BrokerSession(parent, worker, thread, stopped)
 
     def audit_records(self) -> tuple[BrokerAuditRecord, ...]:
         """Return bounded token-free broker evidence."""
         with self._lock:
             return tuple(self._audit)
 
-    def _serve(self, channel: socket.socket, spawn: SpawnRecord, grant: Grant) -> None:
+    def _serve(
+        self, channel: socket.socket, spawn: SpawnRecord, grant: Grant, stopped: Event
+    ) -> None:
         stream = channel.makefile("rwb", buffering=0)
         try:
-            while True:
+            while not stopped.is_set():
                 frame = stream.readline(_MAX_FRAME + 1)
-                if not frame:
+                if not frame or stopped.is_set():
+                    return
+                if len(frame) > _MAX_FRAME or not frame.endswith(b"\n"):
+                    # Do not interpret a suffix of an oversized frame as a new
+                    # authorized request.
                     return
                 response = self._handle_frame(frame, spawn, grant)
-                encoded = json.dumps(
-                    response,
-                    sort_keys=True,
-                    separators=(",", ":"),
-                    default=repr,
-                ).encode()
-                stream.write(encoded + b"\n")
-        except (OSError, ValueError):
+                try:
+                    encoded = json.dumps(
+                        response,
+                        sort_keys=True,
+                        separators=(",", ":"),
+                        allow_nan=False,
+                    ).encode()
+                    if len(encoded) + 1 > _MAX_FRAME:
+                        raise ValueError("response too large")
+                except (TypeError, ValueError, RecursionError):
+                    # Never expose arbitrary object reprs or exception text.
+                    encoded = b'{"status":"denied","error":"broker:invalid_response"}'
+                channel.sendall(encoded + b"\n")
+        except (OSError, ValueError, RecursionError):
             return
         finally:
+            try:
+                channel.shutdown(socket.SHUT_RDWR)
+            except OSError:
+                pass
             try:
                 stream.close()
             except OSError:

@@ -91,7 +91,7 @@ _REVIEWED_DIGESTS = {
     "in-process-dispatch-binding": "c27f9c3e27353a54504a937127dad4dd487e0ba342a57ae08abaefdca14cbbd3",
     "guarded-in-process-dispatch": "339aa2be9e47df3bbecde106df41cf3910adbfeffaa9a3e086a31547fb108d2a",
     "linux-grant-activation": "ce921b3854f9f5f45ddaaf4762faa2c9cbd7198218f052f58399fa97118abbd5",
-    "enforcement-receipt": "7797364204ad5fb87c4228f58e8afb92563f341a14c463ab1d4763656a648003",
+    "enforcement-receipt": "9a17cd15c3cb9b68fc84d00e8dc06333d2eff0bcb993d32a85de41b0727a88f8",
     "flow-lifecycle": "455dc915f2de6497930122596f1af5cc72b0a2ec0731fdec9dea3259922ec48f",
     "delegation-transfer": "b275e7e857ae259c20b0b5c07619bda9089c946239ea86f641a9efd94041371f",
     "publication-boundaries": "db2150a7e8eaba1baba53ee9860fd48e455ec42841dc65ebef8167ac9680539d",

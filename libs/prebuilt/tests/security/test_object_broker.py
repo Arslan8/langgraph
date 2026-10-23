@@ -8,8 +8,12 @@ from pathlib import Path
 
 import pytest
 
+from langgraph.prebuilt.security import ResourceSupport, SupportLevel
 from langgraph.prebuilt.security.capabilities import probe_landlock_abi
-from langgraph.prebuilt.security.execution import HostExecutionDenied
+from langgraph.prebuilt.security.execution import (
+    HostExecutionDenied,
+    HostExecutionError,
+)
 from langgraph.prebuilt.security.linux import LinuxToolSpec
 from langgraph.prebuilt.security.object_broker import ObjectBrokerDispatcher
 from langgraph.prebuilt.security.object_policy import (
@@ -18,7 +22,14 @@ from langgraph.prebuilt.security.object_policy import (
     ObjectGrantLine,
 )
 from langgraph.prebuilt.security.profile import Requirement
-from langgraph.prebuilt.security.types import Principal, Tool, ToolCall, ToolDac
+from langgraph.prebuilt.security.types import (
+    ExecutionOutcome,
+    Principal,
+    Tool,
+    ToolCall,
+    ToolDac,
+)
+from tests.security.mediator_fixtures import exact_mediator
 
 
 @pytest.fixture
@@ -64,7 +75,7 @@ async def async_run(operation, selector):
                 "worker:run", source, hashlib.sha256(source.read_bytes()).hexdigest()
             )
         },
-        {("pump", "inspect"): handle},
+        mediators=(exact_mediator({("pump", "inspect"): handle}),),
         runtime_roots=tuple(Path(p) for p in sys.path if p and Path(p).is_dir()),
     )
     principal = Principal("alice", frozenset(), frozenset(), "session")
@@ -151,7 +162,7 @@ async def test_async_dispatch(setup):
                 dispatcher.tools["pump_tool"], entrypoint="worker:async_run"
             )
         },
-        dispatcher.handlers,
+        mediators=dispatcher.mediators,
         runtime_roots=dispatcher.runtime_roots,
     )
     assert (await dispatcher.ainvoke(principal, call, grant)).value == "inspected"
@@ -187,3 +198,152 @@ def test_no_grant_means_no_broker_authority(setup):
         dispatcher.invoke(principal, call, replace(grant, lines=())).value == "denied"
     )
     assert not seen
+
+
+@pytest.mark.skipif(probe_landlock_abi() < 5, reason="Landlock ABI 5 required")
+@pytest.mark.parametrize("requirement", [Requirement.NEED, Requirement.WANT])
+@pytest.mark.parametrize(
+    "unsupported", ["strategy", "capability", "protected_path", "missing"]
+)
+def test_lowering_need_and_want(setup, requirement, unsupported):
+    dispatcher, principal, call, grant, seen = setup
+    mediator = dispatcher.mediators[0]
+    line = replace(grant.lines[0], requirement=requirement)
+    if unsupported == "strategy":
+        line = replace(line, lowering="unknown.strategy")
+    elif unsupported == "capability":
+        mediator = replace(
+            mediator,
+            assess=lambda line, host: ResourceSupport(
+                SupportLevel.EXACT,
+                "requires unavailable device driver",
+                "device-v1",
+                required_capabilities=frozenset({"device:unavailable"}),
+            ),
+        )
+    elif unsupported == "protected_path":
+        mediator = replace(
+            mediator,
+            assess=lambda line, host: ResourceSupport(
+                SupportLevel.EXACT,
+                "resource data overlaps runtime",
+                "device-v1",
+                protected_paths=(str(Path(sys.executable).resolve()),),
+            ),
+        )
+    dispatcher = ObjectBrokerDispatcher(
+        dispatcher.tools,
+        runtime_roots=dispatcher.runtime_roots,
+        mediators=() if unsupported == "missing" else (mediator,),
+    )
+    grant = replace(grant, lines=(line,))
+    if requirement is Requirement.NEED:
+        with pytest.raises(HostExecutionDenied, match="required_authority_removed"):
+            dispatcher.invoke(principal, call, grant)
+    else:
+        result = dispatcher.invoke(principal, call, grant)
+        assert result.value == "denied"
+        assert result.receipt.removed_wants == (line.line_id,)
+        record = dispatcher.lowering_records()[0]
+        assert line.line_id in {rule.rule_id for rule in record.candidate.rules}
+        assert line.line_id not in {rule.rule_id for rule in record.grant.rules}
+        assert record.plan.removed_wants == (line.line_id,)
+        assert all(item.rule_id != line.line_id for item in record.obligations)
+    assert not seen
+
+
+@pytest.mark.skipif(probe_landlock_abi() < 5, reason="Landlock ABI 5 required")
+def test_mediator_ownership_conflict(setup):
+    dispatcher, principal, call, grant, seen = setup
+    first = dispatcher.mediators[0]
+    dispatcher = ObjectBrokerDispatcher(
+        dispatcher.tools,
+        runtime_roots=dispatcher.runtime_roots,
+        mediators=(first, replace(first, adapter_id="second")),
+    )
+    with pytest.raises(HostExecutionDenied, match="adapter_ownership_conflict"):
+        dispatcher.invoke(principal, call, grant)
+    assert not seen
+
+
+@pytest.mark.skipif(probe_landlock_abi() < 5, reason="Landlock ABI 5 required")
+def test_activation_failure_cleans_up_before_tool_import(setup):
+    dispatcher, principal, call, grant, seen = setup
+    lifecycle = []
+
+    def activate(lines, context):
+        lifecycle.append(("activate", context))
+        raise RuntimeError("resource unavailable")
+
+    def release(context):
+        lifecycle.append(("release", context))
+
+    dispatcher = ObjectBrokerDispatcher(
+        dispatcher.tools,
+        runtime_roots=dispatcher.runtime_roots,
+        mediators=(
+            replace(dispatcher.mediators[0], activate=activate, release=release),
+        ),
+    )
+    with pytest.raises(HostExecutionDenied, match="activation_failed"):
+        dispatcher.invoke(principal, call, grant)
+    assert not seen
+    assert [kind for kind, _ in lifecycle] == ["activate", "release"]
+    assert lifecycle[0][1] == lifecycle[1][1]
+
+
+@pytest.mark.skipif(probe_landlock_abi() < 5, reason="Landlock ABI 5 required")
+def test_resource_support_rechecked_on_each_request(setup):
+    dispatcher, principal, call, grant, seen = setup
+    original = dispatcher.mediators[0]
+    activated = False
+
+    def activate(lines, context):
+        nonlocal activated
+        activated = True
+        assert lines == grant.lines
+        assert context.principal_id == principal.user_id
+        assert context.worker.broker_epoch != "no-broker"
+
+    def assess(line, host):
+        if activated:
+            return ResourceSupport(SupportLevel.UNSUPPORTED, "resource lease lost")
+        return original.assess(line, host)
+
+    dispatcher = ObjectBrokerDispatcher(
+        dispatcher.tools,
+        runtime_roots=dispatcher.runtime_roots,
+        mediators=(replace(original, assess=assess, activate=activate),),
+    )
+    assert dispatcher.invoke(principal, call, grant).value == "denied"
+    assert not seen
+    assert dispatcher.audit_records()[0].reason == "adapter_failure"
+
+
+@pytest.mark.skipif(probe_landlock_abi() < 5, reason="Landlock ABI 5 required")
+def test_release_failure_is_indeterminate_after_effect(setup):
+    dispatcher, principal, call, grant, seen = setup
+
+    def release(context):
+        raise RuntimeError("lease revocation failed")
+
+    dispatcher = ObjectBrokerDispatcher(
+        dispatcher.tools,
+        runtime_roots=dispatcher.runtime_roots,
+        mediators=(replace(dispatcher.mediators[0], release=release),),
+    )
+    with pytest.raises(HostExecutionError, match="resource_release_failed") as caught:
+        dispatcher.invoke(principal, call, grant)
+    assert seen == [("inspect", "pump-1")]
+    assert caught.value.outcome is ExecutionOutcome.INDETERMINATE
+    assert not caught.value.termination_confirmed
+
+
+def test_bare_handler_is_not_a_lowering_contract(setup):
+    dispatcher, *_ = setup
+    with pytest.raises(ValueError, match="no lowering contract"):
+        ObjectBrokerDispatcher(
+            dispatcher.tools,
+            {("pump", "inspect"): lambda line, payload: None},
+            runtime_roots=dispatcher.runtime_roots,
+        )

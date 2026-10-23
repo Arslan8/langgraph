@@ -225,6 +225,12 @@ class ObjectClassRegistry:
         enforcer = self._enforcers.get(object_class.enforced_by)
         return enforcer is not None and enforcer.supports(object_class, line)
 
+    def defers_to_lowering(self, line: ObjectGrantLine) -> bool:
+        """Whether host-specific enforceability is decided after authorization."""
+        object_class = self._classes[line.class_name]
+        enforcer = self._enforcers.get(object_class.enforced_by)
+        return getattr(enforcer, "requires_host_negotiation", False) is True
+
     def require_registered_enforcer(self, class_name: str) -> None:
         """Reject a class whose declared enforcement locus is unavailable."""
         object_class = self._classes[class_name]
@@ -666,6 +672,8 @@ class CedarObjectAuthorizer:
             raise
         waived_lines: dict[str, str] = {}
         for line in retained:
+            if self.manifest.registry.defers_to_lowering(line):
+                continue
             if self.manifest.registry.supports(line):
                 continue
             reason = self.enforcement_waivers.get(line.class_name)
@@ -770,6 +778,13 @@ class ObjectGrantDispatcher(Protocol):
     def confirm_termination(self, recovery: TerminationRecovery) -> bool: ...
 
 
+@runtime_checkable
+class ObjectSandboxDispatcher(ObjectGrantDispatcher, ObjectClassEnforcer, Protocol):
+    """Isolated dispatcher that also checks its registered execution artifacts."""
+
+    def validate_tools(self, tool_names: Sequence[str]) -> None: ...
+
+
 class ObjectPolicyHostExecutor:
     """Bridge open-class Cedar authorization into secured `ToolNode` dispatch.
 
@@ -837,6 +852,8 @@ class ObjectPolicyHostExecutor:
                     )
                 except ObjectPolicyDenied as exc:
                     raise ValueError(f"object policy tool {name}: {exc}") from exc
+        if isinstance(self.dispatcher, ObjectSandboxDispatcher):
+            self.dispatcher.validate_tools(tool_names)
 
     def invoke(
         self,
@@ -915,7 +932,19 @@ class ObjectPolicyHostExecutor:
                 result.receipt,
                 ExecutionOutcome.INDETERMINATE,
             )
-        expected = {line.line_id for line in grant.lines}
+        removed = set(result.receipt.removed_wants)
+        optional = {
+            line.line_id for line in grant.lines if line.requirement is Requirement.WANT
+        }
+        if not removed.issubset(optional) or len(removed) != len(
+            result.receipt.removed_wants
+        ):
+            raise HostExecutionError(
+                "object_policy:invalid_removed_authority",
+                result.receipt,
+                ExecutionOutcome.INDETERMINATE,
+            )
+        expected = {line.line_id for line in grant.lines} - removed
         reported = [item.rule_id for item in result.receipt.rule_enforcement]
         if len(reported) != len(set(reported)) or set(reported) != expected:
             raise HostExecutionError(
@@ -1086,13 +1115,14 @@ def cedar_security(
     executable: str | Path = "cedar",
     modules: Sequence[SecurityModule] = (),
     normalizers: Mapping[str, ObjectNormalizer] | None = None,
+    dispatcher: ObjectSandboxDispatcher | None = None,
     labels: Callable[
         [Principal, ToolCall],
         Mapping[tuple[str, str], Mapping[str, str]],
     ]
     | None = None,
 ) -> SecurityConfig:
-    """Bind Cedar call and resource DAC directly to one trusted in-process tool.
+    """Bind Cedar DAC to a trusted tool or an explicitly isolated dispatcher.
 
     `manifest` is an unnamed SLP tool body. The tool's internal name is derived
     from `tool`, and exact owner permits are generated automatically. `classes`
@@ -1100,8 +1130,10 @@ def cedar_security(
     caller-facing Cedar permit policy. For resource-bearing manifests, access
     to the derived operations also determines caller eligibility; resource-free
     manifests require an explicit caller-side `call` permit. Resource grants
-    are enforced by the explicit trusted-tool/host-permission intersection
-    contract.
+    use the trusted-tool/host-permission intersection contract in process.
+    For `runs linux` or `runs broker`, supply an isolated `dispatcher`; the
+    registered schema tool is never executed in the coordinator. Kernel and
+    broker classes must be supported by that dispatcher before execution.
     """
     if not isinstance(tool, BaseTool):
         raise TypeError("cedar_security requires a @tool-decorated BaseTool")
@@ -1109,18 +1141,40 @@ def cedar_security(
     if not _NAME.fullmatch(tool_name):
         raise ValueError("tool name must be an identifier")
     _text(owner, "tool owner")
+    if dispatcher is not None and not isinstance(dispatcher, ObjectSandboxDispatcher):
+        raise TypeError("dispatcher must implement ObjectSandboxDispatcher")
+    core_classes = (
+        _TRUSTED_TOOL_CORE_CLASSES
+        if dispatcher is None
+        else (
+            ObjectClass(
+                name="fs",
+                operations=frozenset({"read", "write", "truncate"}),
+                object_kind="path",
+                normalizer="fs.realpath",
+                enforced_by=EnforcementKind.KERNEL,
+            ),
+        )
+    )
     parsed = parse_security_manifest(
         f"{classes}\ntool {tool_name} {{\n{manifest}\n}}",
         source=f"<{tool_name} manifest>",
         normalizers=normalizers,
         enforcers={
             EnforcementKind.TRUSTED_TOOL: _TrustedInProcessEnforcer(),
+        }
+        if dispatcher is None
+        else {
+            EnforcementKind.KERNEL: dispatcher,
+            EnforcementKind.BROKER: dispatcher,
         },
-        classes=_TRUSTED_TOOL_CORE_CLASSES,
+        classes=core_classes,
     )
     tool_manifest = parsed.tools[tool_name]
-    if tool_manifest.runs != "inprocess":
+    if dispatcher is None and tool_manifest.runs != "inprocess":
         raise ValueError("cedar_security requires runs inprocess")
+    if dispatcher is not None and tool_manifest.runs not in {"linux", "broker"}:
+        raise ValueError("isolated cedar_security requires runs linux or runs broker")
     invalid_enforcers = sorted(
         {
             rule.class_name
@@ -1129,7 +1183,7 @@ def cedar_security(
             is not EnforcementKind.TRUSTED_TOOL
         }
     )
-    if invalid_enforcers:
+    if dispatcher is None and invalid_enforcers:
         raise ValueError(
             "cedar_security resource classes must use enforced_by trusted_tool: "
             + ", ".join(invalid_enforcers)
@@ -1148,15 +1202,16 @@ def cedar_security(
     )
     overrides = DacOverrides({tool_name: local_policy})
     authorizer = CedarObjectAuthorizer(parsed, policies, executable=executable)
-    if not tool_manifest.rules:
+    if not tool_manifest.rules and dispatcher is None:
         module = CedarCallPolicy(authorizer, {tool_name: owner})
         return SecurityConfig(modules=(module, *modules), dac_overrides=overrides)
     executor = ObjectPolicyHostExecutor(
         authorizer,
-        _TrustedInProcessDispatcher(tool),
+        dispatcher if dispatcher is not None else _TrustedInProcessDispatcher(tool),
         tool_owners={tool_name: owner},
         labels=labels,
     )
+    executor.validate_tools((tool_name,))
     return SecurityConfig(
         modules=tuple(modules),
         host_executor=executor,
@@ -1666,6 +1721,7 @@ __all__ = (
     "ObjectNormalizer",
     "ObjectPolicyDenied",
     "ObjectPolicyHostExecutor",
+    "ObjectSandboxDispatcher",
     "SecurityManifest",
     "ToolManifest",
     "cedar_security",

@@ -7,6 +7,33 @@ The Linux reference executor implements the documented filesystem and
 resource-limit subset; [implementation status](status.md) records the exact
 boundary and remaining adapters.
 
+## Isolated object-resource implementation
+
+`ObjectBrokerDispatcher` now composes the existing `EnforcementCoordinator`
+with a Linux host adapter and operator-supplied `ResourceMediatorAdapter`
+instances. It compiles the object grant and explicit runtime baseline into
+obligations; mediator semantics depend on host bypass prevention, authenticated
+broker transport, and parent-owned credential custody. It negotiates the
+concrete host, removes unsupported optional authority, rechecks the ledger,
+and verifies activation evidence bound to the worker before releasing `GO`.
+The worker receives only the retained broker routes.
+
+SLP `lowering` names are contracts for adapters to recognize, not assertions
+of host support. The exact-file host adapter currently accepts its default
+strategy only; unknown strategies fail closed. Custom semantic adapters must
+assess each complete line, including the strategy. See
+[isolated tools](object-classes.md#isolated-tools) and the
+[pump example](../../workspace/05_custom_class_quickstart.py).
+
+The negotiation API is platform-neutral; the shipped executable object backend
+is Linux Landlock ABI 5+ with seccomp. A different OS needs a real confinement
+backend and evidence verifier. Local activation evidence is authenticated by
+per-invocation supervisor trust anchors, not independent remote attestation.
+A mediator's witness identifies an operator-reviewed semantic contract, not a
+machine-checked proof of arbitrary Python or physical-device semantics.
+This integration does not claim the full target authority record, externally
+anchored audit, or all resource/OS adapters described below.
+
 ## Security invariant
 
 An execution may be reported as **enforced** only when the framework can produce

@@ -1,0 +1,64 @@
+{
+  "source_sha256": "bb54838b8e112fc516d41868896872420ddee07700fb08614a47f6c14e5fa3b6",
+  "cedar_version": {
+    "returncode": 0,
+    "stdout": "cedar-policy-cli 4.13.0\n",
+    "stderr": ""
+  },
+  "manifest": "class record {\n  operations read\n  object item\n  normalizer identity\n  attrs owner\n  enforced_by broker\n}\ntool lookup {\n  runs broker\n  record read public need\n  returns normal\n}\n",
+  "cases": [
+    {
+      "principal": "alice",
+      "outcome": "ALLOW",
+      "lines": [
+        {
+          "attributes": {},
+          "class": "record",
+          "enforcer": "broker",
+          "line_id": "lookup:0",
+          "lowering": null,
+          "operation": "read",
+          "provenance": [
+            "<string>:10"
+          ],
+          "requirement": "need",
+          "selector": "public"
+        }
+      ],
+      "production_request_replay": {
+        "returncode": 0,
+        "stdout": "\nALLOW\n",
+        "stderr": ""
+      },
+      "unicode_control_replay": {
+        "returncode": 0,
+        "stdout": "\nALLOW\n",
+        "stderr": ""
+      },
+      "emitted_escape": "alice",
+      "generated_candidate_permit": "@id(\"constructive:lookup:0\")\npermit (\n  principal == slangGraph::User::\"alice\",\n  action == slangGraph::Action::\"record::read\",\n  resource\n);\n"
+    },
+    {
+      "principal": "josé",
+      "outcome": "ERROR",
+      "error": "cedar:evaluation:owner-call",
+      "production_request_replay": {
+        "returncode": 1,
+        "stdout": "\n  × failed to parse request\n  ├─▶ failed to parse principal in /tmp/slp-cedar-counterexample/josé/owner-\n  │   call-a6cd5292188e4783.request.json as entity Uid\n  ╰─▶ the input `\\u0` is not a valid escape\n   ╭────\n 1 │ slangGraph::User::\"jos\\u00e9\"\n   · ─────────────────────────────\n   ╰────\n\n",
+        "stderr": ""
+      },
+      "unicode_control_replay": {
+        "returncode": 0,
+        "stdout": "\nALLOW\n",
+        "stderr": ""
+      },
+      "emitted_escape": "jos\\u00e9",
+      "generated_candidate_permit": "@id(\"constructive:lookup:0\")\npermit (\n  principal == slangGraph::User::\"jos\\u00e9\",\n  action == slangGraph::Action::\"record::read\",\n  resource\n);\n"
+    }
+  ],
+  "lean_check": {
+    "returncode": 0,
+    "stdout": "'ProductionCapture.production_output_not_cedar_body' depends on axioms: [propext, Classical.choice, Quot.sound]\n",
+    "stderr": ""
+  }
+}

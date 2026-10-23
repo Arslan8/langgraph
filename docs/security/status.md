@@ -13,6 +13,17 @@ record the new evidence and remaining obligations. The 21-entry router proof
 passes; full placement and composition are not yet proved. Existence of the
 adapters must not be confused with complete coverage of their supported APIs.
 
+## Isolated object-resource lowering
+
+The object dispatcher now negotiates host confinement and custom semantic
+mediators through `EnforcementCoordinator`. Exact-file kernel grants,
+spawn-bound broker requests, required/optional reductions, activation hooks,
+and the pump mediator have executable regression coverage. The executable
+backend remains Linux Landlock/seccomp; semantic adapters are operator-trusted
+and other OS backends remain unimplemented. This is not a complete-mediation
+proof or completion of the full authority-record/audit target. See
+[lowering implementation](lowering.md#isolated-object-resource-implementation).
+
 ## Model
 
 The target is a layered reference monitor: LangGraph is a user-space object

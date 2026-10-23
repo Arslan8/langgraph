@@ -50,6 +50,89 @@ Run the complete permission matrix and its assertions with:
 python3 workspace/05_custom_class_quickstart.py --demo
 ```
 
+Example 6 adds a parent-owned SQLite database with record-level Cedar
+permissions. It requires Python 3.11+, Linux Landlock ABI 5+, libseccomp, and
+the Cedar CLI. No database server or manual setup is needed:
+
+```bash
+python3 workspace/06_database_quickstart.py
+```
+
+The demo creates a temporary database, checks allowed and denied read/write/delete
+requests, verifies that another user's record stayed unchanged, and cleans up.
+The database directory is kept outside worker-readable code roots. See the
+[SQLite mediator contract](../docs/security/object-classes.md#sqlite-record-mediator)
+for the fixed schema, payload limits, and integration API.
+
+Examples 7 and 8 demonstrate unsafe worker code and custom resource mediation.
+Both require Linux Landlock ABI 5+, libseccomp, and the Cedar CLI:
+
+```bash
+python3 workspace/07_unsafe_tools_demo.py
+python3 workspace/08_resource_adapters_demo.py
+```
+
+[Example 7](07_unsafe_tools_demo.py) grants read access to one temporary file.
+The deliberately unsafe [worker](07_unsafe_worker.py) then attempts an undeclared
+read, a native `open()` bypass, a write to its read-only file, and socket creation.
+Each forbidden operation prints `blocked`; the controller verifies that both
+fixture files stayed unchanged. Run the controller above, not the worker alone.
+This uses only demo-owned temporary data and creates no external connections.
+The manifest describes authority; it does not certify tool behavior. Runtime
+code roots remain readable, and filesystem metadata is not fully hidden.
+
+[Example 8](08_resource_adapters_demo.py) implements a counter adapter directly
+in the example, with four visible hooks:
+
+- `assess` recognizes the exact class, selector, operations, attributes, and
+  `counter.local.v1` lowering contract, and declares the protected directory.
+- `activate` establishes per-invocation state using the authenticated context.
+- `invoke` validates the payload and applies the counter's semantic limits.
+- `release` clears the invocation state after worker/broker activity stops.
+
+Its [worker](08_resource_adapter_worker.py) makes valid requests, then tries an
+invalid increment, a payload that changes the selector, and direct resource
+access. It also requests `retired`, an optional resource Cedar permits but the
+adapter cannot implement. Lowering removes that permission before dispatch.
+Finally, the controller repeats the call without the adapter and verifies that
+missing required support denies execution before worker activity.
+
+The counter adapter is trusted application code; its semantic checks are part
+of the security boundary. It illustrates a resource owned by one parent
+process, not a distributed counter or a general transactional store. Temporary
+fixtures are cleaned up automatically; the demos exit nonzero if an assertion
+fails.
+
+Example 9 configures operator MAC independently of the tool's DAC. It requires
+Linux Landlock ABI 5+, libseccomp, and the Cedar CLI:
+
+```bash
+python3 workspace/09_no_internet_demo.py
+```
+
+[The controller](09_no_internet_demo.py) loads the operator-owned
+[no-internet policy](09_no_internet.cedar) and supplies it through
+`cedar_security(..., policy=DAC_POLICY, mac_forbids=mac_policy)`.
+`policy` supplies discretionary permits; `mac_forbids` supplies mandatory Cedar
+forbids. DAC runs first, then MAC removes forbidden authority. Applications using
+the lower-level API set `CedarPolicySet(mac_forbids=...)` instead.
+
+Alice's DAC permits the declared file and internet operations. MAC denies
+`internet::connect` for every principal and destination. With internet marked
+`need`, authorization denies before dispatch. With it marked `want`, the tool
+runs with only the local file grant. The isolated worker verifies that IPv4 and
+IPv6 TCP/UDP socket creation fails; it never attempts an external connection.
+Assertions check the MAC denial, surviving grant, and worker results.
+
+The `internet` class is application-defined. No internet mediator is installed
+because MAC removes its authority before lowering. The current Linux sandbox
+also blocks direct sockets independently through seccomp; this demo does not
+implement a policy-controlled network sandbox toggle. Removing the MAC rule
+alone cannot enable internet access. In an application with network-capable
+parent brokers, every outbound operation must be covered by the mandatory
+policy too: this class name does not automatically classify other custom
+resources or disable the coordinator's network access.
+
 The examples introduce these ideas in order:
 
 1. A minimal graph and tool invocation.
@@ -59,6 +142,13 @@ The examples introduce these ideas in order:
    Cedar, converted into an exact grant, and enforced during execution.
 5. A custom `pump` class whose device operations are authorized independently
    even though every accepted command uses the same Unix-domain socket.
+6. A SQLite `db_record` class with separate read/write/delete permissions per
+   record, enforced by a parent-owned database mediator and host file isolation.
+7. An unsafe tool constrained by a read-only file grant and host isolation.
+8. A custom resource adapter with semantic validation, lifecycle hooks, optional
+   authority removal, and denial when required support is missing.
+9. Operator-owned mandatory policy removing internet authority despite a DAC
+   permit, with local work continuing inside a sandbox that blocks sockets.
 
 Example 4 also prints the retained temporary directory containing the generated
 Cedar schema, entities, policies, and requests. These artifacts can be copied or
@@ -232,7 +322,18 @@ operations and objects, not invocation counts or rate limits.
 The reusable API is `ObjectBrokerDispatcher`, connected to
 `ObjectPolicyHostExecutor`, plus the worker-side `object_request` helper in
 `langgraph.prebuilt.security.object_broker`. Register the dispatcher as the
-manifest's `EnforcementKind.BROKER` enforcer. Register handlers explicitly by
-`(class_name, operation)`; unregistered handlers and enforcement waivers fail
-closed. This runtime complements the static checker; static analysis is not
+manifest's `EnforcementKind.BROKER` enforcer. Register `ResourceMediatorAdapter` instances through `mediators=`.
+The pump adapter recognizes `lowering pump.socket.v1`, the exact device,
+operations, and attributes. Its `ResourceSupport` declares the socket path
+and required host capabilities. Host isolation and semantic support are
+negotiated separately; missing required support and enforcement waivers fail
+closed. Unsupported optional authority is removed and recorded by
+`dispatcher.lowering_records()`. Bare callback maps are no longer accepted. This runtime complements the static checker; static analysis is not
 required to enforce the worker's object capabilities.
+
+The same wiring is now available through
+`cedar_security(tool, manifest=manifest_body, classes=classes, policy=policy,
+dispatcher=dispatcher)`. Set `runs linux` or `runs broker` in the manifest.
+The helper registers the dispatcher's kernel and broker enforcers and derives
+the owner ceiling. See [isolated tools](../docs/security/object-classes.md#isolated-tools)
+for mixed filesystem and custom-resource grants and the runtime baseline.

@@ -23,6 +23,18 @@ from langgraph.prebuilt.security import (
     guarded_tool,
     with_principal,
 )
+from langgraph.prebuilt.security.introspect import _GUARDED_TOOLS
+
+
+@pytest.fixture(autouse=True)
+def restore_guarded_registry():
+    """Keep this module's guarded readers out of later graph inventories."""
+    previous = dict(_GUARDED_TOOLS)
+    try:
+        yield
+    finally:
+        _GUARDED_TOOLS.clear()
+        _GUARDED_TOOLS.update(previous)
 
 
 def config():

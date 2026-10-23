@@ -762,11 +762,13 @@ class ActivationReceipt:
     artifact_digest: str = ""
     deployment_digest: str = ""
     runtime_digest: str = ""
+    removed_wants: tuple[str, ...] = ()
 
     def __post_init__(self) -> None:
         if self.valid_until <= 0:
             raise ValueError("activation receipt expiry must be positive")
         object.__setattr__(self, "rule_enforcement", tuple(self.rule_enforcement))
+        object.__setattr__(self, "removed_wants", tuple(self.removed_wants))
 
     def canonical(self) -> Mapping[str, Any]:
         """Return complete canonical evidence suitable for durable audit."""
@@ -802,6 +804,11 @@ class ActivationReceipt:
                 )
             ],
             "valid_until": self.valid_until,
+            **(
+                {"removed_wants": list(self.removed_wants)}
+                if self.removed_wants
+                else {}
+            ),
             **(
                 {"artifact_digest": self.artifact_digest}
                 if self.artifact_digest
@@ -859,6 +866,8 @@ class EnforcementCoordinator:
         if evidence_error is not None:
             return NegotiationResult(None, evidence_error)
         obligation_map = {item.obligation_id: item for item in obligations}
+        if len(obligation_map) != len(obligations):
+            return NegotiationResult(None, "obligation_duplicate_identity")
         structure_error = _validate_obligations(grant, obligation_map)
         if structure_error is not None:
             return NegotiationResult(None, structure_error)
@@ -958,6 +967,7 @@ class EnforcementCoordinator:
             grant.artifact_digest,
             grant.deployment_digest,
             grant.runtime_digest,
+            plan.removed_wants,
         )
 
     def validate_receipt(
@@ -985,6 +995,7 @@ class EnforcementCoordinator:
             or receipt.artifact_digest != grant.artifact_digest
             or receipt.deployment_digest != grant.deployment_digest
             or receipt.runtime_digest != grant.runtime_digest
+            or receipt.removed_wants != plan.removed_wants
         ):
             return False
         expected = {assignment.obligation_id for assignment in plan.assignments}
@@ -1062,6 +1073,8 @@ class EnforcementCoordinator:
                 raise ValueError("adapter returned another adapter's identity")
             if assessment.obligation_id != obligation.obligation_id:
                 raise ValueError("adapter assessed a different obligation")
+            if not isinstance(assessment.support, SupportLevel):
+                raise ValueError("adapter returned an invalid support relation")
             if assessment.support is not SupportLevel.UNSUPPORTED:
                 supported.append(assessment)
         return supported
@@ -1092,6 +1105,13 @@ def _validate_obligations(
     if not obligations:
         return "obligations_missing"
     rule_ids = {rule.rule_id for rule in grant.rules}
+    operated = {
+        item.rule_id
+        for item in obligations.values()
+        if item.kind in {ObligationKind.OPERATE, ObligationKind.RESOURCE_LIMIT}
+    }
+    if not rule_ids.issubset(operated):
+        return "obligation_operation_missing"
     if any(
         item.rule_id not in rule_ids
         and not (

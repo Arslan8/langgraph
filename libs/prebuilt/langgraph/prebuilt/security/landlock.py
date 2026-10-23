@@ -21,7 +21,7 @@ from collections import deque
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from pathlib import Path
-from types import MappingProxyType
+from types import MappingProxyType, SimpleNamespace
 from typing import Any
 
 from langgraph.prebuilt.security.broker import (
@@ -68,6 +68,7 @@ _NET_PORT = 2
 _OPENAT2 = 437
 _AT_FDCWD = -100
 _RESOLVE_NO_MAGICLINKS = 0x02
+_RESOLVE_NO_SYMLINKS = 0x04
 _RESOLVE_BENEATH = 0x08
 
 _EXECUTE = 1 << 0
@@ -294,16 +295,35 @@ class LandlockSandboxExecutor:
             raise HostExecutionDenied("host:tool_manifest_missing")
         private_tmp = tempfile.TemporaryDirectory(prefix="slanggraph-worker-")
         private_tmp_path = Path(private_tmp.name)
+        artifact_tmp = tempfile.TemporaryDirectory(prefix="slanggraph-artifact-")
         broker_session: BrokerSession | None = None
         worker_broker_fd: int | None = None
+        ruleset: LandlockRuleset | None = None
         try:
-            if _file_digest(Path(spec.artifact_path)) != spec.artifact_digest:
+            source = Path(spec.artifact_path).read_bytes()
+            if hashlib.sha256(source).hexdigest() != spec.artifact_digest:
                 raise HostExecutionDenied("host:artifact_changed")
+            # The source path may change after authorization. Execute only the
+            # verified bytes, in a separate directory with no worker write grant.
+            pinned = Path(artifact_tmp.name) / "tool.py"
+            pinned.write_bytes(source)
+            pinned.chmod(0o400)
+            spec = SimpleNamespace(
+                entrypoint=spec.entrypoint,
+                artifact_path=pinned,
+                artifact_digest=spec.artifact_digest,
+            )
+            if (
+                _file_digest(self.python_executable) != self.python_digest
+                or _file_digest(self.worker_script) != self.worker_digest
+            ):
+                raise HostExecutionDenied("host:runtime_changed")
             grant, ledger = self._compile_grant(principal, call, spec, private_tmp_path)
             filtered = self.policy_backend.filter(grant, ledger, constraints)
             if not filtered.allowed or filtered.grant is None:
                 raise HostExecutionDenied(f"host:{filtered.reason}")
             grant = filtered.grant
+            grant = self._prepare_grant(grant, filtered.ledger)
             landlock_rules, enforcement = self._lower(grant)
             ruleset = build_ruleset(landlock_rules, abi=self.abi)
             limits = self._limits(grant)
@@ -319,19 +339,14 @@ class LandlockSandboxExecutor:
                 broker_session = self.credential_broker.open_session(spawn, grant)
                 worker_broker_fd = broker_session.detach_worker()
             request = {
-                "args": _json_value(call.args),
+                "args": _json_value({**call.args, **call.normalized}),
                 "artifact_path": os.fspath(spec.artifact_path),
                 "asynchronous": asynchronous,
                 "call_id": call.call_id,
                 "entrypoint": spec.entrypoint,
                 "landlock_ruleset_fd": ruleset.fd,
                 "limits": limits,
-                "plan_digest": _digest(
-                    [
-                        (item.rule_id, item.support.value, item.mechanism)
-                        for item in enforcement
-                    ]
-                ),
+                "plan_digest": self._worker_plan_digest(grant, enforcement),
                 "runtime_roots": [os.fspath(item) for item in self.runtime_roots],
                 "startup_challenge": secrets.token_hex(16),
                 "tool_name": call.tool.name,
@@ -340,11 +355,14 @@ class LandlockSandboxExecutor:
                 request["broker_fd"] = worker_broker_fd
             encoded = _encode_worker_request(request)
         except BaseException:
+            if ruleset is not None:
+                ruleset.close()
             if worker_broker_fd is not None:
                 os.close(worker_broker_fd)
             if broker_session is not None:
                 broker_session.close_parent()
             private_tmp.cleanup()
+            artifact_tmp.cleanup()
             raise
         environment = {
             "PATH": "/usr/bin",
@@ -406,6 +424,7 @@ class LandlockSandboxExecutor:
             except (AttributeError, OSError):
                 pidfd = None
             ruleset.close()
+            ruleset = None
             if process.stdin is None or process.stdout is None:
                 raise HostExecutionDenied("host:worker_pipe_failed")
             process.stdin.write(encoded)
@@ -448,10 +467,9 @@ class LandlockSandboxExecutor:
                 ) from exc
             raise HostExecutionDenied("host:worker_activation_failed") from exc
         finally:
-            try:
-                os.close(ruleset.fd)
-            except OSError:
-                pass
+            active_error = sys.exc_info()[1]
+            if ruleset is not None:
+                ruleset.close()
             if worker_broker_fd is not None:
                 try:
                     os.close(worker_broker_fd)
@@ -472,13 +490,27 @@ class LandlockSandboxExecutor:
                 elif not killed_cgroup:
                     process.kill()
                 process.wait(timeout=2)
+            if process is not None:
+                for stream in (process.stdin, process.stdout, process.stderr):
+                    if stream is not None:
+                        stream.close()
             if pidfd is not None:
                 os.close(pidfd)
             if cgroup is not None:
                 cgroup.close()
             if broker_session is not None:
                 broker_session.close_parent()
+            broker_stopped = broker_session is None or broker_session.terminated
             private_tmp.cleanup()
+            artifact_tmp.cleanup()
+            if isinstance(active_error, HostExecutionError):
+                active_error.termination_confirmed = broker_stopped
+            elif not broker_stopped and receipt is not None:
+                raise HostExecutionError(
+                    "host:broker_operation_still_running",
+                    receipt,
+                    ExecutionOutcome.INDETERMINATE,
+                )
 
     def _compile_grant(
         self, principal: Principal, call: ToolCall, spec: Any, private_tmp: Path
@@ -523,6 +555,21 @@ class LandlockSandboxExecutor:
             ),
         )
         return compiled.grant, compiled.ledger
+
+    def _prepare_grant(self, grant: Any, ledger: Any) -> Any:
+        """Allow composed backends to negotiate and attenuate before lowering."""
+        return grant
+
+    def _worker_plan_digest(self, grant: Any, enforcement: Any) -> str:
+        return _digest(
+            {
+                "grant": grant.digest,
+                "enforcement": [
+                    (item.rule_id, item.support.value, item.mechanism)
+                    for item in enforcement
+                ],
+            }
+        )
 
     def _baseline_rules(
         self, spec: Any, private_tmp: Path, *, enable_broker: bool
@@ -715,7 +762,13 @@ class LandlockSandboxExecutor:
             item.obligation_id for item in compile_obligations(grant)
         )
         plan_digest = _digest(
-            [(item.rule_id, item.support.value, item.mechanism) for item in enforcement]
+            {
+                "grant": grant.digest,
+                "enforcement": [
+                    (item.rule_id, item.support.value, item.mechanism)
+                    for item in enforcement
+                ],
+            }
         )
         context_digest = _digest({"pid": pid, "boot": _boot_id()})
         signature = hmac.new(
@@ -789,7 +842,7 @@ def build_ruleset(
     return LandlockRuleset(ruleset_fd, effective_abi, tuple(lowering))
 
 
-def open_path_descriptor(path: str) -> int:
+def open_path_descriptor(path: str, *, no_symlinks: bool = False) -> int:
     """Resolve one absolute path beneath `/` without magic-link traversal."""
     if not path.startswith("/") or posixpath.normpath(path) != path:
         raise ValueError("Landlock paths must be canonical and absolute")
@@ -799,7 +852,10 @@ def open_path_descriptor(path: str) -> int:
         if path == "/":
             return os.dup(root_fd)
         relative = path.lstrip("/").encode()
-        how = _OpenHow(flags, 0, _RESOLVE_BENEATH | _RESOLVE_NO_MAGICLINKS)
+        resolve = _RESOLVE_BENEATH | _RESOLVE_NO_MAGICLINKS
+        if no_symlinks:
+            resolve |= _RESOLVE_NO_SYMLINKS
+        how = _OpenHow(flags, 0, resolve)
         libc = ctypes.CDLL(None, use_errno=True)
         ctypes.set_errno(0)
         descriptor = int(
@@ -836,9 +892,17 @@ def _add_rule(
             return RuleLowering(
                 rule.rule_id, SupportLevel.UNSUPPORTED, "ABI lacks access right"
             )
-        descriptor = open_path_descriptor(rule.selector)
+        descriptor = open_path_descriptor(
+            rule.selector, no_symlinks=bool(rule.conditions.get("exact_file"))
+        )
         try:
             mode = os.fstat(descriptor).st_mode
+            if rule.conditions.get("exact_file") and not stat.S_ISREG(mode):
+                return RuleLowering(
+                    rule.rule_id,
+                    SupportLevel.UNSUPPORTED,
+                    "exact file authority cannot expose a directory subtree",
+                )
             permitted_urandom = (
                 stat.S_ISCHR(mode)
                 and rule.domain is AuthorityDomain.RUNTIME

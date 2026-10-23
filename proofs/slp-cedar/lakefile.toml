@@ -1,0 +1,12 @@
+name = "slp-cedar"
+version = "0.1.0"
+defaultTargets = ["SlpCedar", "TranslationFailure", "ProductionCapture"]
+
+[[lean_lib]]
+name = "SlpCedar"
+
+[[lean_lib]]
+name = "TranslationFailure"
+
+[[lean_lib]]
+name = "ProductionCapture"

@@ -51,7 +51,201 @@ the retained Cedar schema, entity set, policies, and requests for each decision.
 Only classes declared with `enforced_by trusted_tool` use this convenience path;
 other enforcement loci require an explicit dispatcher.
 
-The effective permission of that trusted in-process execution is the
+### Isolated tools
+
+Pass `ObjectBrokerDispatcher` to the same helper for a separate Linux worker.
+The registered `BaseTool` supplies the schema; its body is never executed. The
+dispatcher selects a pinned implementation artifact, activates Landlock,
+seccomp, limits, and a cleared environment before import, and exposes only a
+channel bound to the invocation for brokered resource operations.
+
+```python
+import hashlib
+from pathlib import Path
+
+from langgraph.prebuilt.security import (
+    LinuxToolSpec,
+    ObjectBrokerDispatcher,
+    ResourceMediatorAdapter,
+    ResourceSupport,
+    SupportLevel,
+    EnforcementKind,
+    cedar_security,
+)
+
+artifact = Path("/opt/report-worker/report_worker.py").resolve(strict=True)
+
+def assess_record(line, host):
+    if (line.class_name != "record" or line.operation != "read"
+        or line.enforcer is not EnforcementKind.BROKER
+        or line.lowering != "database.record.v1" or line.attributes
+        or not database.is_canonical_record_id(line.selector)):
+        return ResourceSupport(SupportLevel.UNSUPPORTED, "unsupported record semantics")
+    return ResourceSupport(
+        SupportLevel.EXACT, "read one canonical record by ID",
+        witness="operator-reviewed-record-adapter-v1",
+        protected_paths=("/run/secrets/database-token",),
+        required_capabilities=frozenset({"broker:spawn-bound", "seccomp:minimal"}),
+    )
+
+def read_record(line, payload, context):
+    if payload:
+        raise ValueError("read_record takes no payload")
+    # This client and its credentials stay in the coordinator. The selector
+    # comes from the authorized grant, never a resource name in the payload.
+    return database.read_record(line.selector)
+
+dispatcher = ObjectBrokerDispatcher(
+    {report_tool.name: LinuxToolSpec(
+        "report_worker:run", artifact, hashlib.sha256(artifact.read_bytes()).hexdigest()
+    )},
+    mediators=(ResourceMediatorAdapter("database.record.v1", assess_record, read_record),),
+    runtime_roots=("/opt/report-worker", "/opt/report-dependencies"),
+)
+security = cedar_security(
+    report_tool,
+    dispatcher=dispatcher,
+    manifest="""
+        runs linux
+        fs read @{path} need
+        record read @{record_id} need
+    """,
+    classes="""
+        class record {
+          operations read
+          object item
+          normalizer identity
+          attrs
+          enforced_by broker
+          lowering database.record.v1
+        }
+    """,
+    policy=caller_and_resource_policy,
+)
+```
+
+The worker implementation can use ordinary `open(path)` for its kernel-granted
+file and `object_request("record", "read", record_id)` for its brokered record.
+Use `security` with `ToolNode` or `StateGraph.compile` as above. The manifest and
+argument inspection run before dispatch. Broker requests are checked against
+the surviving grant on every operation; changing the object, operation, or
+claimed identity cannot expand it. Unsupported classes and enforcement waivers
+deny execution, with no in-process fallback.
+
+The helper's isolated `fs` class supports `read`, `write`, and `truncate` of
+existing regular files. Directory selectors are rejected rather than expanded
+into recursive authority. Canonical paths are opened without symlink traversal
+at lowering; rules are attached to those kernel objects. This is live file
+access, not a content snapshot. The tool's primary source is separately copied
+from verified bytes before launch to prevent artifact-path replacement.
+
+Runtime authority is additional, explicit operator configuration: the Python
+runtime, `/usr`, tool code, dependency roots, a private temporary directory, and
+protocol descriptors are available. Runtime roots must contain only code and
+public runtime data, never secrets or broker-protected resources. Dependency
+contents are not pinned by the primary artifact digest. Landlock confines file
+content access; it does not hide all filesystem metadata. Direct sockets,
+process creation, executable replacement, and ptrace are blocked by seccomp.
+
+The dispatcher negotiates an obligation graph before import: host confinement,
+a channel bound to this invocation, credential custody, bypass prevention, and
+the semantic operation each need an owner. A missing required capability denies
+execution. Unsupported `want` lines are removed, including their broker routes;
+`receipt.removed_wants` and `dispatcher.lowering_records()` expose the reduction.
+Ambiguous adapter ownership denies execution.
+
+`ResourceMediatorAdapter(assess=..., invoke=..., activate=..., release=...)`
+is the extension point for resources the host cannot interpret. `assess`
+receives the complete canonical line and host attestation and returns
+`ResourceSupport` with `EXACT`, useful `STRICTER`, or `UNSUPPORTED`.
+It must recognize the selector, attributes, operation, and lowering strategy.
+Supported assessments require a `witness` reference to an operator-reviewed
+contract or conformance tests; this is not an automatically verified proof.
+Declare all protected credential/data paths and required host capabilities.
+The host rejects declared paths overlapping runtime or file grants. Operators
+must also exclude aliases/hardlinks and undeclared resource access from readable
+code roots; a pathname declaration does not discover them automatically.
+
+`activate` can establish resource-side state before tool import; `release`
+tears it down after worker and broker activity stops. `invoke` receives a
+parent-authenticated `ResourceInvocation` and untrusted JSON payload.
+Support is rechecked before activation and each request. Bare handler maps are
+rejected because callback existence does not establish enforceability.
+The executable backend currently requires Linux Landlock ABI 5+; portable
+negotiation contracts do not imply executors exist for every OS.
+
+Custom mediators remain trusted reference monitors. They must validate payload
+fields, use the supplied selector and operation, bound external I/O, and avoid
+background work. A handler's arbitrary Python semantics cannot be inferred from
+SLP. Terminating the worker does not undo a broker operation already in flight;
+an unfinished handler produces an indeterminate outcome. Cancellation waits for
+worker cleanup instead of abandoning a running invocation. Requests and results
+are JSON-only and frame-limited; injected coordinator objects require explicit
+broker interfaces. Permissions do not impose invocation counts or rate limits.
+
+### SQLite record mediator
+
+`sqlite_record_mediator(path, database_id="notes")` is a concrete database
+adapter. Register its return value in `ObjectBrokerDispatcher(mediators=...)`.
+It requires Python 3.11+ and the isolated Linux backend's normal prerequisites.
+Create the database yourself, in a dedicated directory outside all readable
+runtime roots, using the exported `SQLITE_RECORD_SCHEMA`:
+
+```sql
+CREATE TABLE records (key TEXT PRIMARY KEY, value TEXT NOT NULL)
+```
+
+Declare the resource class and select operations through a closed manifest map:
+
+```text
+class db_record {
+  operations read write delete
+  object record
+  normalizer identity
+  attrs
+  enforced_by broker
+  lowering sqlite.record.v1
+}
+tool manage_record {
+  runs linux
+  map operation=read   db_record read   @{record} need
+  map operation=write  db_record write  @{record} need
+  map operation=delete db_record delete @{record} need
+}
+```
+
+A selector such as `notes/alice` identifies one key in the configured database.
+Both database IDs and keys accept 1–128 ASCII letters, digits, underscores, or
+hyphens. `read` accepts no payload and returns `{"found": true, "value": "..."}`
+or `{"found": false, "value": null}`. `write` accepts only `{"value": "..."}`
+and inserts or replaces that key's value; `delete` accepts no payload. Writes
+and deletes return `{"ok": true}` without exposing the old value or whether
+the key existed. Values are UTF-8 text limited to 8192 bytes.
+
+The worker cannot supply SQL, table names, predicates, or connection options.
+Fixed parameterized statements determine the row; SQLite's authorizer adds a
+statement-level allowlist. The exact schema and absence of record triggers
+are checked at activation and again inside each operation's transaction.
+Unsupported views, virtual tables, generated columns, and trigger side effects
+fail closed. This adapter does not provide arbitrary SQL or adapt an existing
+application schema automatically.
+
+Connections exist only in parent callbacks. The protected resource is the
+entire database directory, covering the database, rollback journal, WAL, and
+shared-memory files. The host refuses overlapping file/runtime grants.
+Operators must exclude readable aliases/hardlinks and keep code roots separate.
+SQLite lock waits use `timeout_s` (default one second); query work also has a
+deadline and instruction budget. These bounds do not promise cancellation of
+an operating-system I/O stall or reversal of an already committed transaction.
+
+Run [the database example](../../workspace/06_database_quickstart.py) to exercise
+real Cedar permissions through a ToolNode: Alice may manage her record, Bob
+may only read his, and cross-record requests are denied. The untrusted
+[worker](../../workspace/06_database_worker.py) receives only record selectors.
+
+### Trusted in-process resources
+
+The effective permission of trusted in-process execution is the
 intersection of slangGraph authorization and the coordinator's existing host
 permission. A host allow does not grant an operation denied by slangGraph, and
 a slangGraph allow does not overcome a host denial. The tool runs under the

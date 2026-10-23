@@ -194,7 +194,7 @@ optional and repeatable.
 
 | Entry | Cardinality | Default | Meaning |
 | --- | --- | --- | --- |
-| `runs RUN_LOCUS` | Zero or one | `inprocess` | Identifier naming the execution locus. The high-level helper accepts only trusted `inprocess` execution; host executors interpret other values. |
+| `runs RUN_LOCUS` | Zero or one | `inprocess` | Identifier naming the execution locus. The high-level helper accepts trusted `inprocess`, or `linux`/`broker` with an explicit isolated dispatcher. |
 | `returns RETURN_CLASS` | Zero or one | `normal` | Identifier classifying the tool result, such as `normal` or `sensitive`. The manifest parser records the identifier; downstream policy gives it meaning. |
 | `CLASS OPERATION OBJECT_PATTERN need` | Zero or more | None | Required resource capability. Removing or denying it denies the complete call. |
 | `CLASS OPERATION OBJECT_PATTERN want` | Zero or more | None | Optional resource capability. Removing or denying it omits the line but does not by itself deny the call. |
