@@ -125,6 +125,7 @@ class SecurityStack:
             from langgraph.prebuilt.analysis.adapters.enforcement import (
                 EnforcementAdapter,
             )
+
             try:
                 snapshot = EnforcementAdapter(self.analysis).snapshot(principal, call)
                 call = replace(call, analysis_snapshot=snapshot)
@@ -163,8 +164,11 @@ class SecurityStack:
             from langgraph.prebuilt.analysis.adapters.enforcement import (
                 EnforcementAdapter,
             )
+
             try:
-                snapshot = await EnforcementAdapter(self.analysis).asnapshot(principal, call)
+                snapshot = await EnforcementAdapter(self.analysis).asnapshot(
+                    principal, call
+                )
                 call = replace(call, analysis_snapshot=snapshot)
             except Exception:
                 return Decision(Verdict.DENY, "analysis:unavailable")
@@ -197,6 +201,7 @@ class SecurityStack:
             from langgraph.prebuilt.analysis.adapters.enforcement import (
                 EnforcementAdapter,
             )
+
             try:
                 call = EnforcementAdapter(self.analysis).prepare(principal, call)
             except Exception:
@@ -229,6 +234,17 @@ class SecurityStack:
                 continue
             if decision.verdict is not Verdict.ALLOW:
                 return decision, current
+        if self.analysis is not None:
+            from langgraph.prebuilt.analysis.serialization import freeze
+
+            try:
+                current = replace(
+                    current,
+                    args=freeze(current.args),
+                    normalized=freeze(current.normalized),
+                )
+            except Exception:
+                return Decision(Verdict.DENY, "analysis:unavailable"), current
         started = self._started()
         final = dac_check(principal, current.tool, current.normalized)
         self._observe(principal, current, "prepare", "dac_final", final, started)
@@ -244,8 +260,9 @@ class SecurityStack:
             from langgraph.prebuilt.analysis.adapters.enforcement import (
                 EnforcementAdapter,
             )
+
             try:
-                call = EnforcementAdapter(self.analysis).prepare(principal, call)
+                call = await EnforcementAdapter(self.analysis).aprepare(principal, call)
             except Exception:
                 return Decision(Verdict.DENY, "analysis:unavailable"), call
         started = self._started()
@@ -276,6 +293,17 @@ class SecurityStack:
                 continue
             if decision.verdict is not Verdict.ALLOW:
                 return decision, current
+        if self.analysis is not None:
+            from langgraph.prebuilt.analysis.serialization import freeze
+
+            try:
+                current = replace(
+                    current,
+                    args=freeze(current.args),
+                    normalized=freeze(current.normalized),
+                )
+            except Exception:
+                return Decision(Verdict.DENY, "analysis:unavailable"), current
         started = self._started()
         final = dac_check(principal, current.tool, current.normalized)
         self._observe(principal, current, "prepare", "dac_final", final, started)
@@ -415,11 +443,14 @@ class SecurityStack:
     ) -> ObjectAuthorization:
         if self.analysis is not None:
             from langgraph.prebuilt.analysis.adapters.objects import ObjectAdapter
+
             try:
                 snapshot = ObjectAdapter(self.analysis).snapshot(principal, request)
                 request = replace(request, analysis_snapshot=snapshot)
             except Exception:
-                return ObjectAuthorization(Decision(Verdict.DENY, "analysis:unavailable"), request)
+                return ObjectAuthorization(
+                    Decision(Verdict.DENY, "analysis:unavailable"), request
+                )
         current: StateRequest | ModelInvocationRequest | OutputRequest = request
         constraints: list[PolicyConstraint] = []
         for module in self.modules:
@@ -471,11 +502,16 @@ class SecurityStack:
     ) -> ObjectAuthorization:
         if self.analysis is not None:
             from langgraph.prebuilt.analysis.adapters.objects import ObjectAdapter
+
             try:
-                snapshot = ObjectAdapter(self.analysis).snapshot(principal, request)
+                snapshot = await ObjectAdapter(self.analysis).asnapshot(
+                    principal, request
+                )
                 request = replace(request, analysis_snapshot=snapshot)
             except Exception:
-                return ObjectAuthorization(Decision(Verdict.DENY, "analysis:unavailable"), request)
+                return ObjectAuthorization(
+                    Decision(Verdict.DENY, "analysis:unavailable"), request
+                )
         current: StateRequest | ModelInvocationRequest | OutputRequest = request
         constraints: list[PolicyConstraint] = []
         for module in self.modules:

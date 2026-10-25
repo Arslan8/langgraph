@@ -832,12 +832,27 @@ class Pregel(
             stream_transformers or ()
         )
         self._serde_allowlist: set[tuple[str, ...]] | None = None
+        self._input_guard: Callable[[Any, RunnableConfig], None] | None = None
+        self._ainput_guard: Callable[[Any, RunnableConfig], Awaitable[None]] | None = (
+            None
+        )
         self._output_filter: Callable[[Any, RunnableConfig], Any] | None = None
         self._aoutput_filter: Callable[[Any, RunnableConfig], Awaitable[Any]] | None = (
             None
         )
         if auto_validate:
             self.validate()
+
+    def _set_input_guard(
+        self,
+        input_guard: Callable[[Any, RunnableConfig], None],
+        ainput_guard: Callable[[Any, RunnableConfig], Awaitable[None]],
+    ) -> None:
+        """Install trusted admission callbacks before callbacks or graph processing."""
+        if self._input_guard is not None or self._ainput_guard is not None:
+            raise ValueError("an input guard is already installed")
+        self._input_guard = input_guard
+        self._ainput_guard = ainput_guard
 
     def _set_output_filter(
         self,
@@ -2766,6 +2781,8 @@ class Pregel(
         stream = SyncQueue()
 
         config = ensure_config(self.config, config)
+        if self._input_guard is not None:
+            self._input_guard(input, config)
         run_manager = None
         try:
             # assign defaults
@@ -3197,6 +3214,8 @@ class Pregel(
         )
 
         config = ensure_config(self.config, config)
+        if self._ainput_guard is not None:
+            await self._ainput_guard(input, config)
         run_manager = None
         try:
             # assign defaults

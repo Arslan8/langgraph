@@ -101,16 +101,22 @@ class NotificationHub:
     def __init__(self, retention: int = 4096) -> None:
         self.retention = retention
         self._lock = RLock()
-        self._retained: dict[str, deque[tuple[str, AnalysisSnapshot]]] = {}
-        self._sequence: dict[str, int] = {}
+        self._retained: dict[
+            tuple[str, str, str], deque[tuple[str, AnalysisSnapshot]]
+        ] = {}
+        self._sequence: dict[tuple[str, str, str], int] = {}
         self._subscriptions: list[AnalysisSubscription] = []
 
     def publish(self, snapshot: AnalysisSnapshot) -> None:
         with self._lock:
-            run = snapshot.event.run_id
+            run = (
+                snapshot.event.tenant_id,
+                snapshot.event.session_id,
+                snapshot.event.run_id,
+            )
             number = self._sequence.get(run, 0) + 1
             self._sequence[run] = number
-            cursor = f"{run}:{number}"
+            cursor = f"{snapshot.event.run_id}:{number}"
             self._retained.setdefault(run, deque(maxlen=self.retention)).append(
                 (cursor, snapshot)
             )
@@ -133,12 +139,22 @@ class NotificationHub:
                 try:
                     run, number_text = after_cursor.rsplit(":", 1)
                     number = int(number_text)
-                    retained = self._retained.get(run, ())
+                    keys = [
+                        key
+                        for key in self._retained
+                        if key[0] == policy.context.tenant_id
+                        and key[1] in policy.context.session_ids
+                        and key[2] == run
+                    ]
+                    if len(keys) != 1:
+                        raise ValueError
+                    key = keys[0]
+                    retained = self._retained[key]
                     if (
                         query.run_id != run
                         or not retained
                         or number < int(retained[0][0].rsplit(":", 1)[1]) - 1
-                        or number > self._sequence[run]
+                        or number > self._sequence[key]
                     ):
                         raise ValueError
                     for cursor, snapshot in retained:

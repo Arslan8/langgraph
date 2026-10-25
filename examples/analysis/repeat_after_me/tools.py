@@ -18,8 +18,8 @@ class Ledger:
         with sqlite3.connect(self.path) as db:
             return db.execute("SELECT count(*) FROM events").fetchone()[0]
 
-    def tool(self):
-        @tool
+    def tool(self, name="record_demo_event"):
+        @tool(name)
         @dac(owner="demo", grants={"demo": "x"})
         def record_demo_event(message: str) -> str:
             """Record one harmless message in the isolated demonstration ledger."""

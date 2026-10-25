@@ -3,11 +3,13 @@
 from typing import Protocol
 
 from langgraph.prebuilt.analysis.contracts import ValueRef
+from langgraph.prebuilt.analysis.provenance.domains import DomainRegistry
 from langgraph.prebuilt.analysis.provenance.records import (
     DependencyEdge,
     StoredValue,
     ValueRecord,
 )
+from langgraph.prebuilt.analysis.provenance.sqlite import SqliteProvenanceStore
 
 
 class ProvenanceStore(Protocol):
@@ -25,11 +27,10 @@ class ProvenanceStore(Protocol):
     def resolve(self, value_ref: ValueRef) -> bytes: ...
 
 
-# Deferred construction keeps the protocol independent of the SQLite backend.
-class MemoryProvenanceStore:
-    """Isolated, transactional in-memory store using SQLite's memory backend."""
+class MemoryProvenanceStore(SqliteProvenanceStore):
+    """Isolated transactional memory backend with the persistent store's semantics."""
 
-    def __new__(cls, **kwargs):
-        from langgraph.prebuilt.analysis.provenance.sqlite import SqliteProvenanceStore
-
-        return SqliteProvenanceStore(":memory:", **kwargs)
+    def __init__(
+        self, *, domains: DomainRegistry | None = None, max_records: int = 100000
+    ) -> None:
+        super().__init__(":memory:", domains=domains, max_records=max_records)

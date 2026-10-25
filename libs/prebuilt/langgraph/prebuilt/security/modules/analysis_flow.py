@@ -11,9 +11,22 @@ from langgraph.prebuilt.security.types import Decision, Verdict
 class AnalysisFlowPolicy(AnalysisGate):
     name = "analysis_flow"
 
-    def __init__(self, policy_version: str, domains: DomainRegistry, clearances):
+    def __init__(
+        self,
+        policy_version: str,
+        domains: DomainRegistry,
+        clearances,
+        *,
+        read_bounds=None,
+    ):
         super().__init__(policy_version)
         self.domains = domains
+        self.read_bounds = MappingProxyType(
+            {
+                key: None if value is None else frozenset(value)
+                for key, value in (read_bounds or {}).items()
+            }
+        )
         self.clearances = MappingProxyType(
             {
                 key: None if value is None else frozenset(value)
@@ -39,6 +52,12 @@ class AnalysisFlowPolicy(AnalysisGate):
         decision = super().tool_call_permission(principal, call)
         if decision.verdict is not Verdict.ALLOW:
             return decision
+        bound = self.read_bounds.get(call.tool.name)
+        clearance = self.clearances.get(call.tool.name)
+        if bound is None or clearance is None:
+            return Decision(Verdict.DENY, "analysis:unknown_authority")
+        if not bound.issubset(clearance):
+            return Decision(Verdict.DENY, "analysis:authority_flow")
         return self._flow(self.snapshot(principal, call), call.tool.name)
 
     def model_invoke(self, principal, request):

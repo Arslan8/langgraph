@@ -177,9 +177,7 @@ class _GuardedExecutor:
                 result = host_result.value
             else:
                 result = self._invoke_in_process(principal, call, config)
-            if self.security.analysis is not None:
-                from langgraph.prebuilt.analysis.adapters.enforcement import EnforcementAdapter
-                result = EnforcementAdapter(self.security.analysis).result(result, call)
+            result = self._analysis_result(result, call)
             outcome = ExecutionOutcome.SUCCEEDED
             return result
         except HostExecutionDenied as exc:
@@ -269,9 +267,7 @@ class _GuardedExecutor:
                 result = host_result.value
             else:
                 result = await self._ainvoke_in_process(principal, call, config)
-            if self.security.analysis is not None:
-                from langgraph.prebuilt.analysis.adapters.enforcement import EnforcementAdapter
-                result = await EnforcementAdapter(self.security.analysis).aresult(result, call)
+            result = await self._aanalysis_result(result, call)
             outcome = ExecutionOutcome.SUCCEEDED
             return result
         except HostExecutionDenied as exc:
@@ -314,6 +310,20 @@ class _GuardedExecutor:
                     termination_confirmed,
                     flow_recovery,
                 )
+
+    def _analysis_result(self, result, call):
+        if self.security.analysis is None:
+            return result
+        from langgraph.prebuilt.analysis.adapters.enforcement import EnforcementAdapter
+
+        return EnforcementAdapter(self.security.analysis).result(result, call)
+
+    async def _aanalysis_result(self, result, call):
+        if self.security.analysis is None:
+            return result
+        from langgraph.prebuilt.analysis.adapters.enforcement import EnforcementAdapter
+
+        return await EnforcementAdapter(self.security.analysis).aresult(result, call)
 
     def _invoke_in_process(
         self, principal: Principal, call: ToolCall, config: RunnableConfig

@@ -23,6 +23,7 @@ from langgraph.prebuilt.analysis.access.subscriptions import (
 from langgraph.prebuilt.analysis.contracts import ValueRef
 from langgraph.prebuilt.analysis.errors import AccessDenied
 from langgraph.prebuilt.analysis.journal import AnalysisJournal
+from langgraph.prebuilt.analysis.serialization import freeze
 
 
 class AnalysisClient:
@@ -123,6 +124,10 @@ class AnalysisClient:
             )
             if level < depth:
                 pending.extend((edge.parent, level + 1) for edge in edges)
+        if cursor is not None and revision != self._journal.store.revision:
+            from langgraph.prebuilt.analysis.errors import CursorExpired
+
+            raise CursorExpired("analysis:provenance_revision_changed")
         ordered = tuple(records[key] for key in sorted(records))
         return ProvenancePage(
             records=ordered[offset : offset + 100],
@@ -172,7 +177,7 @@ class AnalysisClient:
         )
         event = snapshot.event.model_copy(
             update={
-                "metadata": {},
+                "metadata": freeze({}),
                 "parent_event_ids": (),
                 "destination": "",
                 "input_refs": tuple(

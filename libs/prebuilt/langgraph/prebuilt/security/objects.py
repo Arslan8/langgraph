@@ -116,6 +116,7 @@ class ModelInvocationRequest:
     context: tuple[LabeledValue, ...]
     invocation_id: str
     analysis_snapshot: Any = field(default=None, compare=False, repr=False)
+
     def __post_init__(self) -> None:
         if not self.model or not self.invocation_id:
             raise ValueError("model and invocation_id must be non-empty")

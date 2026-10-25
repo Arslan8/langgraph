@@ -39,11 +39,13 @@ class MediatedCheckpointer(BaseCheckpointSaver):
         inner: BaseCheckpointSaver,
         router: HostRouter,
         checkpoint_key: bytes,
+        analysis: Any = None,
     ) -> None:
         super().__init__(serde=inner.serde)
         self.inner = inner
         self.router = router
         self.checkpoint_key = bytes(checkpoint_key)
+        self.analysis = analysis
 
     @property
     def config_specs(self) -> builtins.list[Any]:
@@ -242,6 +244,11 @@ class MediatedCheckpointer(BaseCheckpointSaver):
                 ),
             )
         )
+        if self.analysis is not None:
+            effective = dict(effective)
+            effective["__slanggraph_analysis__"] = self._analysis_save(
+                principal, effective["id"]
+            )
         envelope = seal_checkpoint(
             self.checkpoint_key,
             checkpoint_id=effective["id"],
@@ -274,6 +281,11 @@ class MediatedCheckpointer(BaseCheckpointSaver):
                 ),
             )
         )
+        if self.analysis is not None:
+            effective = dict(effective)
+            effective["__slanggraph_analysis__"] = self._analysis_save(
+                principal, effective["id"]
+            )
         envelope = seal_checkpoint(
             self.checkpoint_key,
             checkpoint_id=effective["id"],
@@ -292,6 +304,11 @@ class MediatedCheckpointer(BaseCheckpointSaver):
         principal = _principal(config)
         value = self._verify_pending_writes(value, principal)
         envelope = _envelope(value, principal)
+        if self.analysis is not None:
+            authenticate_checkpoint(self.checkpoint_key, envelope, principal)
+            self._analysis_restore(
+                principal, envelope.payload.get("__slanggraph_analysis__")
+            )
         effective = _checkpoint(
             self.router.state(
                 principal,
@@ -311,6 +328,11 @@ class MediatedCheckpointer(BaseCheckpointSaver):
         principal = _principal(config)
         value = self._verify_pending_writes(value, principal)
         envelope = _envelope(value, principal)
+        if self.analysis is not None:
+            authenticate_checkpoint(self.checkpoint_key, envelope, principal)
+            self._analysis_restore(
+                principal, envelope.payload.get("__slanggraph_analysis__")
+            )
         effective = _checkpoint(
             await self.router.astate(
                 principal,
@@ -368,6 +390,39 @@ class MediatedCheckpointer(BaseCheckpointSaver):
         )
         return value._replace(checkpoint=effective)
 
+    def _analysis_save(self, principal, checkpoint_id):
+        from dataclasses import asdict
+
+        from langgraph.prebuilt.analysis.provenance.checkpoint import CheckpointBinding
+
+        refs = self.analysis.store.run_refs(
+            self.analysis.tenant_id, self.analysis.run_id
+        )
+        binding = CheckpointBinding(
+            self.analysis.store,
+            self.checkpoint_key,
+            self.analysis.config.policy_version,
+        )
+        return asdict(binding.save(principal, refs, checkpoint_id=checkpoint_id))
+
+    def _analysis_restore(self, principal, data):
+        from langgraph.prebuilt.analysis.adapters.boundary import BoundaryAdapter
+        from langgraph.prebuilt.analysis.provenance.checkpoint import CheckpointBinding
+        from langgraph.prebuilt.security.object_manager import CheckpointEnvelope
+
+        if not isinstance(data, dict):
+            raise PermissionError("analysis:missing_checkpoint_metadata")
+        envelope = CheckpointEnvelope(**data)
+        binding = CheckpointBinding(
+            self.analysis.store,
+            self.checkpoint_key,
+            self.analysis.config.policy_version,
+        )
+        refs = binding.restore(principal, envelope)
+        BoundaryAdapter(self.analysis).value(
+            {"checkpoint_id": envelope.checkpoint_id}, refs, "state.checkpoint.restore"
+        )
+
     def _write_witness(
         self,
         config: RunnableConfig,
@@ -379,7 +434,7 @@ class MediatedCheckpointer(BaseCheckpointSaver):
         digest = self._pending_digest(
             checkpoint_id, task_id, writes, principal.user_id, principal.session_id
         )
-        return {
+        witness = {
             "checkpoint_id": checkpoint_id,
             "task_id": task_id,
             "principal_id": principal.user_id,
@@ -387,6 +442,12 @@ class MediatedCheckpointer(BaseCheckpointSaver):
             "count": len(writes),
             "digest": digest,
         }
+
+        if self.analysis is not None:
+            witness["analysis"] = self._analysis_save(
+                principal, f"{checkpoint_id}:writes:{task_id}"
+            )
+        return witness
 
     def _pending_digest(
         self,
@@ -464,6 +525,14 @@ class MediatedCheckpointer(BaseCheckpointSaver):
             digest = witness.get("digest")
             if not isinstance(digest, str) or not hmac.compare_digest(expected, digest):
                 raise PermissionError("checkpoint:invalid_write_witness")
+            if self.analysis is not None:
+                data = witness.get("analysis")
+                if (
+                    not isinstance(data, dict)
+                    or data.get("checkpoint_id") != f"{checkpoint_id}:writes:{task_id}"
+                ):
+                    raise PermissionError("analysis:missing_write_metadata")
+                self._analysis_restore(principal, data)
         return value._replace(pending_writes=visible)
 
 

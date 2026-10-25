@@ -4,6 +4,8 @@ from __future__ import annotations
 
 import asyncio
 from concurrent.futures import ThreadPoolExecutor
+from contextlib import contextmanager
+from contextvars import ContextVar
 from threading import Event
 from time import monotonic
 from uuid import uuid4
@@ -50,6 +52,7 @@ class AnalysisRuntime:
         )
         self.journal = AnalysisJournal(store)
         self.notifications = notifications
+        self._influence = ContextVar(f"analysis-influence-{id(self)}", default=None)
         self._executor = ThreadPoolExecutor(
             max_workers=4, thread_name_prefix="analysis"
         )
@@ -120,6 +123,19 @@ class AnalysisRuntime:
         for proposal in result.dependency_proposals:
             if proposal.subject not in permitted or proposal.parent not in permitted:
                 raise AnalysisUnavailable("analysis:out_of_scope_dependency")
+        result = result.model_copy(
+            update={
+                "findings": tuple(
+                    finding.model_copy(
+                        update={
+                            "event_id": event.event_id,
+                            "event_name": event.event_name,
+                        }
+                    )
+                    for finding in result.findings
+                )
+            }
+        )
         self.journal.commit_result(event, result)
 
     def _snapshot(
@@ -220,3 +236,23 @@ class AnalysisRuntime:
 
     def close(self) -> None:
         self._executor.shutdown(wait=False, cancel_futures=True)
+
+    @contextmanager
+    def influence_scope(self, refs):
+        """Trusted instrumentation only: supply a complete operation input bound."""
+        for ref in refs:
+            if self.store.get(ref).tenant_id != self.tenant_id:
+                raise AnalysisUnavailable("analysis:inaccessible_value")
+        token = self._influence.set(tuple(refs))
+        try:
+            yield
+        finally:
+            self._influence.reset(token)
+
+    def influence_refs(self):
+        scoped = self._influence.get()
+        return (
+            self.store.run_refs(self.tenant_id, self.run_id)
+            if scoped is None
+            else scoped
+        )

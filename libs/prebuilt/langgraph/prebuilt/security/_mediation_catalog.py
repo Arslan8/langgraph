@@ -37,6 +37,8 @@ _GUARDED_TRUST = (
     "exc.receipt.audit_reason",
     "host_result.receipt.audit_reason",
     "self._acquire_flow",
+    "self._analysis_result",
+    "self._aanalysis_result",
     "self._finalize_flow",
     "self._prepare",
     "self._release_flow",
@@ -85,11 +87,11 @@ _NODE_TRUST = (
 # Updating one of these values is an explicit review action. A changed helper
 # body makes dependent obligations unresolved until its summary is re-reviewed.
 _REVIEWED_DIGESTS = {
-    "authorization-stack": "c3bd475aecc2dfcdc23255564fc78dd5e2dcbf9acada811aab7bc369432b495e",
+    "authorization-stack": "465eeff9d5953752738be9fe2e5aeb93cbee606df27e7063ebe85b27e7ed246f",
     "guarded-request-binding": "618de901277adc73396c1e08ab27562560a8f010e0aa7a2ec6763a7052144717",
-    "toolnode-request-binding": "48bf2a50d25bdb99e76f2a0c889079b0b20f7a61d1611f634f7c30d62316dc55",
-    "in-process-dispatch-binding": "c27f9c3e27353a54504a937127dad4dd487e0ba342a57ae08abaefdca14cbbd3",
-    "guarded-in-process-dispatch": "339aa2be9e47df3bbecde106df41cf3910adbfeffaa9a3e086a31547fb108d2a",
+    "toolnode-request-binding": "330a9b46bdfb9524a1b98e460383b6f653c7b2722d3f66c560439293ed53ccc5",
+    "in-process-dispatch-binding": "b4e3816578032535a10fc9b87e24536b7bd0defbb23b925ba91fb1cc5c9d1cc7",
+    "guarded-in-process-dispatch": "e8297c70f9e05987e8d3be3ddf7cca4bc6bc69d6531ba11824aea91553df01e6",
     "linux-grant-activation": "ce921b3854f9f5f45ddaaf4762faa2c9cbd7198218f052f58399fa97118abbd5",
     "enforcement-receipt": "9a17cd15c3cb9b68fc84d00e8dc06333d2eff0bcb993d32a85de41b0727a88f8",
     "flow-lifecycle": "455dc915f2de6497930122596f1af5cc72b0a2ec0731fdec9dea3259922ec48f",
@@ -138,6 +140,17 @@ def contracts() -> tuple[tuple[str, Contract], ...]:
                             "self._prepare_security_request",
                             ("result:1.principal", "result:2"),
                             decision="0",
+                        ),
+                        *(
+                            (
+                                Authorizer(
+                                    "self._aprepare_security_request",
+                                    ("result:1.principal", "result:2"),
+                                    decision="0",
+                                ),
+                            )
+                            if asynchronous
+                            else ()
                         ),
                         Authorizer(f"self.{resume}", ("arg:0", "arg:1")),
                     ),
@@ -221,6 +234,7 @@ def _evidence(source_root: Path) -> list[dict[str, Any]]:
             "security/stack.py",
             (
                 "SecurityStack.prepare",
+                "SecurityStack.aprepare",
                 "SecurityStack.permission",
                 "SecurityStack.resume_permission",
                 "SecurityStack.apermission",
@@ -241,6 +255,7 @@ def _evidence(source_root: Path) -> list[dict[str, Any]]:
             "tool_node.py",
             (
                 "ToolNode._prepare_security_request",
+                "ToolNode._aprepare_security_request",
                 "ToolNode._resume_security",
                 "ToolNode._aresume_security",
             ),
@@ -259,6 +274,8 @@ def _evidence(source_root: Path) -> list[dict[str, Any]]:
             (
                 "_GuardedExecutor._invoke_in_process",
                 "_GuardedExecutor._ainvoke_in_process",
+                "_GuardedExecutor._analysis_result",
+                "_GuardedExecutor._aanalysis_result",
             ),
         ),
         (
@@ -374,6 +391,7 @@ def framework_report(source_root: Path) -> dict[str, Any]:
                 if summary["target"]
                 in {
                     "self._prepare_security_request",
+                    "self._aprepare_security_request",
                     "self._resume_security",
                     "self._aresume_security",
                 }

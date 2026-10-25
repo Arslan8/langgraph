@@ -22,7 +22,7 @@ class EnforcementAdapter(BoundaryAdapter):
         super().__init__(runtime)
 
     def context_refs(self):
-        return self.runtime.store.run_refs(self.runtime.tenant_id, self.runtime.run_id)
+        return self.runtime.influence_refs()
 
     def prepare(self, principal: Principal, call: ToolCall) -> ToolCall:
         if (principal.user_id, principal.session_id) != (
@@ -49,6 +49,38 @@ class EnforcementAdapter(BoundaryAdapter):
             attempt_id=str(call.call_index),
         )
         self.before(
+            TOOL_PREPARE,
+            (ref,),
+            invocation_id=call.call_id,
+            attempt_id=str(call.call_index),
+        )
+        return call
+
+    async def aprepare(self, principal: Principal, call: ToolCall) -> ToolCall:
+        if (principal.user_id, principal.session_id) != (
+            self.runtime.principal_id,
+            self.runtime.session_id,
+        ):
+            raise AnalysisUnavailable("analysis:principal_mismatch")
+        # Copy/freeze before plugin inspection, normalizers and physical dispatch.
+        call = replace(
+            call,
+            args=freeze(call.args),
+            normalized=freeze(call.normalized),
+            analysis_snapshot=None,
+        )
+        ref = self.value(
+            {"tool": call.tool.name, "args": call.args},
+            self.context_refs(),
+            TOOL_PROPOSE,
+        )
+        await self.abefore(
+            TOOL_PROPOSE,
+            (ref,),
+            invocation_id=call.call_id,
+            attempt_id=str(call.call_index),
+        )
+        await self.abefore(
             TOOL_PREPARE,
             (ref,),
             invocation_id=call.call_id,

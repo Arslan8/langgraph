@@ -66,8 +66,17 @@ class SecurityConfig:
     def __post_init__(self) -> None:
         if self.analysis is not None:
             from langgraph.prebuilt.security.modules.analysis_gate import AnalysisGate
-            if not any(isinstance(module, AnalysisGate) and module.policy_version == self.analysis.config.policy_version for module in self.modules):
+
+            if not any(
+                isinstance(module, AnalysisGate)
+                and module.policy_version == self.analysis.config.policy_version
+                for module in self.modules
+            ):
                 raise SecurityConfigurationError("analysis:missing_policy_bridge")
+            for module in self.modules:
+                validator = getattr(module, "validate_analysis", None)
+                if validator is not None:
+                    validator(self.analysis)
         object.__setattr__(self, "modules", tuple(self.modules))
         object.__setattr__(
             self, "object_dacs", MappingProxyType(dict(self.object_dacs))
@@ -251,7 +260,10 @@ class SecurityConfig:
             return checkpointer
         if isinstance(checkpointer, BaseCheckpointSaver):
             return MediatedCheckpointer(
-                checkpointer, placement_router, self.checkpoint_key or b""
+                checkpointer,
+                placement_router,
+                self.checkpoint_key or b"",
+                analysis=self.analysis,
             )
         return checkpointer
 
@@ -263,6 +275,14 @@ class SecurityConfig:
         if mediator is None or not callable(install):
             raise SecurityConfigurationError("compiled graph lacks output placement")
         install(mediator, mediator.acall)
+        if self.analysis is not None:
+            from langgraph.prebuilt.analysis.adapters.agent import AgentAdapter
+
+            input_install = getattr(graph, "_set_input_guard", None)
+            if not callable(input_install):
+                raise SecurityConfigurationError("analysis:missing_input_boundary")
+            input_adapter = AgentAdapter(self.analysis)
+            input_install(input_adapter.input_guard, input_adapter.ainput_guard)
         from langgraph.prebuilt.security.mac import register_mac_boundary
 
         register_mac_boundary(graph)

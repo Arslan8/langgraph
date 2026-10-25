@@ -62,6 +62,8 @@ class AnalysisEvent(Record):
 
 
 class AnalysisFinding(Record):
+    event_id: str = ""
+    event_name: str = ""
     finding_id: str = Field(min_length=1)
     analyzer_id: str = Field(min_length=1)
     analyzer_version: str = Field(min_length=1)

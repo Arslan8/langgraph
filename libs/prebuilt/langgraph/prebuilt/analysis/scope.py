@@ -1,26 +1,35 @@
-"""Read-only analyzer capabilities scoped to runtime-validated references."""
+"""Detached read-only analyzer capabilities; no store or coordinator handle."""
 
-from dataclasses import dataclass
+from types import MappingProxyType
 
 from langgraph.prebuilt.analysis.contracts import ValueRef
 from langgraph.prebuilt.analysis.errors import AccessDenied
 from langgraph.prebuilt.analysis.provenance.store import ProvenanceStore
 
 
-@dataclass(frozen=True, slots=True)
 class ScopedValues:
-    store: ProvenanceStore
-    refs: frozenset[ValueRef]
-    content_access: bool
+    __slots__ = ("refs", "_content", "_parents")
+
+    def __init__(
+        self, store: ProvenanceStore, refs: frozenset[ValueRef], content_access: bool
+    ):
+        self.refs = refs
+        self._content = MappingProxyType(
+            {ref: store.resolve(ref) for ref in refs} if content_access else {}
+        )
+        self._parents = MappingProxyType(
+            {
+                ref: tuple(parent for parent in store.ancestors(ref) if parent in refs)
+                for ref in refs
+            }
+        )
 
     def resolve(self, ref: ValueRef) -> bytes:
-        if not self.content_access or ref not in self.refs:
+        if ref not in self._content:
             raise AccessDenied("analysis:content_access_denied")
-        return self.store.resolve(ref)
+        return self._content[ref]
 
     def ancestors(self, ref: ValueRef) -> tuple[ValueRef, ...]:
-        if ref not in self.refs:
+        if ref not in self._parents:
             raise AccessDenied("analysis:provenance_access_denied")
-        return tuple(
-            parent for parent in self.store.ancestors(ref) if parent in self.refs
-        )
+        return self._parents[ref]

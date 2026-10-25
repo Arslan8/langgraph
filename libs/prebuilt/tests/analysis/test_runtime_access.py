@@ -1,4 +1,5 @@
 import asyncio
+import time
 from dataclasses import replace
 from uuid import uuid4
 
@@ -16,6 +17,7 @@ from langgraph.prebuilt.analysis import (
     AnalyzerRegistration,
     AnnotationProposal,
     Coverage,
+    EventSpec,
     NotificationHub,
     Registry,
 )
@@ -222,4 +224,75 @@ async def test_model_and_output_barriers_precede_effects():
         await adapter.abefore("output.emit", (ref,))
         effects.append("output")
     assert effects == []
+    runtime.close()
+
+
+async def test_pagination_replay_and_redaction():
+    runtime, adapter, client, access = setup_runtime()
+    ref = adapter.value("document")
+    first = adapter.before("input.admit", (ref,))
+    second = adapter.before("input.admit", (ref,))
+    page = client.get_findings(AnalysisQuery(), limit=1)
+    assert page.cursor is not None
+    continuation = client.get_findings(AnalysisQuery(), page.cursor, limit=1)
+    assert continuation.records[0].finding_id != page.records[0].finding_id
+    assert continuation.revision == page.revision
+    replay = client.subscribe(AnalysisQuery(run_id="run"), "run:1")
+    notice = await anext(replay)
+    assert notice.snapshot_id == first.snapshot_id
+    hidden = AnalysisClient(
+        runtime.journal,
+        replace(access, authorize_resource=lambda _: False),
+        runtime.notifications,
+    )
+    view = hidden.get_snapshot(second.snapshot_id)
+    assert view.partial and not view.snapshot.findings and not view.snapshot.flow
+    with pytest.raises(TypeError):
+        view.snapshot.event.metadata["mutable"] = True
+    await replay.aclose()
+    runtime.close()
+
+
+def test_custom_event_plugin_executes_without_runtime_changes():
+    runtime, adapter, client, _ = setup_runtime()
+    custom = EventSpec("example.document", "before", "document_fixture", True)
+    marker = Marker()
+    runtime.registry = Registry(
+        (*BUILTIN_EVENTS, custom),
+        (
+            AnalyzerRegistration(
+                "marker", "1", marker, (custom.name,), content_access=True
+            ),
+        ),
+        producers=frozenset(
+            {"document_fixture", *(spec.producer for spec in BUILTIN_EVENTS)}
+        ),
+    )
+    source = adapter.value("department document")
+    snapshot = adapter.before(custom.name, (source,))
+    assert snapshot.findings[0].code == "example.department.restricted"
+    assert "example.department.restricted" in client.get_labels(source).record.risks
+    assert marker.calls == 1
+    runtime.close()
+
+
+def test_sync_timeout_never_commits_late_clean_result():
+    class Slow:
+        def analyze(self, event, context):
+            time.sleep(0.04)
+            return AnalysisResult()
+
+        async def aanalyze(self, event, context):
+            await asyncio.sleep(0.04)
+            return AnalysisResult()
+
+    runtime, adapter, client, _ = setup_runtime(Slow(), timeout=0.002)
+    with pytest.raises(AnalysisUnavailable):
+        adapter.before("input.admit", (adapter.value("data"),))
+    time.sleep(0.05)
+    assert "complete" not in client.get_findings(AnalysisQuery()).statuses
+    assert any(
+        f.code == "analysis.unavailable"
+        for f in client.get_findings(AnalysisQuery()).records
+    )
     runtime.close()

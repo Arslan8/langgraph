@@ -10,13 +10,13 @@ from langgraph.prebuilt.security.objects import (
 
 
 class ObjectAdapter(BoundaryAdapter):
-    def snapshot(self, principal, request):
+    def event_for(self, principal, request):
         if (
             principal.user_id != self.runtime.principal_id
             or principal.session_id != self.runtime.session_id
         ):
             raise PermissionError("analysis:principal_mismatch")
-        refs = self.runtime.store.run_refs(self.runtime.tenant_id, self.runtime.run_id)
+        refs = self.runtime.influence_refs()
         destination = ""
         if isinstance(request, OutputRequest):
             name, destination = "output.emit", request.destination
@@ -43,4 +43,16 @@ class ObjectAdapter(BoundaryAdapter):
         else:
             return None
         ref = self.value(content, refs, name)
-        return self.before(name, (ref,), destination=destination)
+        return self.event(name, (ref,), destination=destination)
+
+    def snapshot(self, principal, request):
+        event = self.event_for(principal, request)
+        if event is None:
+            return None
+        return self.runtime.process(event)
+
+    async def asnapshot(self, principal, request):
+        event = self.event_for(principal, request)
+        if event is None:
+            return None
+        return await self.runtime.aprocess(event)

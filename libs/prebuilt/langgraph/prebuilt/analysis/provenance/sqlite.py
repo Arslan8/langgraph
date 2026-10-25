@@ -111,6 +111,18 @@ class SqliteProvenanceStore:
                 for parent, edge in zip(parents, dependencies)
                 if edge.kind != "containment"
             ]
+            # Consuming a whole container consumes its elements. Precise selection
+            # supplies the selected field reference instead of the container.
+            influenced = list(
+                {
+                    value.ref: value
+                    for parent in influenced
+                    for value in (
+                        parent,
+                        *(self.get(ref) for ref in self.ancestors(parent.ref)),
+                    )
+                }.values()
+            )
             output = transfer(influenced, output, self.domains)
             self.domains.validate(json.loads(output.domains_json))
             ref = ValueRef(
@@ -172,7 +184,7 @@ class SqliteProvenanceStore:
             while pending:
                 value = self.get(pending.pop())
                 for edge in value.dependencies:
-                    if edge.kind != "containment" and edge.parent.value_id not in seen:
+                    if edge.parent.value_id not in seen:
                         seen[edge.parent.value_id] = edge.parent
                         pending.append(edge.parent)
             return tuple(seen[key] for key in sorted(seen))

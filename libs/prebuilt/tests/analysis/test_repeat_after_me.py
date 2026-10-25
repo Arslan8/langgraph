@@ -11,6 +11,7 @@ from langgraph.prebuilt.analysis import (
     Registry,
 )
 from langgraph.prebuilt.analysis.adapters.boundary import BoundaryAdapter
+from langgraph.prebuilt.analysis.errors import ConfigurationError
 from langgraph.prebuilt.analysis.provenance.checkpoint import CheckpointBinding
 from langgraph.prebuilt.analysis.provenance.sqlite import SqliteProvenanceStore
 from langgraph.prebuilt.analysis_plugins.repeat_after_me import (
@@ -18,7 +19,9 @@ from langgraph.prebuilt.analysis_plugins.repeat_after_me import (
     RepeatAfterMeAnalyzer,
     ScriptedClassifier,
 )
-from langgraph.prebuilt.security import Principal
+from langgraph.prebuilt.security import Principal, SecurityConfig
+from langgraph.prebuilt.security.modules.repeat_after_me import RepeatAfterMePolicy
+from tests.analysis.test_runtime_access import setup_runtime
 
 
 @pytest.mark.parametrize(
@@ -83,3 +86,13 @@ def test_risk_and_canonical_findings_survive_new_process_store(tmp_path):
     assert snapshot.findings[0].finding_id in {f.finding_id for f in result.findings}
     resumed.close()
     restored.close()
+
+
+def test_incomplete_defensive_profile_rejected():
+    runtime, _, _, _ = setup_runtime()
+    with pytest.raises(ConfigurationError, match="incomplete_defensive_profile"):
+        SecurityConfig(
+            modules=(RepeatAfterMePolicy(runtime.config.policy_version),),
+            analysis=runtime,
+        )
+    runtime.close()

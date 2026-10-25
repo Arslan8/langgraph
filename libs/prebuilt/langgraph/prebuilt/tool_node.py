@@ -1064,6 +1064,115 @@ class ToolNode(RunnableCallable):
         )
         return permission, secured, security_call
 
+    async def _aprepare_security_request(
+        self, request: ToolCallRequest
+    ) -> tuple[Decision, ToolCallRequest, SecurityToolCall | None]:
+        stack = self._security_stack
+        if stack is None:
+            return Decision(Verdict.ALLOW, "security:disabled"), request, None
+        name = request.tool_call["name"]
+        registered_tool = self.tools_by_name.get(name)
+        principal = request.principal
+        if principal is None:
+            principal = principal_from(request.runtime.config)
+        if principal is None:
+            if self._security_require_principal:
+                return Decision(Verdict.DENY, "no_principal"), request, None
+            principal = Principal(
+                "__anonymous__", frozenset(), frozenset(), "anonymous"
+            )
+        if request.tool is None:
+            return (
+                Decision(Verdict.DENY, "security:tool_identity_mismatch"),
+                request,
+                None,
+            )
+        if registered_tool is not request.tool:
+            registration = self._register_runtime_tool(
+                principal,
+                request.tool,
+                override=registered_tool is not None,
+            )
+            if registration.verdict is not Verdict.ALLOW:
+                return registration, request, None
+            registered_tool = request.tool
+        security_tool = self._security_tools_by_name.get(name)
+        if security_tool is None:
+            return Decision(Verdict.DENY, "security:unknown_tool"), request, None
+        try:
+            injected_call = self._inject_tool_args(
+                request.tool_call, request.runtime, registered_tool
+            )
+        except PermissionError as exc:
+            return Decision(Verdict.DENY, str(exc)), request, None
+        request = request.override(
+            tool_call=injected_call,
+            descriptor=self._descriptors_by_name[name],
+            dac=self._dacs_by_name[name],
+            principal=principal,
+            security=security_tool.security,
+        )
+        args = request.tool_call.get("args", {})
+        call_index = next_call_index(request.runtime.config)
+        history = history_for(self._security_audit_sink, principal)
+        try:
+            normalized = self._normalize_security_args(security_tool, args)
+        except Exception:
+            security_call = SecurityToolCall(
+                security_tool,
+                args,
+                {},
+                request.tool_call["id"],
+                call_index,
+                history,
+            )
+            decision = Decision(Verdict.DENY, "normalization_error")
+            self._audit_security(principal, security_call, "prepare", decision)
+            return decision, request, security_call
+        security_call = SecurityToolCall(
+            security_tool,
+            args,
+            normalized,
+            request.tool_call["id"],
+            call_index,
+            history,
+        )
+        binder = getattr(self._security_host_executor, "bind_call", None)
+        if binder is not None:
+            try:
+                bound_call = binder(principal, security_call)
+            except Exception:
+                decision = Decision(Verdict.DENY, "host:deployment_binding_failed")
+                self._audit_security(principal, security_call, "prepare", decision)
+                return decision, request, security_call
+            if (
+                not isinstance(bound_call, SecurityToolCall)
+                or bound_call.tool != security_call.tool
+                or bound_call.args != security_call.args
+                or bound_call.normalized != security_call.normalized
+                or bound_call.call_id != security_call.call_id
+                or bound_call.call_index != security_call.call_index
+                or bound_call.history != security_call.history
+            ):
+                decision = Decision(Verdict.DENY, "host:invalid_execution_binding")
+                self._audit_security(principal, security_call, "prepare", decision)
+                return decision, request, security_call
+            security_call = bound_call
+        prepared, security_call = await stack.aprepare(principal, security_call)
+        if prepared.verdict is not Verdict.ALLOW:
+            self._audit_security(principal, security_call, "prepare", prepared)
+            return prepared, request, security_call
+        permission = await stack.apermission(principal, security_call)
+        self._audit_security(principal, security_call, "permission", permission)
+        secured = request.override(
+            tool_call={**request.tool_call, "args": dict(security_call.args)},
+            descriptor=self._descriptors_by_name[name],
+            dac=self._dacs_by_name[name],
+            principal=principal,
+            security=security_tool.security,
+        )
+        return permission, secured, security_call
+
     def _register_runtime_tool(
         self, principal: Principal, tool: BaseTool, *, override: bool
     ) -> Decision:
@@ -1134,11 +1243,17 @@ class ToolNode(RunnableCallable):
                 "authorized in-process dispatch identity changed"
             )
         result = tool.invoke({**call, "type": "tool_call"}, config)
-        if self._security_config is not None and self._security_config.analysis is not None:
+        if (
+            self._security_config is not None
+            and self._security_config.analysis is not None
+        ):
             from langgraph.prebuilt.analysis.adapters.enforcement import (
                 EnforcementAdapter,
             )
-            result = EnforcementAdapter(self._security_config.analysis).result(result, security_call)
+
+            result = EnforcementAdapter(self._security_config.analysis).result(
+                result, security_call
+            )
         return result
 
     async def _invoke_secured_tool_async(
@@ -1169,11 +1284,17 @@ class ToolNode(RunnableCallable):
                 "authorized in-process dispatch identity changed"
             )
         result = await tool.ainvoke({**call, "type": "tool_call"}, config)
-        if self._security_config is not None and self._security_config.analysis is not None:
+        if (
+            self._security_config is not None
+            and self._security_config.analysis is not None
+        ):
             from langgraph.prebuilt.analysis.adapters.enforcement import (
                 EnforcementAdapter,
             )
-            result = await EnforcementAdapter(self._security_config.analysis).aresult(result, security_call)
+
+            result = await EnforcementAdapter(self._security_config.analysis).aresult(
+                result, security_call
+            )
         return result
 
     def _acquire_security_flow(
@@ -1888,7 +2009,19 @@ class ToolNode(RunnableCallable):
             raise TypeError(msg)
 
         try:
-            decision, request, security_call = self._prepare_security_request(request)
+            if (
+                self._security_config is not None
+                and self._security_config.analysis is not None
+            ):
+                (
+                    decision,
+                    request,
+                    security_call,
+                ) = await self._aprepare_security_request(request)
+            else:
+                decision, request, security_call = self._prepare_security_request(
+                    request
+                )
         except SecurityAuditError:
             return self._security_denial(call, Decision(Verdict.DENY, "audit_failure"))
         if (
