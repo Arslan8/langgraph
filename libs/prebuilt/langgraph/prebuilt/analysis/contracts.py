@@ -6,7 +6,7 @@ from collections.abc import Mapping
 from dataclasses import dataclass
 from typing import Any, Literal, Protocol
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator
+from pydantic import BaseModel, ConfigDict, Field, field_serializer, field_validator
 
 from langgraph.prebuilt.analysis.serialization import freeze, thaw
 
@@ -49,6 +49,10 @@ class AnalysisEvent(Record):
     @classmethod
     def immutable_metadata(cls, value: Mapping[str, Any]) -> Mapping[str, Any]:
         return freeze(value)
+
+    @field_serializer("metadata")
+    def serialize_metadata(self, value: Mapping[str, Any]) -> Any:
+        return thaw(value)
 
     def wire(self) -> dict[str, Any]:
         return {
