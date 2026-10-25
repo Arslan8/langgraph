@@ -2,10 +2,16 @@
 
 import json
 
-from langgraph.prebuilt.analysis.contracts import ValueRef
+from langgraph.prebuilt.analysis.contracts import (
+    AnalysisFinding,
+    AnalysisSnapshot,
+    ValueRef,
+)
 from langgraph.prebuilt.analysis.errors import AnalysisUnavailable
+from langgraph.prebuilt.analysis.journal import AnalysisJournal
 from langgraph.prebuilt.analysis.provenance.records import StoredValue
 from langgraph.prebuilt.analysis.provenance.sqlite import SqliteProvenanceStore
+from langgraph.prebuilt.analysis.serialization import canonical
 from langgraph.prebuilt.security.object_manager import (
     CheckpointEnvelope,
     authenticate_checkpoint,
@@ -33,15 +39,31 @@ class CheckpointBinding:
         checkpoint_id: str,
         sequence: int = 0,
         previous_hash: str = "",
-        findings_json: str = "[]",
     ) -> CheckpointEnvelope:
+        AnalysisJournal(self.store)
+        tenants = {self.store.get(ref).tenant_id for ref in refs}
+        with self.store._lock:
+            journal = {
+                "findings": [
+                    list(row)
+                    for row in self.store._db.execute("SELECT * FROM analysis_findings")
+                    if row[1] in tenants
+                ],
+                "snapshots": [
+                    list(row)
+                    for row in self.store._db.execute(
+                        "SELECT * FROM analysis_snapshots"
+                    )
+                    if row[1] in tenants
+                ],
+            }
         payload = {
             "schema_version": 1,
             "policy_version": self.policy_version,
             "domain_digest": self.store.domains.digest,
             "role_digest": self.role_digest,
             "values": self.store.export(refs),
-            "findings": findings_json,
+            "findings": canonical(journal),
             "roots": [ref.model_dump() for ref in refs],
         }
         return seal_checkpoint(
@@ -80,7 +102,31 @@ class CheckpointBinding:
             for item in json.loads(payload["values"])
         ]
         roots = tuple(ValueRef.model_validate(item) for item in payload["roots"])
+        AnalysisJournal(self.store)
+        journal = json.loads(payload["findings"])
+        if set(journal) != {"findings", "snapshots"}:
+            raise AnalysisUnavailable("analysis:invalid_checkpoint_journal")
         with self.store.transaction():
+            for tenant, run in {
+                (record.tenant_id, record.run_id) for record, _ in records
+            }:
+                count = self.store._db.execute(
+                    "SELECT count(*) FROM analysis_values WHERE tenant=? AND run=?",
+                    (tenant, run),
+                ).fetchone()[0]
+                new = sum(
+                    1
+                    for record, _ in records
+                    if record.tenant_id == tenant
+                    and record.run_id == run
+                    and self.store._db.execute(
+                        "SELECT 1 FROM analysis_values WHERE id=?",
+                        (record.ref.value_id,),
+                    ).fetchone()
+                    is None
+                )
+                if count + new > self.store.max_records:
+                    raise AnalysisUnavailable("analysis:checkpoint_capacity")
             for record, content in records:
                 self.store.domains.validate(json.loads(record.domains_json))
                 old = self.store._db.execute(
@@ -113,4 +159,23 @@ class CheckpointBinding:
                         raise AnalysisUnavailable("analysis:checkpoint_tenant_mismatch")
             for ref in roots:
                 self.store.get(ref)
+            for row in journal["findings"]:
+                finding = AnalysisFinding.model_validate_json(row[5])
+                if row[0] != finding.finding_id:
+                    raise AnalysisUnavailable("analysis:checkpoint_finding_identity")
+                self.store._db.execute(
+                    "INSERT OR IGNORE INTO analysis_findings VALUES (?, ?, ?, ?, ?, ?)",
+                    row,
+                )
+            for row in journal["snapshots"]:
+                snapshot = AnalysisSnapshot.model_validate_json(row[5])
+                if (
+                    row[0] != snapshot.snapshot_id
+                    or snapshot.policy_version != self.policy_version
+                ):
+                    raise AnalysisUnavailable("analysis:checkpoint_snapshot_identity")
+                self.store._db.execute(
+                    "INSERT OR IGNORE INTO analysis_snapshots VALUES (?, ?, ?, ?, ?, ?)",
+                    row,
+                )
         return roots

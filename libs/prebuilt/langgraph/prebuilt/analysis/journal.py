@@ -90,10 +90,8 @@ class AnalysisJournal:
                 if domain is None:
                     raise AnalysisUnavailable("analysis:unknown_domain")
                 domain.validate(candidate)
-                if proposal.domain in labels and not domain.is_at_least_as_restrictive(
-                    candidate, labels[proposal.domain]
-                ):
-                    raise AnalysisUnavailable("analysis:label_relaxation")
+                if proposal.domain in labels:
+                    candidate = domain.combine((labels[proposal.domain], candidate))
                 labels[proposal.domain] = candidate
                 updated = value.model_copy(
                     update={"domains_json": canonical(labels), "revision": revision}

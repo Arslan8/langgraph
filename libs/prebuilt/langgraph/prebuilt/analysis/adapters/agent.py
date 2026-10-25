@@ -1,6 +1,9 @@
 """Mandatory prebuilt-agent barriers outside application model hooks."""
 
+from uuid import uuid4
+
 from langchain_core.runnables import RunnableLambda
+from langgraph.prebuilt.security.binding import principal_from
 
 from langgraph.prebuilt.analysis.adapters.boundary import BoundaryAdapter
 from langgraph.prebuilt.analysis.events import (
@@ -8,6 +11,7 @@ from langgraph.prebuilt.analysis.events import (
     MODEL_REQUEST,
     MODEL_RESPONSE,
 )
+from langgraph.prebuilt.security.objects import LabeledValue, ModelInvocationRequest
 
 
 def message_data(value):
@@ -33,23 +37,41 @@ class AgentAdapter(BoundaryAdapter):
         ref = self.value(message_data(messages), self.refs(), INPUT_ADMIT)
         await self.abefore(INPUT_ADMIT, (ref,))
 
-    def wrap(self, model, *, tool_schemas, destination):
-        def request(messages):
+    def wrap(self, model, *, tool_schemas, destination, object_router=None):
+        def request(messages, config):
             ref = self.value(
                 {"messages": message_data(messages), "tools": tool_schemas},
                 self.refs(),
                 MODEL_REQUEST,
             )
             self.before(MODEL_REQUEST, (ref,), destination=destination)
+            if object_router is not None:
+                object_router.model_invoke(
+                    principal_from(config),
+                    ModelInvocationRequest(
+                        destination,
+                        (LabeledValue("final-request", messages),),
+                        str(uuid4()),
+                    ),
+                )
             return messages
 
-        async def arequest(messages):
+        async def arequest(messages, config):
             ref = self.value(
                 {"messages": message_data(messages), "tools": tool_schemas},
                 self.refs(),
                 MODEL_REQUEST,
             )
             await self.abefore(MODEL_REQUEST, (ref,), destination=destination)
+            if object_router is not None:
+                await object_router.amodel_invoke(
+                    principal_from(config),
+                    ModelInvocationRequest(
+                        destination,
+                        (LabeledValue("final-request", messages),),
+                        str(uuid4()),
+                    ),
+                )
             return messages
 
         def response(result):

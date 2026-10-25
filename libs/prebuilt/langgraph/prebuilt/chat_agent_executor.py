@@ -581,6 +581,7 @@ def create_react_agent(
             selected,
             tool_schemas=[{"name": tool.name, "description": tool.description, "schema": tool.get_input_schema().model_json_schema()} for tool in tool_classes],
             destination=security.analysis.config.model_destination,
+            object_router=tool_node._security_object_router,
         )
 
     if not is_dynamic_model:
