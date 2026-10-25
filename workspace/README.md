@@ -20,6 +20,7 @@ policies, simulators, and app-owned mediators live beside the demo that uses the
 | [07_manifest_verification](07_manifest_verification/README.md) | Static manifest verification |
 | [08_custom_mediator](08_custom_mediator/README.md) | Extending the framework: custom mediator |
 | [09_no_internet](09_no_internet/README.md) | Mandatory access control: no internet |
+| [10_repeat_after_me](10_repeat_after_me/README.md) | Analysis and provenance block detected Repeat-After-Me tool calls |
 
 ## Run the examples
 
@@ -195,6 +196,21 @@ parent brokers, every outbound operation must be covered by the mandatory
 policy too: this class name does not automatically classify other custom
 resources or disable the coordinator's network access.
 
+Example 10 shows a detected Repeat-After-Me attack blocked before tool execution.
+It runs offline with a scripted classifier, the existing ToolNode authorization
+path and a temporary SQLite ledger. The baseline inserts one row, the detected
+attack inserts zero, and the benign control inserts one. Quoted JSON never executes.
+
+```bash
+libs/prebuilt/.venv/bin/python workspace/10_repeat_after_me/demo.py
+# Presentation: synthetic transcript and pauses between cases
+libs/prebuilt/.venv/bin/python workspace/10_repeat_after_me/demo.py --step --show-prompts
+```
+
+[Demo 10's guide](10_repeat_after_me/README.md) explains the public analysis trace,
+retrieval/tool-result variants and deliberately missed attack that demonstrates
+the limits of classifier detection. It requires no local model or sandbox setup.
+
 The examples introduce these ideas in order:
 
 1. A minimal graph and tool invocation.
@@ -212,6 +228,8 @@ The examples introduce these ideas in order:
 8. A typed counter mediator that accepts a valid increment and rejects an invalid one.
 9. Operator-owned mandatory policy removing internet authority despite a DAC
    permit, with local work continuing inside a sandbox that blocks sockets.
+10. Required analysis and persistent provenance feeding a fixed restrictive policy,
+    with actual tool effects compared before and after enabling the defense.
 
 Example 4 also prints the retained temporary directory containing the generated
 Cedar schema, entities, policies, and requests. These artifacts can be copied or
