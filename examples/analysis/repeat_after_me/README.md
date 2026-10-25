@@ -13,3 +13,13 @@ PYTHONPATH="$PWD" uv run --directory libs/prebuilt python -m examples.analysis.r
 `run_live` supports optional `--mode replay` and `--mode agent`. Offline execution
 requires no network, model downloads or credentials. The SQLite row count is the
 execution oracle; quoted JSON is never executable. All fixtures are synthetic.
+
+Live defense selection is available through `--classifier llm|predictive|both`.
+See [demo 10's classifier guide](../../../workspace/10_repeat_after_me/README.md#choose-the-analysis-defense)
+for training, held-out results, uncertainty behavior, and chat commands.
+
+Offline classifier and policy checks:
+
+```sh
+libs/prebuilt/.venv/bin/python -m unittest examples.analysis.repeat_after_me.test_predictive -v
+```

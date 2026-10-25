@@ -6,8 +6,6 @@ import statistics
 from pathlib import Path
 from time import perf_counter
 
-from examples.analysis.repeat_after_me.run_live import local_classifier
-
 from langgraph.prebuilt.analysis import (
     BUILTIN_EVENTS,
     AnalysisConfig,
@@ -20,6 +18,9 @@ from langgraph.prebuilt.analysis.adapters.boundary import BoundaryAdapter
 from langgraph.prebuilt.analysis.provenance.store import MemoryProvenanceStore
 from langgraph.prebuilt.analysis.serialization import digest
 from langgraph.prebuilt.analysis_plugins.repeat_after_me import ClassificationInput
+
+from examples.analysis.repeat_after_me.predictive import PredictiveClassifier
+from examples.analysis.repeat_after_me.run_live import live_clients
 
 CORPUS = Path(__file__).with_name("fixtures") / "evaluation.json"
 
@@ -51,7 +52,7 @@ def evaluate(classifier, cases):
                 ((case["id"], json.dumps(case["messages"])),), "input.admit", "{}"
             )
             predicted = classifier.classify(candidate).label
-        except Exception:
+        except Exception:  # noqa: BLE001 - count classifier failures as errors
             predicted = "error"
         latency.append(perf_counter() - start)
         matrix[case["gold"]][predicted] += 1
@@ -133,6 +134,11 @@ def main():
         "--split", choices=("development", "held_out"), default="held_out"
     )
     parser.add_argument("--output", type=Path)
+    parser.add_argument(
+        "--classifier", choices=("llm", "predictive", "both"), default="llm"
+    )
+    parser.add_argument("--backend", choices=("ollama", "llama-cpp"), default="ollama")
+    parser.add_argument("--model", default="qwen3:8b")
     args = parser.parse_args()
     cases = json.loads(CORPUS.read_text())
     validate_corpus(cases)
@@ -141,8 +147,11 @@ def main():
         "runtime_overhead": overhead(),
         "classifier_evaluation": "not run; supply --live",
     }
-    if args.live:
-        _, classifier = local_classifier()
+    if args.live or args.classifier == "predictive":
+        if args.classifier == "predictive":
+            classifier = PredictiveClassifier()
+        else:
+            _, classifier = live_clients(args.backend, args.model, args.classifier)
         result["classifier_evaluation"] = evaluate(
             classifier, [case for case in cases if case["split"] == args.split]
         )

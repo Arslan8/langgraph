@@ -13,13 +13,13 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT))
 
-from examples.analysis.repeat_after_me.run_offline import (  # noqa: E402
-    FIXTURE,
-    run_case,
+from langgraph.prebuilt.analysis_plugins.repeat_after_me import (
+    ScriptedClassifier,
 )
 
-from langgraph.prebuilt.analysis_plugins.repeat_after_me import (  # noqa: E402
-    ScriptedClassifier,
+from examples.analysis.repeat_after_me.run_offline import (
+    FIXTURE,
+    run_case,
 )
 
 
@@ -98,8 +98,91 @@ async def demonstrate(directory: Path, *, step: bool) -> list[dict]:
     return traces
 
 
+async def demonstrate_live(
+    directory: Path,
+    *,
+    model_name: str,
+    backend: str,
+    step: bool,
+    show_prompts: bool,
+    classifier_mode="llm",
+    predictive_model=None,
+):
+    from examples.analysis.repeat_after_me.run_live import (
+        live_agent,
+        live_clients,
+    )
+
+    print(
+        f"Connecting to {backend}: {model_name} (Ollama cold loading may take up to 3 minutes)…",
+        flush=True,
+    )
+    model, classifier = live_clients(
+        backend, model_name, classifier_mode, predictive_model
+    )
+    print(f"Local model: {model_name}")
+    print(
+        f"Classifier: {classifier_mode}; configuration {classifier.configuration_digest}"
+    )
+    print(
+        "Agent proposals come from the real LLM; analysis uses the selected classifier."
+    )
+    traces = []
+    for benign, title in (
+        (False, "One-line tagged repetition attempt"),
+        (True, "Direct authorized request"),
+    ):
+        if step:
+            input(f"\nPress Enter for {title} … ")
+        print(f"\n{title} (waiting for local inference)…", flush=True)
+        trace = await live_agent(
+            directory / ("benign" if benign else "attack"),
+            model,
+            classifier,
+            benign=benign,
+        )
+        show_result(trace)
+        for decision in trace.get("classifier_decisions", ()):
+            print(f"  Classifier decision: {json.dumps(decision)}")
+        print(f"  Structured tool proposals: {len(trace['proposal'])}")
+        for finding in trace["findings"]["records"]:
+            print(f"  Classifier: {finding['code']} ({finding['reason']})")
+        if show_prompts:
+            for turn in trace["turns"]:
+                print(f"  User: {turn['user']}")
+                print(f"  LLM: {turn['assistant']}")
+                print(f"  Tool calls: {json.dumps(turn['tool_calls'])}")
+        traces.append(trace)
+    return traces
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument(
+        "--chat",
+        "--interactive",
+        action="store_true",
+        help="Chat with the live model and inspect real tool effects",
+    )
+    parser.add_argument(
+        "--defense-off",
+        action="store_true",
+        help="With --chat, compare without the analysis defense",
+    )
+    parser.add_argument(
+        "--live",
+        action="store_true",
+        help="Use a real local LLM agent and classifier",
+    )
+    parser.add_argument(
+        "--backend",
+        choices=("ollama", "llama-cpp"),
+        default="ollama",
+        help="Local server API for --live",
+    )
+    parser.add_argument(
+        "--model", default="qwen3:8b", help="Model name or server alias for --live"
+    )
     parser.add_argument("--step", action="store_true", help="Pause before each case")
     parser.add_argument(
         "--show-prompts",
@@ -107,8 +190,62 @@ def main() -> None:
         help="Print the local synthetic attack transcript",
     )
     parser.add_argument("--output", type=Path, help="Write the public API JSON trace")
+    parser.add_argument(
+        "--classifier",
+        choices=("llm", "predictive", "both"),
+        default="llm",
+        help="Analysis defense for live/chat mode (default: llm)",
+    )
+    parser.add_argument(
+        "--predictive-model", type=Path, help="Alternative trained JSON artifact"
+    )
     args = parser.parse_args()
+    if args.defense_off and not args.chat:
+        parser.error("--defense-off requires --chat")
     print("Demo 10: Repeat-After-Me — analysis before tool execution")
+    if args.chat or args.live:
+        try:
+            with tempfile.TemporaryDirectory(
+                prefix="slanggraph-demo10-live-"
+            ) as directory:
+                if args.chat:
+                    from chat import chat
+
+                    traces = asyncio.run(
+                        chat(
+                            Path(directory),
+                            model_name=args.model,
+                            backend=args.backend,
+                            defended=not args.defense_off,
+                            classifier_mode=args.classifier,
+                            predictive_model=args.predictive_model,
+                        )
+                    )
+                else:
+                    traces = asyncio.run(
+                        demonstrate_live(
+                            Path(directory),
+                            model_name=args.model,
+                            backend=args.backend,
+                            step=args.step,
+                            show_prompts=args.show_prompts,
+                            classifier_mode=args.classifier,
+                            predictive_model=args.predictive_model,
+                        )
+                    )
+        except Exception as error:  # noqa: BLE001 - CLI reports provider failures without claiming success
+            parser.exit(
+                1,
+                f"Live run failed ({type(error).__name__}): {error}\nSee workspace/10_repeat_after_me/README.md for setup.\n",
+            )
+        if args.output:
+            args.output.parent.mkdir(parents=True, exist_ok=True)
+            args.output.write_text(json.dumps(traces, indent=2) + "\n")
+            print(f"\nLive trace: {args.output}")
+        print(
+            "\nLive run complete. Outcomes are observations, not a guaranteed attack or detection."
+        )
+        return
     print(
         "Offline scripted classifier and model proposal; no model service or credentials."
     )
