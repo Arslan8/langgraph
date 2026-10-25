@@ -1,6 +1,6 @@
 """Example 5: authorize device operations independently of socket access.
 
-Start `05_pump_simulator.py` in another terminal before running this file.
+Start `simulator.py` in this directory in another terminal before running this file.
 Tool code runs in a Landlock/seccomp worker. Only the parent-owned
 `PumpSocketAdapter` can contact the device; the broker checks every request
 against the exact Cedar-authorized object grant.
@@ -229,7 +229,7 @@ def build_demo(socket_path: Path, cedar: str) -> tuple[Any, Any]:
         """Perform one operation on a simulated pump."""
         raise RuntimeError("tool must execute in the confined worker")
 
-    worker_path = Path(__file__).with_name("05_pump_worker.py").resolve()
+    worker_path = Path(__file__).with_name("worker.py").resolve()
 
     def assess(line, host):
         if (

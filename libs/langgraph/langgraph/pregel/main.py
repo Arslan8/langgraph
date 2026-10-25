@@ -2737,6 +2737,9 @@ class Pregel(
         Yields:
             The output of each step in the graph. The output shape depends on the `stream_mode`.
         """
+        from langgraph._internal._runtime_policy import check_runtime_policy
+
+        check_runtime_policy(self)
         if (checkpoint_during := kwargs.get("checkpoint_during")) is not None:
             warnings.warn(
                 "`checkpoint_during` is deprecated and will be removed. Please use `durability` instead.",
@@ -3160,6 +3163,9 @@ class Pregel(
         Yields:
             The output of each step in the graph. The output shape depends on the `stream_mode`.
         """
+        from langgraph._internal._runtime_policy import check_runtime_policy
+
+        check_runtime_policy(self)
         if (checkpoint_during := kwargs.get("checkpoint_during")) is not None:
             warnings.warn(
                 "`checkpoint_during` is deprecated and will be removed. Please use `durability` instead.",

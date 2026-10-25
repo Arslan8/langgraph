@@ -17,8 +17,8 @@ import pytest
 from langgraph.prebuilt.security.capabilities import probe_landlock_abi
 
 REPOSITORY = Path(__file__).resolve().parents[4]
-SIMULATOR = REPOSITORY / "workspace" / "05_pump_simulator.py"
-CONTROLLER = REPOSITORY / "workspace" / "05_custom_class_quickstart.py"
+SIMULATOR = REPOSITORY / "workspace" / "05_custom_resource/simulator.py"
+CONTROLLER = REPOSITORY / "workspace" / "05_custom_resource/demo.py"
 
 
 @pytest.mark.skipif(probe_landlock_abi() < 1, reason="pump runtime requires Landlock")

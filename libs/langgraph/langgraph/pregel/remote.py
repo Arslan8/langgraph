@@ -179,6 +179,9 @@ class RemoteGraph(PregelProtocol):
         self.sync_client = sync_client
 
     def _validate_client(self) -> LangGraphClient:
+        from langgraph._internal._runtime_policy import check_runtime_policy
+
+        check_runtime_policy(self)
         if self.client is None:
             raise ValueError(
                 "Async client is not initialized: please provide `url` or `client` when initializing `RemoteGraph`."
@@ -186,6 +189,9 @@ class RemoteGraph(PregelProtocol):
         return self.client
 
     def _validate_sync_client(self) -> SyncLangGraphClient:
+        from langgraph._internal._runtime_policy import check_runtime_policy
+
+        check_runtime_policy(self)
         if self.sync_client is None:
             raise ValueError(
                 "Sync client is not initialized: please provide `url` or `sync_client` when initializing `RemoteGraph`."

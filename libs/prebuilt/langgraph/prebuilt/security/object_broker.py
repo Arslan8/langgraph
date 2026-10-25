@@ -83,7 +83,10 @@ def object_request(
 class _ObjectBroker(CredentialBroker):
     """Reuse bounded spawn-bound transport without credential issuance."""
 
-    def __init__(self, grant: ObjectGrant) -> None:
+    def __init__(
+        self, grant: ObjectGrant, bindings: Mapping[str, str] | None = None
+    ) -> None:
+        self.bindings = dict(bindings or {})
         self.grant = grant
         self.routes: dict[str, _BoundMediator] = {}
         self.spawn: SpawnRecord | None = None
@@ -121,6 +124,7 @@ class _ObjectBroker(CredentialBroker):
                 raise ValueError("invalid fields")
         except (ValueError, UnicodeError, RecursionError):
             return {"status": "denied", "error": "broker:invalid_request"}
+        service = self.bindings.get(service, service)
         active = {
             rule.rule_id
             for rule in grant.rules
@@ -401,6 +405,7 @@ class ObjectBrokerDispatcher:
         *,
         runtime_roots: Sequence[str | Path],
         mediators: Sequence[ResourceMediatorAdapter] = (),
+        resources: Sequence[Any] = (),
         wall_timeout_s: float = 30.0,
     ) -> None:
         self.tools = MappingProxyType(dict(tools))
@@ -408,7 +413,14 @@ class ObjectBrokerDispatcher:
             raise ValueError(
                 "bare handlers have no lowering contract; register ResourceMediatorAdapter via mediators="
             )
-        self.mediators = tuple(mediators)
+        from langgraph.prebuilt.security.mediators.contracts import object_bindings
+
+        self.resources = tuple(resources)
+        self.bindings = MappingProxyType(object_bindings(self.resources))
+        self.mediators = (
+            *mediators,
+            *(resource.adapter for resource in self.resources),
+        )
         if any(
             not isinstance(item, ResourceMediatorAdapter) for item in self.mediators
         ):
@@ -485,7 +497,7 @@ class ObjectBrokerDispatcher:
         profiles = parse_profiles(
             f"tool {call.tool.name} {{\n owner broker\n runs linux\n syscalls @minimal\n}}"
         )
-        broker = _ObjectBroker(grant)
+        broker = _ObjectBroker(grant, self.bindings)
         worker = _ObjectWorker(
             grant,
             profiles,

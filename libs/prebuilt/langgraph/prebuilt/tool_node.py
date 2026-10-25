@@ -1350,6 +1350,9 @@ class ToolNode(RunnableCallable):
         config: RunnableConfig,
         runtime: Runtime,
     ) -> Any:
+        from langgraph._internal._runtime_policy import check_runtime_policy
+
+        check_runtime_policy(self)
         tool_calls, input_type = self._parse_input(input)
         config_list = get_config_list(config, len(tool_calls))
 
@@ -1387,6 +1390,9 @@ class ToolNode(RunnableCallable):
         config: RunnableConfig,
         runtime: Runtime,
     ) -> Any:
+        from langgraph._internal._runtime_policy import check_runtime_policy
+
+        check_runtime_policy(self)
         tool_calls, input_type = self._parse_input(input)
         config_list = get_config_list(config, len(tool_calls))
 

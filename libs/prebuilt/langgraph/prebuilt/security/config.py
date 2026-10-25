@@ -257,6 +257,9 @@ class SecurityConfig:
         if mediator is None or not callable(install):
             raise SecurityConfigurationError("compiled graph lacks output placement")
         install(mediator, mediator.acall)
+        from langgraph.prebuilt.security.mac import register_mac_boundary
+
+        register_mac_boundary(graph)
 
     def configure_tool_node(
         self,

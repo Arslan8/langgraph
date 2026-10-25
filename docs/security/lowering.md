@@ -23,7 +23,7 @@ of host support. The exact-file host adapter currently accepts its default
 strategy only; unknown strategies fail closed. Custom semantic adapters must
 assess each complete line, including the strategy. See
 [isolated tools](object-classes.md#isolated-tools) and the
-[pump example](../../workspace/05_custom_class_quickstart.py).
+[pump example](../../workspace/05_custom_resource/demo.py).
 
 The negotiation API is platform-neutral; the shipped executable object backend
 is Linux Landlock ABI 5+ with seccomp. A different OS needs a real confinement

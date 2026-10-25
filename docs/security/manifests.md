@@ -394,8 +394,10 @@ For each tool call, the object-policy path performs these steps:
     into an `ObjectGrant` digest.
 11. Dispatch through the trusted host and verify its activation receipt.
 
-For resource-free manifests, the high-level helper performs only the Cedar call
-check. For `trusted_tool` resource manifests, it performs the complete expansion
+The high-level helper requires [manifest consistency admission](manifest-consistency.md)
+for all in-process tool bodies, including resource-free tools. Resource-free
+manifests still receive the Cedar call check and run through the verified
+dispatcher. For `trusted_tool` resource manifests, it performs the complete expansion
 and grant construction sequence, canonicalizes descriptor-declared resource
 arguments before executing the trusted tool, and records each issued grant and
 an exact trusted-tool/host-intersection receipt. It generates the owner ceiling
@@ -403,6 +405,12 @@ internally. The caller-facing `policy` permits the resource operations; access
 to those manifest-derived operations determines whether the invocation may be
 dispatched. Resource-free manifests still require an explicit caller-facing
 `Action::"call"` permit.
+
+Admission requires a complete supported effect overapproximation and
+`inferred effects ⊆ manifest`, plus rejection of unmonitored APIs and reflection.
+An approved resource call outside the manifest is permitted in the source but
+denied by its monitor during execution. A manifest cannot grant an effect absent
+from inference, or turn an arbitrary library into an approved resource API.
 
 Every evaluation also leaves a private bundle below
 `CedarObjectAuthorizer.artifact_root`. Each directory returned by

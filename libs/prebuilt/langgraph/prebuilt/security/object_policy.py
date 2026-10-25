@@ -24,7 +24,7 @@ from enum import Enum
 from pathlib import Path
 from threading import RLock
 from types import MappingProxyType
-from typing import Protocol, runtime_checkable
+from typing import Any, Protocol, runtime_checkable
 
 from langchain_core.tools import BaseTool
 
@@ -461,7 +461,11 @@ class ObjectGrant:
 
 @dataclass(frozen=True, slots=True)
 class CedarPolicySet:
-    """Cedar policy partitions with monotone ownership semantics."""
+    """Graph-local Cedar policy partitions.
+
+    `mac_forbids` is a legacy name for additional local restrictions. Mandatory
+    operator policy is installed independently with `install_mac_policy`.
+    """
 
     owner_permits: Mapping[str, str]
     principal_permits: str
@@ -556,6 +560,10 @@ class CedarObjectAuthorizer:
         labels: Mapping[tuple[str, str], Mapping[str, str]] | None = None,
     ) -> ObjectGrant:
         """Return the exact surviving grant or raise a fail-closed denial."""
+        from langgraph.prebuilt.security.mac import runtime_mac_forbids
+
+        operator_forbids = runtime_mac_forbids()
+        mandatory_forbids = "\n".join((operator_forbids, self.policies.mac_forbids))
         candidates = self.manifest.expand(tool_name, arguments, labels=labels)
         executable = _resolve_executable(self.executable)
         if executable is None:
@@ -596,6 +604,17 @@ class CedarObjectAuthorizer:
                 if not source.strip() and name == "mac":
                     continue
                 self._validate(executable, root, schema_path, name, source)
+            if operator_forbids:
+                # Operator vocabulary spans graphs. A graph-local schema cannot
+                # reject a forbid merely because its action belongs to another
+                # graph; Cedar still parses it and fails closed on evaluation errors.
+                operator_path = root / "operator-mac.cedar"
+                operator_path.write_text(operator_forbids, encoding="utf-8")
+                parsed = self._run(
+                    executable, "check-parse", "--policies", os.fspath(operator_path)
+                )
+                if parsed.returncode != 0:
+                    raise ObjectPolicyDenied("cedar:validation:operator-mac")
             call_request = _call_request(principal_id, tool_name)
             if not self._allows(
                 executable,
@@ -621,12 +640,12 @@ class CedarObjectAuthorizer:
                 call_request,
             ):
                 raise ObjectPolicyDenied(f"dac:envelope_call:{tool_name}")
-            if self.policies.mac_forbids.strip() and not self._allows(
+            if mandatory_forbids.strip() and not self._allows(
                 executable,
                 root,
                 entities_path,
                 "mac-call",
-                _call_permit(principal_id, tool_name) + self.policies.mac_forbids,
+                _call_permit(principal_id, tool_name) + mandatory_forbids,
                 call_request,
             ):
                 raise ObjectPolicyDenied(f"mac:call:{tool_name}")
@@ -654,9 +673,7 @@ class CedarObjectAuthorizer:
                     if line.requirement is Requirement.NEED:
                         raise ObjectPolicyDenied(f"dac:envelope:{line.line_id}")
                     continue
-                mac_policy = (
-                    _candidate_permit(principal_id, line) + self.policies.mac_forbids
-                )
+                mac_policy = _candidate_permit(principal_id, line) + mandatory_forbids
                 if not self._allows(
                     executable, root, entities_path, "mac-eval", mac_policy, request
                 ):
@@ -688,7 +705,13 @@ class CedarObjectAuthorizer:
             principal_id,
             tool_name,
             call_id,
-            self.policies.digest,
+            (
+                hashlib.sha256(
+                    (self.policies.digest + operator_forbids).encode()
+                ).hexdigest()
+                if operator_forbids
+                else self.policies.digest
+            ),
             tuple(retained),
             waived_lines,
         )
@@ -1037,24 +1060,66 @@ class _TrustedInProcessDispatcher:
 
     enforcer_id = "trusted-tool-host-intersection"
 
-    def __init__(self, tool: BaseTool) -> None:
+    def __init__(
+        self, tool: BaseTool, manifest: SecurityManifest, resources=()
+    ) -> None:
+        from langgraph.prebuilt.security.inprocess import ManifestAdmission
+
         self.tool = tool
+        self.admission = ManifestAdmission(tool, manifest)
+        self.resources = resources
 
     def invoke(
         self, principal: Principal, call: ToolCall, grant: ObjectGrant
     ) -> HostExecutionResult:
-        return HostExecutionResult(
-            self.tool.invoke(self._arguments(call)),
-            self._receipt(principal, call, grant),
+        from langgraph.prebuilt.security.inprocess import _active_grant
+        from langgraph.prebuilt.security.mediators.objects import (
+            ResourceReleaseError,
+            local_resources,
         )
+
+        self.admission.validate()
+        token = _active_grant.set(grant)
+        try:
+            with local_resources(self.resources, principal, call, grant):
+                return HostExecutionResult(
+                    self.admission.invoke(self._arguments(call)),
+                    self._receipt(principal, call, grant),
+                )
+        except ResourceReleaseError as exc:
+            raise HostExecutionError(
+                str(exc),
+                self._receipt(principal, call, grant),
+                ExecutionOutcome.INDETERMINATE,
+            ) from exc
+        finally:
+            _active_grant.reset(token)
 
     async def ainvoke(
         self, principal: Principal, call: ToolCall, grant: ObjectGrant
     ) -> HostExecutionResult:
-        return HostExecutionResult(
-            await self.tool.ainvoke(self._arguments(call)),
-            self._receipt(principal, call, grant),
+        from langgraph.prebuilt.security.inprocess import _active_grant
+        from langgraph.prebuilt.security.mediators.objects import (
+            ResourceReleaseError,
+            local_resources,
         )
+
+        self.admission.validate()
+        token = _active_grant.set(grant)
+        try:
+            with local_resources(self.resources, principal, call, grant):
+                return HostExecutionResult(
+                    await self.admission.ainvoke(self._arguments(call)),
+                    self._receipt(principal, call, grant),
+                )
+        except ResourceReleaseError as exc:
+            raise HostExecutionError(
+                str(exc),
+                self._receipt(principal, call, grant),
+                ExecutionOutcome.INDETERMINATE,
+            ) from exc
+        finally:
+            _active_grant.reset(token)
 
     def confirm_termination(self, recovery: TerminationRecovery) -> bool:
         return True
@@ -1063,9 +1128,12 @@ class _TrustedInProcessDispatcher:
     def _arguments(call: ToolCall) -> Mapping[str, object]:
         # Descriptor-normalized resource arguments replace their raw forms so
         # the trusted tool acts on the same canonical identity policy observed.
-        return {
+        arguments = {
             name: call.normalized.get(name, value) for name, value in call.args.items()
         }
+        if any(type(value) is not str for value in arguments.values()):
+            raise HostExecutionDenied("manifest_consistency:arguments_must_be_strings")
+        return arguments
 
     def _receipt(
         self, principal: Principal, call: ToolCall, grant: ObjectGrant
@@ -1116,6 +1184,7 @@ def cedar_security(
     modules: Sequence[SecurityModule] = (),
     normalizers: Mapping[str, ObjectNormalizer] | None = None,
     dispatcher: ObjectSandboxDispatcher | None = None,
+    resources: Sequence[Any] = (),
     labels: Callable[
         [Principal, ToolCall],
         Mapping[tuple[str, str], Mapping[str, str]],
@@ -1131,9 +1200,19 @@ def cedar_security(
     to the derived operations also determines caller eligibility; resource-free
     manifests require an explicit caller-side `call` permit. Resource grants
     use the trusted-tool/host-permission intersection contract in process.
+    `mac_forbids` adds graph-local restrictions (legacy parameter name); it
+    cannot replace or disable operator policy from `install_mac_policy`.
+    `resources` registers object-bound implementations for admitted in-process
+    tools; class declarations are generated automatically. For isolated tools,
+    register resources on their dispatcher instead.
+
     For `runs linux` or `runs broker`, supply an isolated `dispatcher`; the
     registered schema tool is never executed in the coordinator. Kernel and
     broker classes must be supported by that dispatcher before execution.
+    In-process bodies must pass source-only manifest consistency checking;
+    unavailable source, unmodeled calls, and unsupported syntax deny admission.
+    Resource access must use approved `security.inprocess` APIs or registered
+    typed resource clients.
     """
     if not isinstance(tool, BaseTool):
         raise TypeError("cedar_security requires a @tool-decorated BaseTool")
@@ -1143,6 +1222,24 @@ def cedar_security(
     _text(owner, "tool owner")
     if dispatcher is not None and not isinstance(dispatcher, ObjectSandboxDispatcher):
         raise TypeError("dispatcher must implement ObjectSandboxDispatcher")
+    from langgraph.prebuilt.security.mediators.contracts import object_bindings
+
+    if dispatcher is not None:
+        if resources:
+            raise ValueError("register resources on the dispatcher for isolated tools")
+        resources = getattr(dispatcher, "resources", ())
+    resources = tuple(resources)
+    object_bindings(resources)  # Reject duplicate bindings before admission.
+    declarations = {}
+    for resource in resources:
+        resource.adapter  # Require an implementation at registration.
+        declaration = resource.class_declaration(
+            enforced_by="trusted_tool" if dispatcher is None else "broker"
+        )
+        previous = declarations.setdefault(resource.class_name, declaration)
+        if previous != declaration:
+            raise ValueError("conflicting resource class definitions")
+    classes = classes + "\n" + "\n".join(declarations.values())
     core_classes = (
         _TRUSTED_TOOL_CORE_CLASSES
         if dispatcher is None
@@ -1202,12 +1299,11 @@ def cedar_security(
     )
     overrides = DacOverrides({tool_name: local_policy})
     authorizer = CedarObjectAuthorizer(parsed, policies, executable=executable)
-    if not tool_manifest.rules and dispatcher is None:
-        module = CedarCallPolicy(authorizer, {tool_name: owner})
-        return SecurityConfig(modules=(module, *modules), dac_overrides=overrides)
     executor = ObjectPolicyHostExecutor(
         authorizer,
-        dispatcher if dispatcher is not None else _TrustedInProcessDispatcher(tool),
+        dispatcher
+        if dispatcher is not None
+        else _TrustedInProcessDispatcher(tool, parsed, resources),
         tool_owners={tool_name: owner},
         labels=labels,
     )

@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import os
 import sys
 import tempfile
 from pathlib import Path
@@ -26,6 +27,7 @@ from langgraph.prebuilt.security import (
     Principal,
     cedar_security,
     effects,
+    install_mac_policy,
     with_principal,
 )
 
@@ -45,8 +47,10 @@ DAC_POLICY = 'permit(principal == slangGraph::User::"alice", action, resource);'
 
 
 def main() -> None:
-    # Trusted application configuration supplies MAC; tool arguments do not.
-    mac_policy = Path(__file__).with_name("09_no_internet.cedar").read_text()
+    # Trusted runtime bootstrap installs MAC once for every graph and session.
+    # A deployment-selected directory is loaded automatically by the runtime.
+    if "LANGGRAPH_MAC_DIR" not in os.environ:
+        install_mac_policy(Path(__file__).with_name("no_internet.cedar").read_text())
 
     @tool
     @effects(Effect.READ)
@@ -54,7 +58,7 @@ def main() -> None:
         """Read a local report, optionally using the internet."""
         raise AssertionError("the schema tool must not execute in the parent")
 
-    artifact = Path(__file__).with_name("09_no_internet_worker.py").resolve()
+    artifact = Path(__file__).with_name("worker.py").resolve()
     with tempfile.TemporaryDirectory(prefix="slanggraph-offline-demo-") as directory:
         report = Path(directory) / "report.txt"
         report.write_text("offline report")
@@ -80,7 +84,6 @@ def main() -> None:
                     "returns normal"
                 ),
                 policy=DAC_POLICY,
-                mac_forbids=mac_policy,
                 dispatcher=dispatcher,
             )
             builder = StateGraph(MessagesState)

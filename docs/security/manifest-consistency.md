@@ -1,10 +1,170 @@
 # Static manifest consistency checks
 
+## Supported verification contract
+
+The static contract has two checks: **inferred ⊆ manifest** and
+**inferred ⊆ allowed operations**. The manifest is a permission ceiling, not an
+obligation to perform every declared operation. "Allowed operations" means the
+framework-approved, monitored API vocabulary, not caller permissions. A manifest
+cannot approve an arbitrary library. These checks cover the supported function
+body, not module loading or the entire Python runtime (see
+[Loading and trust boundary](#loading-and-trust-boundary)).
+
+1. **Closed-world resource access.** Every call must resolve to an approved,
+   monitored API. Unsupported Python and unresolved calls reject admission,
+   including after a return or in a branch excluded by a closed selector map.
+2. **Manifest coverage.** Let `I` overapproximate effects of admitted invocations
+   and `M` be the active manifest. Every inferred effect must be covered: `I ⊆ M`.
+   Unused declarations are valid. An inferred operation or resource outside the
+   manifest is rejected before execution.
+
+Let `A` be approved resource operations and `G` the grant after DAC, then MAC:
+
+```text
+static:   I ⊆ M and I ⊆ A
+runtime:  successful resource effects ⊆ G, where G ⊆ M
+```
+
+A hardcoded return has `I = {}` and passes even with unused read permission.
+A body that reads and writes fails a read-only manifest because the write is
+outside `M`. A body reading both public and private resources must declare both;
+otherwise admission fails. Adding `requests.get` or `os.execve` fails the approved
+API check even if the author adds a corresponding manifest declaration.
+
+Runtime checks remain necessary: concrete resource identities and caller grants
+are dynamic. DAC or MAC may remove optional declared permission; the resource
+monitor denies its use. Admission does not guarantee that code handles this
+denial gracefully. [Demo 07](../../workspace/07_manifest_verification/demo.py) uses a real
+`@tool` and automatic admission. Returning a constant passes with unused read
+permission; restoring a read requires the manifest to cover its resource.
+[Demo 7's companion examples](../../workspace/07_manifest_verification/bypasses.py)
+reject direct library and reflection bypasses before execution.
+[Demo 9](../../workspace/09_no_internet/demo.py) demonstrates MAC removing
+optional authority or denying required authority. Resource names can remain
+symbolic during static analysis.
+
+Reflection and dynamic execution are **unsupported**, not features deferred to
+runtime tracing: `getattr`, `globals`, `locals`, `vars`, `eval`, `exec`, dynamic
+imports, arbitrary attribute access, native libraries, and indirect callbacks
+do not enter the admitted language. Imports inside the function body are also
+rejected. The framework does not infer “all effects” for unknown code and then
+let a resource monitor discover its behavior at runtime.
+Process execution such as `os.execve` and `subprocess.run`, and native-library
+loading such as `ctypes.CDLL`, are not approved tool-body operations. They reject
+admission even if the manifest otherwise matches, including in unreachable code.
+The monitor implementations and their dependencies remain reviewed trusted code;
+registering an API is not proof that its implementation cannot escape.
+
+## Mandatory in-process admission
+
+`cedar_security` now requires this check for every in-process tool, including
+tools with resource-free manifests. It reads the actual sync and async function
+bodies, compares the retrieved source with the loaded bytecode, and rejects
+`mismatch`, `unknown`, unavailable source, closures, wrappers, and custom tool
+subclasses. There is no opt-out or caller-supplied passing report. Source hashes
+and reports are retained on the in-process dispatcher's `admission.reports`.
+Isolated `runs linux`/`runs broker` tools retain their host confinement path.
+
+Only approved framework APIs are modeled during admission. The local file API is:
+
+```python
+from langgraph.prebuilt.security.inprocess import read_text
+
+@tool
+def read_document(path: str) -> str:
+    """Read a granted UTF-8 file."""
+    return read_text(path)
+```
+
+Declare `fs read @{path} need` in its manifest. `read_text` checks the current
+invocation's surviving grant; an optional permission removed by MAC cannot be
+used. Import this function directly at module scope (an alias is supported).
+Direct `open`, `Path.read_text`, arbitrary helpers, and unregistered resource
+APIs are rejected. Source availability alone does not approve a helper or its
+transitive libraries: without a reviewed terminal contract or complete supported
+analysis, it is unknown. General helper expansion and more approved resource APIs
+are future work. There is no automatic isolation fallback or verification bypass.
+
+### Typed resource clients
+
+Broker-backed resources use typed clients defined in `security.mediators`:
+
+```python
+from langgraph.prebuilt.security.mediators.records import records as db
+
+def update_record(record: str, value: str):
+    return db.write(record, value)
+```
+
+The registered `RecordsAPI` contract maps this method to `db_record::write` on
+`record`. The same definition generates the client, SLP class declaration, and
+backend signature/dispatch checks. The checker recognizes approved canonical
+imports and aliases without importing candidate modules. For a live tool,
+admission resolves actual registered client instances and pins their generated
+methods; matching a variable or method name alone is insufficient.
+
+Unknown methods, extra/missing/duplicate arguments, known argument-type
+mismatches, reflection, and unregistered objects reject verification. A typed
+argument with an unresolved type is unknown, never silently accepted. Inert
+resource aliases and supported expressions still participate in effect inference,
+and `inferred ⊆ manifest` remains the admission rule. The declared resource class
+must agree with the client's lowering and enforcement contract (broker, or
+trusted-tool enforcement for registered object-bound in-process resources).
+
+Object-bound APIs omit the selector argument: `counter.increment(2)` infers the
+identity of that registered counter object and the `increment` operation. Declare
+it using `resource.permission("increment")`. `.bind(...)` preserves the identity;
+a separately constructed contract represents a different object, even with the
+same interface. A manifest granting one object does not cover another. The checker
+also validates zero-argument methods. Runtime grants remain mandatory after
+admission. See the [mediator guide](../../libs/prebuilt/langgraph/prebuilt/security/mediators/README.md).
+
+Ordinary type checkers also see typed method signatures and return values.
+Both constructor binding and `.bind(...)` check implementation methods against
+that same interface. Optional custom mediation adds pre-effect validation without
+changing generated client or inference mappings. This does not prove the backend's resource semantics: it remains
+trusted code with conformance tests. Runtime validation and authorization remain
+mandatory because worker requests, resource identities, and grants are dynamic.
+These generated clients use the authenticated worker broker; they do not create
+an in-process database connection. Raw `object_request` remains available to
+isolated workers as a transport API, but is not an approved terminal in the
+restricted typed source model.
+
+Execution rechecks callable, bytecode, default-argument, and terminal bindings.
+Arguments and defaults must be strings, as required by the checker's model.
+The dispatcher calls the admitted function directly; it does not execute custom
+`BaseTool` validators or callbacks through `tool.invoke`. Tool schemas remain
+declarations for the surrounding framework, not executable admission evidence.
+Resource-free tools also use the verified dispatcher, preventing substitution
+of a different same-named tool body after authorization.
+
+### Loading and trust boundary
+
+The high-level API receives an **already-created** tool. It cannot prevent
+effects that occurred during module initialization, import-time dependency code,
+decorators, default-expression evaluation, or tool/schema construction. These
+are operator-trusted setup, outside the function-body certificate. Do not import
+an arbitrary untrusted tool module into the coordinator and treat a later passing
+report as retroactive protection. A verified loader that checks the complete
+module/dependency initialization before execution is not implemented here.
+
+The resource monitors, normalizers, coordinator, and stable runtime bindings are
+also trusted. Binding checks detect changes between admission and invocation;
+they do not make tool reflection or concurrent hostile mutation supported.
+Filesystem replacement races are not covered. This is a restricted language
+boundary, not arbitrary-Python confinement or a complete-system proof.
+Legacy `SecurityConfig` without
+Cedar manifests and custom host executors are not certified by this gate.
+`CedarCallPolicy` alone is a low-level authorization policy, not verified tool
+admission. Use `cedar_security` for the mandatory admission path.
+
+## Standalone analysis
+
 `check_manifest_consistency` compares a Python tool function's resource effects
 with its `.slp` security manifest without importing or executing the source.
-It checks capability coverage: each modeled effect must have a matching class,
-operation, and resource pattern in an active manifest rule. Extra declarations
-are reported as `unused_rules`, rather than treated as errors.
+It infers modeled effects and checks that each has a matching class, operation,
+and resource expression in an active manifest rule. Extra inferred effects are
+rejected; unused manifest rules are allowed.
 
 ```python
 from langgraph.prebuilt.security.manifest_consistency import (
@@ -46,29 +206,47 @@ The operation model is an explicit, reviewed trust assumption: this API performs
 only the named operation on the resource argument at `position` (default zero)
 or keyword `parameter`. Other arguments and the result must be inert data; the
 API must not execute callbacks or defer effects. Models must include all effects
-of the terminal API. Do not model an arbitrary helper as a terminal to silence
-an unknown result. General helpers currently produce `unknown`.
+of the terminal API, and its resource monitor must check the active grant before
+performing them. Do not model an arbitrary helper as a terminal to silence
+an unknown result. General helpers currently produce `unknown`. The standalone
+API accepts operator-reviewed models for analysis; a standalone report cannot
+register a library with the in-process admission gate or replace its fixed API
+catalog. Its contracts are assumptions, not proof of library implementations.
 
 The checker supports top-level function bodies, local argument aliases, imported
 API aliases, literal resources, simple f-string templates, and `if`/`else`
-branches comparing the closed manifest selector to string literals with `==`
-or `!=`. It checks each allowed selector value independently. It does not
-analyze rejected selector values, which the manifest authorizer must deny before
-execution. Resource expressions are compared structurally before normalization;
-two paths which happen to normalize to the same object may require review.
+branches comparing inert string variables to literals with `==` or `!=`.
+Unknown comparisons within this supported form explore both branches and merge
+local bindings conservatively; ambiguous resource values remain unknown. It
+checks every declared value of a closed manifest selector against that value's
+active rules. The runtime rejects unmapped values before dispatch. Without a
+closed map it explores all supported branches. The whole-body audit still
+inspects every branch and unreachable statement for unapproved APIs. Resource expressions are
+compared structurally before normalization; wildcard/pattern containment and
+arbitrary normalization equivalence are not proved. A subset relation the
+checker cannot establish is not accepted.
 
 Reports have three outcomes:
 
-- `consistent`: all analyzed effects are covered under the stated assumptions.
-- `mismatch`: a manifest argument is missing, or a modeled effect/resource is
-  absent from the active declarations. Other parts of the function can still be
+- `consistent`: the supported analysis is complete and `I ⊆ M` holds.
+- `mismatch`: a manifest argument is missing, or an inferred effect is
+  outside the active manifest. Other parts of the function can still be
   unknown; inspect `issues` for both kinds of findings.
 - `unknown`: unsupported Python, unresolved resources, or unmodeled calls prevent
   a conclusion. Unknown is never accepted as consistent.
 
-Reports include source line numbers, observed effects, matching rule indices,
-unused rule indices, and the source SHA-256. Unused rules in an incomplete
-analysis are not evidence that a permission can safely be removed.
+Version 3 reports include source line numbers, `inferred` effects (`observed` is
+retained as an alias), matching rule indices, `outside_manifest` effect indices,
+`unused_rules`, and the source SHA-256. `inference_complete` distinguishes a
+complete supported overapproximation from a partial result.
+`inferred_subset_of_manifest` is null when inference is incomplete, true when
+coverage is established, and false when complete inference exceeds the manifest.
+This replaces the reversed `manifest_subset_of_inferred` field from version 2.
+`outside_manifest` identifies uncovered effects in their selector cases;
+`unused_rules` is informational and never a requirement to exercise permission.
+Reports explicitly identify `verified_scope: function_body_only` and
+`initialization_verified: false`; consumers must not promote them to module-loader
+or whole-runtime certificates.
 
 This initial checker assumes inert string inputs and trusted terminal bindings.
 It does not verify module initialization, decorators, default argument
@@ -105,3 +283,16 @@ python -m langgraph.prebuilt.security.manifest_consistency \
 `--function` selects a Python function whose name differs from the manifest tool
 name. Omitting `--operations` leaves all calls unmodeled. The command exits zero
 only for `consistent`; mismatches, unknown behavior, and invalid inputs exit one.
+
+Failures also produce framework-owned diagnostics on stderr. In terminals, every
+diagnostic label before the colon is red and its message after the colon is
+yellow. File paths and line numbers stay plain. `NO_COLOR` disables highlighting,
+and redirected diagnostics and JSON reports remain uncolored.
+Programmatic command-line frontends can pass a checker report to
+`manifest_verification_exit_code(report, source_name=...)` and propagate its
+return value with `SystemExit`. It emits diagnostics on failure and returns 1;
+success is silent and returns 0. This presentation helper does not replace
+mandatory admission or turn a standalone report into an execution certificate.
+In-process admission uses the same diagnostic formatter in its
+`SecurityConfigurationError`. Demo 07 exercises that automatic path; correcting
+its manifest changes setup from rejection to success.

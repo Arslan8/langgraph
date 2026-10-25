@@ -1,4 +1,4 @@
-"""Run only through 09_no_internet_demo.py, inside the Linux sandbox."""
+"""Run only through 09_no_internet/demo.py, inside the Linux sandbox."""
 
 import socket
 from pathlib import Path

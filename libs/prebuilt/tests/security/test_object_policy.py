@@ -15,7 +15,6 @@ from langgraph.graph import START, MessagesState, StateGraph
 from langgraph.prebuilt import ToolNode
 from langgraph.prebuilt.security import (
     ActivationReceipt,
-    CedarCallPolicy,
     CedarObjectAuthorizer,
     CedarPolicySet,
     Effect,
@@ -41,6 +40,7 @@ from langgraph.prebuilt.security import (
     parse_security_manifest,
     with_principal,
 )
+from langgraph.prebuilt.security.inprocess import read_text
 
 MANIFEST = """
 class db {
@@ -586,9 +586,8 @@ def test_cedar_security_runs_an_ordinary_toolnode(tmp_path: Path) -> None:
         executable=cedar,
     )
 
-    policy_module = security.modules[0]
-    assert isinstance(policy_module, CedarCallPolicy)
-    assert set(policy_module.authorizer.manifest.tools) == {"greet"}
+    assert isinstance(security.host_executor, ObjectPolicyHostExecutor)
+    assert set(security.host_executor.authorizer.manifest.tools) == {"greet"}
 
     builder = StateGraph(MessagesState)
     builder.add_node("tools", ToolNode([greet]))
@@ -631,7 +630,7 @@ def test_cedar_security_derives_and_enforces_trusted_resource_grant(
     )
     def read_file(path: str) -> str:
         """Read one file."""
-        return Path(path).read_text(encoding="utf-8")
+        return read_text(path)
 
     security = cedar_security(
         read_file,
@@ -700,7 +699,7 @@ def test_cedar_security_rejects_nontrusted_resource_enforcer() -> None:
         )
 
 
-def test_cedar_security_accepts_a_custom_trusted_class() -> None:
+def test_cedar_security_accepts_unused_custom_class_permission() -> None:
     @tool
     def read_record(record_id: str) -> str:
         """Read one record."""
@@ -709,22 +708,21 @@ def test_cedar_security_accepts_a_custom_trusted_class() -> None:
     security = cedar_security(
         read_record,
         classes="""
-        class record {
-          operations read
-          object item
-          normalizer identity
-          attrs owner
-          enforced_by trusted_tool
-        }
-        """,
+    class record {
+      operations read
+      object item
+      normalizer identity
+      attrs owner
+      enforced_by trusted_tool
+    }
+    """,
         manifest="record read @{record_id} need",
         policy="permit(principal, action, resource);",
     )
-
-    assert isinstance(security.host_executor, ObjectPolicyHostExecutor)
-    registered = security.host_executor.authorizer.manifest.registry.classes
-    assert set(registered) == {"fs", "record"}
-    assert registered["record"].operations == {"read"}
+    report = security.host_executor.dispatcher.admission.reports[0]
+    assert report["inferred_subset_of_manifest"] is True
+    assert report["inferred"] == []
+    assert report["unused_rules"] == [0]
 
 
 def test_cedar_security_requires_a_tool_object() -> None:

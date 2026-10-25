@@ -17,6 +17,7 @@ from pathlib import Path
 from langchain_core.messages import AIMessage
 from langchain_core.tools import tool
 from langgraph.graph import START, MessagesState, StateGraph
+
 from langgraph.prebuilt import ToolNode
 from langgraph.prebuilt.security import (
     Effect,
@@ -28,7 +29,7 @@ from langgraph.prebuilt.security import (
     effects,
     with_principal,
 )
-
+from langgraph.prebuilt.security.inprocess import read_text
 
 ALLOWED_PATH = str(Path(__file__).resolve())
 
@@ -67,8 +68,8 @@ permit (
     sensitivity="sensitive",
 )
 def read_file(path: str) -> str:
-    """Read the first line of a text file."""
-    return Path(path).read_text(encoding="utf-8").splitlines()[0]
+    """Read a text file through the approved resource API."""
+    return read_text(path)
 
 
 # Passing the tool binds its internal identity. `classes=` is only needed when

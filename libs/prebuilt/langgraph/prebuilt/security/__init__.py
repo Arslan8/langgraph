@@ -128,6 +128,7 @@ from langgraph.prebuilt.security.landlock import (
     open_path_descriptor,
 )
 from langgraph.prebuilt.security.linux import LinuxSandboxExecutor, LinuxToolSpec
+from langgraph.prebuilt.security.mac import install_mac_policy
 from langgraph.prebuilt.security.mcp_proxy import (
     McpServerSpec,
     McpStdioProxy,
@@ -478,6 +479,7 @@ __all__ = (
     "effects",
     "evaluate_dac",
     "guarded_tool",
+    "install_mac_policy",
     "introspect",
     "langsmith_metadata",
     "mcp_service_map",
@@ -493,14 +495,14 @@ __all__ = (
     "with_principal",
 )
 
+from langgraph.prebuilt.security.mediators.sqlite import (
+    SQLITE_RECORD_SCHEMA,
+    sqlite_record_mediator,
+)
 from langgraph.prebuilt.security.resource_mediator import (
     ObjectLoweringRecord,
     ResourceInvocation,
     ResourceMediatorAdapter,
     ResourceSupport,
     negotiate_object_grant,
-)
-from langgraph.prebuilt.security.sqlite_mediator import (
-    SQLITE_RECORD_SCHEMA,
-    sqlite_record_mediator,
 )

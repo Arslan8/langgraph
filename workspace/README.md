@@ -4,15 +4,32 @@ This workspace contains progressively more complete examples of slangGraph tool
 security. The examples teach the runtime contract that the student policy
 inference project must target; they are not the complete project by themselves.
 
+## Demo folders
+
+Each demo has its own directory and a `demo.py` entry point. Supporting workers,
+policies, simulators, and app-owned mediators live beside the demo that uses them.
+
+| Folder | Teaching focus |
+| --- | --- |
+| [01_quickstart](01_quickstart/README.md) | Basic ToolNode |
+| [02_dac](02_dac/README.md) | Discretionary access control |
+| [03_principals](03_principals/README.md) | Principal-based policies |
+| [04_resource_grants](04_resource_grants/README.md) | Resource grants |
+| [05_custom_resource](05_custom_resource/README.md) | Custom resource class: pump |
+| [06_database](06_database/README.md) | Using a database mediator |
+| [07_manifest_verification](07_manifest_verification/README.md) | Static manifest verification |
+| [08_custom_mediator](08_custom_mediator/README.md) | Extending the framework: custom mediator |
+| [09_no_internet](09_no_internet/README.md) | Mandatory access control: no internet |
+
 ## Run the examples
 
 Run each example from the repository root:
 
 ```bash
-python3 workspace/01_quickstart.py
-python3 workspace/02_dac_quickstart.py
-python3 workspace/03_dac_principal_quickstart.py
-python3 workspace/04_resource_grant_quickstart.py
+python3 workspace/01_quickstart/demo.py
+python3 workspace/02_dac/demo.py
+python3 workspace/03_principals/demo.py
+python3 workspace/04_resource_grants/demo.py
 ```
 
 Example 5 requires Linux with Landlock, `libseccomp.so.2`, and the Cedar CLI.
@@ -20,10 +37,10 @@ It uses two terminals and a Unix-domain socket:
 
 ```bash
 # Terminal 1: device behavior and accepted-command log
-python3 workspace/05_pump_simulator.py
+python3 workspace/05_custom_resource/simulator.py
 
 # Terminal 2: interactive authorized controller
-python3 workspace/05_custom_class_quickstart.py
+python3 workspace/05_custom_resource/demo.py
 ```
 
 The controller accepts `inspect`, `start`, `stop`, `set_flow NUMBER`, and
@@ -47,7 +64,7 @@ owner/tool call ceiling; users do not repeat that binding in caller policy.
 Run the complete permission matrix and its assertions with:
 
 ```bash
-python3 workspace/05_custom_class_quickstart.py --demo
+python3 workspace/05_custom_resource/demo.py --demo
 ```
 
 Example 6 adds a parent-owned SQLite database with record-level Cedar
@@ -55,67 +72,112 @@ permissions. It requires Python 3.11+, Linux Landlock ABI 5+, libseccomp, and
 the Cedar CLI. No database server or manual setup is needed:
 
 ```bash
-python3 workspace/06_database_quickstart.py
+libs/prebuilt/.venv/bin/python workspace/06_database/demo.py
 ```
+
+The demo shows the policy matrix, each typed request, its actual grant or denial
+reason, and a live table of the fixture records with changed/deleted rows marked.
+For a presentation, pause before each operation with:
+
+```bash
+libs/prebuilt/.venv/bin/python workspace/06_database/demo.py --step
+```
+
+Use the prebuilt environment's Python 3.11+ interpreter; a bare `python3` may
+select a different environment without SQLite's required `Connection.setlimit`
+API. The demo checks this requirement before creating fixtures or dispatching work.
+
+Colors are enabled on terminals and disabled in captured output or when
+`NO_COLOR` is set. Record tables are the trusted controller's view of demo data,
+not extra data exposed to the worker. The final summary checks every expected
+decision and database change, including that denied requests changed nothing.
 
 The demo creates a temporary database, checks allowed and denied read/write/delete
 requests, verifies that another user's record stayed unchanged, and cleans up.
+The worker calls typed `records.read`, `records.write`, and `records.delete`
+methods. A shared `RecordsAPI` contract supplies their signatures, checker effect
+mappings, generated SLP class, and backend dispatch validation. The controller
+checks the worker source against its manifest before dispatch; it does not import
+the worker to perform this analysis. Strings remain inside the broker protocol,
+not in the tool-facing operation API.
 The database directory is kept outside worker-readable code roots. See the
 [SQLite mediator contract](../docs/security/object-classes.md#sqlite-record-mediator)
 for the fixed schema, payload limits, and integration API.
 
-Examples 7 and 8 demonstrate unsafe worker code and custom resource mediation.
-Both require Linux Landlock ABI 5+, libseccomp, and the Cedar CLI:
+Resource backend implementations live in
+[`security/mediators/`](../libs/prebuilt/langgraph/prebuilt/security/mediators/README.md).
+The database demo imports its backend from `security.mediators.sqlite`. To build
+another backend, start with the empty
+[`template.py`](../libs/prebuilt/langgraph/prebuilt/security/mediators/template.py)
+and follow that directory's implementation and registration guide. The template
+intentionally denies support until its resource semantics are implemented.
+
+Example 7 demonstrates static manifest verification. Example 8 demonstrates
+runtime resource mediation and requires Linux Landlock ABI 5+, libseccomp, and
+the Cedar CLI.
 
 ```bash
-python3 workspace/07_unsafe_tools_demo.py
-python3 workspace/08_resource_adapters_demo.py
+python3 workspace/07_manifest_verification/demo.py
+python3 workspace/08_custom_mediator/demo.py
 ```
 
-[Example 7](07_unsafe_tools_demo.py) grants read access to one temporary file.
-The deliberately unsafe [worker](07_unsafe_worker.py) then attempts an undeclared
-read, a native `open()` bypass, a write to its read-only file, and socket creation.
-Each forbidden operation prints `blocked`; the controller verifies that both
-fixture files stayed unchanged. Run the controller above, not the worker alone.
-This uses only demo-owned temporary data and creates no external connections.
-The manifest describes authority; it does not certify tool behavior. Runtime
-code roots remain readable, and filesystem metadata is not fully hidden.
+[Example 7](07_manifest_verification/demo.py) uses a real `@tool` and automatic verification
+in `cedar_security`. Reading `path` fails against the fixed-file manifest. Replace
+`/tmp/other-report.txt` with `@{path}` to cover the read and pass. Alternatively,
+return a constant: unused manifest permission is valid. Setup never invokes the tool.
 
-[Example 8](08_resource_adapters_demo.py) implements a counter adapter directly
-in the example, with four visible hooks:
+The static contract is **inferred ⊆ manifest** and **inferred ⊆ allowed operations**.
+The demo has no manual verifier calls or prints. Framework diagnostics use red
+labels and yellow messages; `NO_COLOR` disables highlighting.
 
-- `assess` recognizes the exact class, selector, operations, attributes, and
-  `counter.local.v1` lowering contract, and declares the protected directory.
-- `activate` establishes per-invocation state using the authenticated context.
-- `invoke` validates the payload and applies the counter's semantic limits.
-- `release` clears the invocation state after worker/broker activity stops.
+[Example 8: custom mediator](08_custom_mediator/demo.py) shows how an application
+extends the framework with its own resource mediator. Its rule: increments
+must be **1, 2, or 3**. Alice has permission to increment the bound counter.
+Adding `2` succeeds; adding `-1` is rejected and leaves the counter at `2`.
+This is resource-specific validation, not a DAC permission denial.
 
-Its [worker](08_resource_adapter_worker.py) makes valid requests, then tries an
-invalid increment, a payload that changes the selector, and direct resource
-access. It also requests `retired`, an optional resource Cedar permits but the
-adapter cannot implement. Lowering removes that permission before dispatch.
-Finally, the controller repeats the call without the adapter and verifies that
-missing required support denies execution before worker activity.
+Start with the three-line `increment_counter` tool. The shared
+[api.py](08_custom_mediator/mediators/api.py) defines the contract and broker client;
+[counter.py](08_custom_mediator/mediators/counter.py) separates `CounterBackend`
+(the operation) from `CounterMediator` (`assess` for lowering, `validate` for the amount check).
+The parent supplies both through `COUNTER.bind(...)`, then registers
+`resources=(resource,)`. The framework owns the object identity: the tool calls
+`counter.increment(amount)`, and `resource.permission("increment")` declares access
+without an application-managed selector. The combined constructor form and
+optional-validation behavior are shown in the [demo guide](08_custom_mediator/README.md).
 
-The counter adapter is trusted application code; its semantic checks are part
-of the security boundary. It illustrates a resource owned by one parent
-process, not a distributed counter or a general transactional store. Temporary
-fixtures are cleaned up automatically; the demos exit nonzero if an assertion
-fails.
+The parent owns the in-memory counter. The tool runs in a confined worker and
+uses the typed `counter.increment` API; it has no access to the parent's state.
+The same demo file provides the worker function, so there is no separate worker
+script. There are no fixture files, lifecycle logs, optional-resource cases, or
+payload attack loops. The backend is trusted application code, not a distributed
+counter or general transactional store.
 
 Example 9 configures operator MAC independently of the tool's DAC. It requires
 Linux Landlock ABI 5+, libseccomp, and the Cedar CLI:
 
 ```bash
-python3 workspace/09_no_internet_demo.py
+python3 workspace/09_no_internet/demo.py
 ```
 
-[The controller](09_no_internet_demo.py) loads the operator-owned
-[no-internet policy](09_no_internet.cedar) and supplies it through
-`cedar_security(..., policy=DAC_POLICY, mac_forbids=mac_policy)`.
-`policy` supplies discretionary permits; `mac_forbids` supplies mandatory Cedar
-forbids. DAC runs first, then MAC removes forbidden authority. Applications using
-the lower-level API set `CedarPolicySet(mac_forbids=...)` instead.
+[The controller](09_no_internet/demo.py) installs the operator-owned
+[no-internet policy](09_no_internet/no_internet.cedar) once during trusted
+runtime startup using `install_mac_policy(...)`, before any execution.
+Every graph, session, and ToolNode in that interpreter is governed by it;
+`cedar_security(..., policy=DAC_POLICY)` only supplies the local DAC setup.
+The policy cannot be replaced or uninstalled through the public API. Graphs
+without supported mediation fail closed, including graphs compiled before
+installation and raw Pregel/functional programs. Sync, async, and threaded
+execution share the same policy. The legacy `mac_forbids` argument adds local
+restrictions only; omitting it does not omit runtime MAC.
+
+The Python controller and runtime bootstrap remain trusted. Every independent
+controller process must install the operator policy at startup; this is not a
+machine-wide kernel LSM. Arbitrary Python nodes, branches, and tool wrappers
+are refused while MAC is active because they lack a supported confinement
+boundary. Supported tools use the Linux object broker or the admitted,
+restricted in-process resource monitor. Callbacks and runtime services remain
+trusted infrastructure; hostile controller code requires OS isolation.
 
 Alice's DAC permits the declared file and internet operations. MAC denies
 `internet::connect` for every principal and destination. With internet marked
@@ -144,9 +206,10 @@ The examples introduce these ideas in order:
    even though every accepted command uses the same Unix-domain socket.
 6. A SQLite `db_record` class with separate read/write/delete permissions per
    record, enforced by a parent-owned database mediator and host file isolation.
-7. An unsafe tool constrained by a read-only file grant and host isolation.
-8. A custom resource adapter with semantic validation, lifecycle hooks, optional
-   authority removal, and denial when required support is missing.
+7. A real tool rejected for an incorrect manifest; fix the manifest to pass.
+   [Companion examples](07_manifest_verification/bypasses.py) reject direct library
+   and reflection bypasses before execution.
+8. A typed counter mediator that accepts a valid increment and rejects an invalid one.
 9. Operator-owned mandatory policy removing internet authority despite a DAC
    permit, with local work continuing inside a sandbox that blocks sockets.
 
@@ -154,6 +217,12 @@ Example 4 also prints the retained temporary directory containing the generated
 Cedar schema, entities, policies, and requests. These artifacts can be copied or
 edited for Cedar CLI experiments without changing a grant that has already been
 issued.
+
+In-process examples now require mandatory source/manifest consistency admission.
+Example 4 uses `security.inprocess.read_text`, which checks the invocation's
+surviving grant, instead of reading the file directly. Unknown calls, direct
+resource access, missing source, and unsupported bodies fail configuration.
+See [admission scope and limitations](../docs/security/manifest-consistency.md).
 
 ## What the student project must build
 
@@ -292,13 +361,13 @@ part of the student project.
 
 ## Example 5: enforced runtime boundary
 
-`05_pump_worker.py` is the untrusted tool implementation. A fresh Linux worker
+`05_custom_resource/worker.py` is the untrusted tool implementation. A fresh Linux worker
 activates Landlock, seccomp, resource limits, and a cleared environment before
 importing that file. It receives only its arguments and an inherited broker
 channel. It cannot open a device socket, create a subprocess, or access files
 outside its configured runtime roots and private temporary directory.
 
-`05_custom_class_quickstart.py` owns the trusted pump adapter and socket path.
+`05_custom_resource/demo.py` owns the trusted pump adapter and socket path.
 Its manifest uses `runs linux` and `enforced_by broker`. Cedar authorizes the
 requested operation and device before a worker starts. Every worker request is
 then checked against that exact invocation grant. Changing `inspect` to
@@ -337,3 +406,30 @@ dispatcher=dispatcher)`. Set `runs linux` or `runs broker` in the manifest.
 The helper registers the dispatcher's kernel and broker enforcers and derives
 the owner ceiling. See [isolated tools](../docs/security/object-classes.md#isolated-tools)
 for mixed filesystem and custom-resource grants and the runtime baseline.
+
+For deployment-wide installation, put `mac.cedar` in a persistent directory.
+The default is `/etc/langgraph`. Set `LANGGRAPH_MAC_DIR` in the deployment's
+launcher or service environment to choose another directory:
+
+```bash
+mkdir -p "$HOME/my-deployment/policy"
+cp workspace/09_no_internet/no_internet.cedar "$HOME/my-deployment/policy/mac.cedar"
+export LANGGRAPH_MAC_DIR="$HOME/my-deployment/policy"
+python3 workspace/09_no_internet/demo.py
+```
+
+Every controller launched with that setting loads the same policy automatically.
+Keep the setting in the deployment launcher to retain it across shell sessions.
+Relative directories resolve against the controller's startup working directory;
+absolute paths are recommended. An explicitly configured empty or missing directory,
+missing `mac.cedar`, or unreadable/invalid policy fails closed.
+The default `/etc/langgraph` directory and policy must be root-owned. Custom
+directories and policies may be owned by root or the deployment user. Neither
+may be group/world writable, and symlinks are refused. Without a custom setting,
+an absent default policy preserves normal operation.
+
+The directory is selected at first policy load, not per graph or session.
+Changing the environment afterward cannot replace the loaded policy, and
+`install_mac_policy` cannot override it. Restart controllers after policy changes.
+This trusts the deployment launcher and controller account; untrusted code must
+run behind an OS boundary. Each container needs access to the configured directory.

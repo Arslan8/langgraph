@@ -61,15 +61,20 @@ confine the implementation.
 | `ToolManifest` | Finite collection of manifest rules for one tool. |
 | `SecurityManifest` | Parsed class registry and tool manifests; expands bound arguments into normalized candidate lines. |
 | `parse_security_manifest` | Parses `.slp` `class` and `tool` blocks and rejects unknown classes, operations, directives, and normalizers. |
-| `CedarPolicySet` | Separates tool-owner, principal, and share permits from operator MAC forbids and rejects mixed effects. |
+| `CedarPolicySet` | Separates tool-owner, principal, and share permits from additional graph-local forbids and rejects mixed effects. Operator MAC is installed independently. |
+| `install_mac_policy` | Installs immutable runtime-wide operator forbids before execution. Deployment policy from `LANGGRAPH_MAC_DIR/mac.cedar` (default `/etc/langgraph`) loads automatically and cannot be replaced by this API. |
 | `CedarObjectAuthorizer` | Intersects owner and principal/share DAC, applies MAC, preserves `need`/`want`, and returns a finite grant. Explicit class enforcement waivers require reasons and are bound into the grant. `artifact_root` and `authorization_artifacts()` expose retained private Cedar bundles for review and experimentation. |
-| `CedarCallPolicy` | Restrictive policy module that applies Cedar DAC to ordinary tools whose manifests contain no resource lines. |
+| `CedarCallPolicy` | Low-level Cedar call authorization only; does not certify source or provide verified admission. Use `cedar_security` for in-process tool admission. |
 | `cedar_security` | Binds an unnamed SLP manifest and caller-facing Cedar policy to a tool. In-process mode uses the trusted-tool contract; `dispatcher=ObjectBrokerDispatcher(...)` with `runs linux` or `runs broker` uses an isolated worker with kernel and broker enforcement. Derives identity and owner ceilings and constructs inspectable grants. |
 | `ObjectSandboxDispatcher` | Protocol combining isolated dispatch, exact-line support checks, and pinned-tool configuration validation. |
 | `ObjectBrokerDispatcher` | Linux Landlock/seccomp dispatcher negotiating host and semantic obligations for custom broker classes and exact-file kernel grants; records optional reductions and refuses missing required authority. |
 | `ResourceMediatorAdapter` | Operator-supplied exact resource assessment and invocation, with optional activation/release hooks. Semantic implementation is trusted. |
 | `ResourceSupport` | Exact/stricter/unsupported assessment, reviewed contract reference, protected paths, and required host capabilities. |
 | `sqlite_record_mediator` | Concrete parent-owned SQLite adapter for exact `db_record` read/write/delete grants with `lowering sqlite.record.v1`; fixed parameterized SQL and protected database directory. Requires Python 3.11+. |
+| `ResourceContract` (`security.mediators.contracts`) | Typed resource definition. Bind `implementation` and `mediator` (with `assess` and `validate` methods) during construction or with `.bind(...)`; omit `resource_parameter` for an object-bound API. Register `resources=(resource,)` on the broker dispatcher or on `cedar_security` for admitted in-process tools. `.permission(operation)` declares the exact object without application-managed IDs. Generates client methods, checker effects, declarations, and validated dispatch. |
+| `ResourceReference` (`security.mediators`) | Opaque `.service` address for OS broker clients. Available as `resource.reference`; possession never substitutes for an invocation grant. |
+| `ResourceMediator` (`security.mediators.contracts`) | Owns `assess(line, host)` for lowering support and synchronous `validate(operation, arguments, context)` for request checks. Binding wires both methods; authorization and typed checks remain mandatory. |
+| `records` (`security.mediators.records`) | Registered typed record client with `read`, `write`, and `delete`; execution still requires an authenticated worker channel and a matching grant. |
 | `SQLITE_RECORD_SCHEMA` | Exact operator-created records-table schema required by the SQLite mediator. |
 | `ResourceInvocation` | Parent-authenticated principal, session, tool, call, grant, and worker context passed to mediator callbacks. |
 | `ObjectLoweringRecord` | Candidate and retained grants, host attestation, obligation graph, and negotiated plan returned by `lowering_records()`. |
@@ -404,3 +409,54 @@ boundaries:
 
 Policy exceptions do not escape as authorization success. The stack attributes
 them to the module, audits the failure when configured, and denies the call.
+
+## Runtime-wide operator MAC
+
+Trusted bootstrap calls `install_mac_policy(forbids)` before the first graph or
+ToolNode execution in each controller interpreter. Installation is one-shot:
+there is no replacement, reset, or per-graph opt-out. The policy is evaluated
+on every Cedar object authorization and included in the resulting policy digest.
+The legacy `cedar_security(mac_forbids=...)` and `CedarPolicySet.mac_forbids`
+remain additional local restrictions, not the operator policy source.
+
+The core sync/async Pregel entry points and direct ToolNodes gate execution.
+Unsecured graphs, remote graphs, raw Pregel/functional programs, arbitrary Python nodes,
+branches, wrappers, custom authorization backends, and enforcement waivers
+are refused under MAC. Supported tool execution uses `ObjectPolicyHostExecutor`
+with the object broker or admitted in-process resource monitor. Policies also
+apply to graphs constructed before installation, and across threads and sessions.
+Operator forbids are parsed independently of each graph's schema, so an
+internet prohibition also works on graphs that declare only filesystem access.
+Cedar parse or evaluation failures fail closed.
+
+This boundary trusts controller code, callbacks, runtime services, and startup
+configuration. It does not install an OS LSM or govern unrelated interpreters.
+Every deployment controller must install the policy before accepting work;
+untrusted Python controller code requires a separate OS security boundary.
+
+For deployment-wide installation, put `mac.cedar` in a persistent directory.
+The default is `/etc/langgraph`. Set `LANGGRAPH_MAC_DIR` in the deployment's
+launcher or service environment to choose another directory:
+
+```bash
+mkdir -p "$HOME/my-deployment/policy"
+cp workspace/09_no_internet/no_internet.cedar "$HOME/my-deployment/policy/mac.cedar"
+export LANGGRAPH_MAC_DIR="$HOME/my-deployment/policy"
+python3 workspace/09_no_internet/demo.py
+```
+
+Every controller launched with that setting loads the same policy automatically.
+Keep the setting in the deployment launcher to retain it across shell sessions.
+Relative directories resolve against the controller's startup working directory;
+absolute paths are recommended. An explicitly configured empty or missing directory,
+missing `mac.cedar`, or unreadable/invalid policy fails closed.
+The default `/etc/langgraph` directory and policy must be root-owned. Custom
+directories and policies may be owned by root or the deployment user. Neither
+may be group/world writable, and symlinks are refused. Without a custom setting,
+an absent default policy preserves normal operation.
+
+The directory is selected at first policy load, not per graph or session.
+Changing the environment afterward cannot replace the loaded policy, and
+`install_mac_policy` cannot override it. Restart controllers after policy changes.
+This trusts the deployment launcher and controller account; untrusted code must
+run behind an OS boundary. Each container needs access to the configured directory.

@@ -209,6 +209,7 @@
   "effects",
   "evaluate_dac",
   "guarded_tool",
+  "install_mac_policy",
   "introspect",
   "langsmith_metadata",
   "mcp_service_map",

@@ -129,6 +129,13 @@ complete effective grant, including baseline authority and authenticated
 channels. Native confinement, not an author declaration, establishes that
 unlisted effects are unavailable.
 
+For the restricted in-process Cedar path, [source admission](manifest-consistency.md)
+separately requires statically resolved monitored APIs and `inferred effects ⊆ manifest`. Inference overapproximates possible effects; it never grants them.
+Every attempted resource effect must still pass its monitor against the final
+grant. Unmonitored libraries, reflection, and dynamic code are rejected rather
+than admitted for runtime tracing. This function-body contract does not certify
+module initialization or importing untrusted dependencies into the coordinator.
+
 Degradation never means retaining authority while waiving its restriction. An
 optional `want` that cannot be enforced is removed. If an advisory obligation is
 waived, the execution is `DEGRADED`, carries the conservative effective-authority

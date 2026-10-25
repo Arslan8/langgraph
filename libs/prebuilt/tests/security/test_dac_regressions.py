@@ -23,6 +23,7 @@ from langgraph.prebuilt.security import (
     guarded_tool,
     with_principal,
 )
+from langgraph.prebuilt.security.inprocess import read_text
 from langgraph.prebuilt.security.introspect import _GUARDED_TOOLS
 
 
@@ -161,7 +162,7 @@ def test_cedar_helper_preserves_author_dac_and_operator_override():
     @dac(owner="owner", grants={"*": "x"}, required_scopes=["required"])
     def reader(path: str) -> str:
         """Return fixture data."""
-        return path
+        return read_text(path)
 
     security = cedar_security(
         reader,

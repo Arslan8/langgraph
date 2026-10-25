@@ -300,7 +300,7 @@ def test_host_and_record_mediation_compose(database, line, tmp_path, expose_data
 def test_database_example_uses_real_cedar_and_toolnode():
     repository = Path(__file__).resolve().parents[4]
     result = subprocess.run(
-        [sys.executable, str(repository / "workspace/06_database_quickstart.py")],
+        [sys.executable, str(repository / "workspace/06_database/demo.py")],
         cwd=repository,
         capture_output=True,
         text=True,

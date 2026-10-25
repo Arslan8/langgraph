@@ -185,8 +185,20 @@ broker interfaces. Permissions do not impose invocation counts or rate limits.
 
 ### SQLite record mediator
 
+Reusable resource backends live in
+[`security/mediators/`](../../libs/prebuilt/langgraph/prebuilt/security/mediators/README.md).
+The SQLite implementation is `mediators/sqlite.py`. For a new backend, copy
+`mediators/template.py` and follow the directory's developer guide. The template
+is deliberately unimplemented and reports `UNSUPPORTED`; registration alone
+does not establish enforcement.
+
 `sqlite_record_mediator(path, database_id="notes")` is a concrete database
 adapter. Register its return value in `ObjectBrokerDispatcher(mediators=...)`.
+Workers import `records` from `security.mediators.records` and call its typed
+`read(record)`, `write(record, value)`, and `delete(record)` methods. `RecordsAPI`
+defines the shared interface; `RECORDS.class_declaration()` generates the class
+below, and `RECORDS.bind_backend` validates and dispatches the implementation.
+The manifest checker recognizes the registered client and its effect mappings.
 It requires Python 3.11+ and the isolated Linux backend's normal prerequisites.
 Create the database yourself, in a dedicated directory outside all readable
 runtime roots, using the exported `SQLITE_RECORD_SCHEMA`:
@@ -238,10 +250,10 @@ SQLite lock waits use `timeout_s` (default one second); query work also has a
 deadline and instruction budget. These bounds do not promise cancellation of
 an operating-system I/O stall or reversal of an already committed transaction.
 
-Run [the database example](../../workspace/06_database_quickstart.py) to exercise
+Run [the database example](../../workspace/06_database/demo.py) to exercise
 real Cedar permissions through a ToolNode: Alice may manage her record, Bob
 may only read his, and cross-record requests are denied. The untrusted
-[worker](../../workspace/06_database_worker.py) receives only record selectors.
+[worker](../../workspace/06_database/worker.py) receives only record selectors.
 
 ### Trusted in-process resources
 
@@ -384,3 +396,23 @@ The policy partitions are intentionally monotone:
 - the owner and principal/share sides must both allow each line;
 - class operations absent from the declaration fail manifest parsing;
 - Cedar validation or evaluation errors deny.
+
+## Object-bound custom resources
+
+For one concrete resource per binding, omit `resource_parameter` when constructing
+`ResourceContract`. The framework owns its identity. A tool calls, for example,
+`counter.increment(2)`; neither the backend nor mediator needs a `"jobs"` selector.
+The bound mediator receives only requests for its own object after grant checks.
+
+Register `resources=(resource,)` on `ObjectBrokerDispatcher` and declare access
+with `resource.permission("increment")`. `cedar_security` derives compatible
+class declarations from the registered objects. For admitted in-process tools,
+register resources directly on `cedar_security`. Multiple instances can share the
+same class while retaining distinct identities and grants. Constructor binding
+and deferred `.bind(...)` are both supported.
+
+The [mediator guide](../../libs/prebuilt/langgraph/prebuilt/security/mediators/README.md)
+explains registration, lowering, static inference, and the raw OS broker protocol.
+[Demo 08](../../workspace/08_custom_mediator/README.md) shows the app-owned counter.
+Selector-based services such as the built-in multi-record SQLite API remain
+supported separately.
