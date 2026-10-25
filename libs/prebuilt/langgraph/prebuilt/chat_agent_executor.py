@@ -569,6 +569,20 @@ def create_react_agent(
 
     tool_calling_enabled = len(tool_classes) > 0
 
+    analysis_adapter = None
+    if security is not None and security.analysis is not None:
+        from langgraph.prebuilt.analysis.adapters.agent import AgentAdapter
+        analysis_adapter = AgentAdapter(security.analysis)
+
+    def analyzed_model(selected):
+        if analysis_adapter is None:
+            return selected
+        return analysis_adapter.wrap(
+            selected,
+            tool_schemas=[{"name": tool.name, "description": tool.description, "schema": tool.get_input_schema().model_json_schema()} for tool in tool_classes],
+            destination=security.analysis.config.model_destination,
+        )
+
     if not is_dynamic_model:
         if isinstance(model, str):
             try:
@@ -591,7 +605,7 @@ def create_react_agent(
                 tool_classes + llm_builtin_tools  # type: ignore[operator]
             )
 
-        static_model: Runnable | None = _get_prompt_runnable(prompt) | model  # type: ignore[operator]
+        static_model: Runnable | None = _get_prompt_runnable(prompt) | analyzed_model(model)  # type: ignore[operator]
     else:
         # For dynamic models, we'll create the runnable at runtime
         static_model = None
@@ -605,7 +619,7 @@ def create_react_agent(
     ) -> LanguageModelLike:
         """Resolve the model to use, handling both static and dynamic models."""
         if is_dynamic_model:
-            return _get_prompt_runnable(prompt) | model(state, runtime)  # type: ignore[operator]
+            return _get_prompt_runnable(prompt) | analyzed_model(model(state, runtime))  # type: ignore[operator]
         else:
             return static_model
 
@@ -615,9 +629,9 @@ def create_react_agent(
         """Async resolve the model to use, handling both static and dynamic models."""
         if is_async_dynamic_model:
             resolved_model = await model(state, runtime)  # type: ignore[misc,operator]
-            return _get_prompt_runnable(prompt) | resolved_model
+            return _get_prompt_runnable(prompt) | analyzed_model(resolved_model)
         elif is_dynamic_model:
-            return _get_prompt_runnable(prompt) | model(state, runtime)  # type: ignore[operator]
+            return _get_prompt_runnable(prompt) | analyzed_model(model(state, runtime))  # type: ignore[operator]
         else:
             return static_model
 
@@ -674,6 +688,8 @@ def create_react_agent(
             raise RuntimeError(msg)
 
         model_input = _get_model_input_state(state)
+        if analysis_adapter is not None:
+            analysis_adapter.admit(_get_state_value(state, "messages"))
 
         if is_dynamic_model:
             # Resolve dynamic model at runtime and apply prompt
@@ -701,6 +717,8 @@ def create_react_agent(
         state: StateSchema, runtime: Runtime[ContextT], config: RunnableConfig
     ) -> StateSchema:
         model_input = _get_model_input_state(state)
+        if analysis_adapter is not None:
+            await analysis_adapter.aadmit(_get_state_value(state, "messages"))
 
         if is_dynamic_model:
             # Resolve dynamic model at runtime and apply prompt
@@ -761,13 +779,13 @@ def create_react_agent(
             system_prompt, structured_response_schema = response_format
             messages = [SystemMessage(content=system_prompt)] + list(messages)
 
-        resolved_model = _resolve_model(state, runtime)
+        resolved_model = model(state, runtime) if is_dynamic_model else model
         model_with_structured_output = _get_model(
             resolved_model
         ).with_structured_output(
             cast(StructuredResponseSchema, structured_response_schema)
         )
-        response = model_with_structured_output.invoke(messages, config)
+        response = analyzed_model(model_with_structured_output).invoke(messages, config)
         return {"structured_response": response}
 
     async def agenerate_structured_response(
@@ -779,13 +797,13 @@ def create_react_agent(
             system_prompt, structured_response_schema = response_format
             messages = [SystemMessage(content=system_prompt)] + list(messages)
 
-        resolved_model = await _aresolve_model(state, runtime)
+        resolved_model = await model(state, runtime) if is_async_dynamic_model else model(state, runtime) if is_dynamic_model else model
         model_with_structured_output = _get_model(
             resolved_model
         ).with_structured_output(
             cast(StructuredResponseSchema, structured_response_schema)
         )
-        response = await model_with_structured_output.ainvoke(messages, config)
+        response = await analyzed_model(model_with_structured_output).ainvoke(messages, config)
         return {"structured_response": response}
 
     if not tool_calling_enabled:

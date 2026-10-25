@@ -87,6 +87,7 @@ class SecurityStack:
         observer: SecurityObserver | None = None,
         audit_sink: AuditSink | None = None,
         approval_ttl_s: float = 300.0,
+        analysis: Any = None,
     ) -> None:
         if policy_timeout_s <= 0:
             raise ValueError("policy_timeout_s must be positive")
@@ -97,6 +98,7 @@ class SecurityStack:
         names = [module.name for module in modules]
         if any(not name for name in names) or len(names) != len(set(names)):
             raise ValueError("security module names must be unique and non-empty")
+        self.analysis = analysis
         self.modules = (CapModule(), *modules)
         self.policy_timeout_s = policy_timeout_s
         self.approval_ttl_s = approval_ttl_s
@@ -119,6 +121,15 @@ class SecurityStack:
         approval: Approval | None = None,
     ) -> Decision:
         """Run DAC first, then stop on the first module objection."""
+        if self.analysis is not None:
+            from langgraph.prebuilt.analysis.adapters.enforcement import (
+                EnforcementAdapter,
+            )
+            try:
+                snapshot = EnforcementAdapter(self.analysis).snapshot(principal, call)
+                call = replace(call, analysis_snapshot=snapshot)
+            except Exception:
+                return Decision(Verdict.DENY, "analysis:unavailable")
         started = self._started()
         author = dac_check(principal, call.tool, call.normalized)
         self._observe(principal, call, "permission", "dac", author, started)
@@ -148,6 +159,15 @@ class SecurityStack:
         approval: Approval | None = None,
     ) -> Decision:
         """Asynchronously run DAC and module permission hooks."""
+        if self.analysis is not None:
+            from langgraph.prebuilt.analysis.adapters.enforcement import (
+                EnforcementAdapter,
+            )
+            try:
+                snapshot = await EnforcementAdapter(self.analysis).asnapshot(principal, call)
+                call = replace(call, analysis_snapshot=snapshot)
+            except Exception:
+                return Decision(Verdict.DENY, "analysis:unavailable")
         started = self._started()
         author = dac_check(principal, call.tool, call.normalized)
         self._observe(principal, call, "permission", "dac", author, started)
@@ -173,6 +193,14 @@ class SecurityStack:
         self, principal: Principal, call: ToolCall
     ) -> tuple[Decision, ToolCall]:
         """Apply ordered argument narrowing and re-run DAC on the final call."""
+        if self.analysis is not None:
+            from langgraph.prebuilt.analysis.adapters.enforcement import (
+                EnforcementAdapter,
+            )
+            try:
+                call = EnforcementAdapter(self.analysis).prepare(principal, call)
+            except Exception:
+                return Decision(Verdict.DENY, "analysis:unavailable"), call
         started = self._started()
         initial = dac_check(principal, call.tool, call.normalized)
         self._observe(principal, call, "prepare", "dac_initial", initial, started)
@@ -212,6 +240,14 @@ class SecurityStack:
         self, principal: Principal, call: ToolCall
     ) -> tuple[Decision, ToolCall]:
         """Asynchronously apply ordered narrowing and final DAC validation."""
+        if self.analysis is not None:
+            from langgraph.prebuilt.analysis.adapters.enforcement import (
+                EnforcementAdapter,
+            )
+            try:
+                call = EnforcementAdapter(self.analysis).prepare(principal, call)
+            except Exception:
+                return Decision(Verdict.DENY, "analysis:unavailable"), call
         started = self._started()
         initial = dac_check(principal, call.tool, call.normalized)
         self._observe(principal, call, "prepare", "dac_initial", initial, started)
@@ -377,6 +413,13 @@ class SecurityStack:
         *,
         approval: Approval | None = None,
     ) -> ObjectAuthorization:
+        if self.analysis is not None:
+            from langgraph.prebuilt.analysis.adapters.objects import ObjectAdapter
+            try:
+                snapshot = ObjectAdapter(self.analysis).snapshot(principal, request)
+                request = replace(request, analysis_snapshot=snapshot)
+            except Exception:
+                return ObjectAuthorization(Decision(Verdict.DENY, "analysis:unavailable"), request)
         current: StateRequest | ModelInvocationRequest | OutputRequest = request
         constraints: list[PolicyConstraint] = []
         for module in self.modules:
@@ -426,6 +469,13 @@ class SecurityStack:
         *,
         approval: Approval | None = None,
     ) -> ObjectAuthorization:
+        if self.analysis is not None:
+            from langgraph.prebuilt.analysis.adapters.objects import ObjectAdapter
+            try:
+                snapshot = ObjectAdapter(self.analysis).snapshot(principal, request)
+                request = replace(request, analysis_snapshot=snapshot)
+            except Exception:
+                return ObjectAuthorization(Decision(Verdict.DENY, "analysis:unavailable"), request)
         current: StateRequest | ModelInvocationRequest | OutputRequest = request
         constraints: list[PolicyConstraint] = []
         for module in self.modules:

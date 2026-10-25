@@ -417,6 +417,7 @@ class ToolCall:
     call_index: int
     history: Sequence[AuditRecord] = ()
     execution_binding: Mapping[str, Any] = field(default_factory=dict)
+    analysis_snapshot: Any = field(default=None, compare=False, repr=False)
 
     def __post_init__(self) -> None:
         if not self.call_id or self.call_index < 0:

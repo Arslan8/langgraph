@@ -6,11 +6,13 @@ import asyncio
 from concurrent.futures import ThreadPoolExecutor
 from threading import Event
 from time import monotonic
+from uuid import uuid4
 
 from langgraph.prebuilt.analysis.config import AnalysisConfig
 from langgraph.prebuilt.analysis.contracts import (
     AnalysisContext,
     AnalysisEvent,
+    AnalysisFinding,
     AnalysisResult,
     AnalysisSnapshot,
 )
@@ -123,6 +125,24 @@ class AnalysisRuntime:
     def _snapshot(
         self, event: AnalysisEvent, status: str, unavailable: tuple[str, ...] = ()
     ) -> AnalysisSnapshot:
+        if unavailable:
+            self.journal.commit_result(
+                event,
+                AnalysisResult(
+                    findings=(
+                        AnalysisFinding(
+                            finding_id=str(uuid4()),
+                            analyzer_id="analysis.runtime",
+                            analyzer_version="1",
+                            code="analysis.unavailable",
+                            subject_refs=(*event.input_refs, *event.output_refs),
+                            status="unavailable",
+                            reason="required_analysis_unavailable",
+                            configuration_digest=self.config.policy_version,
+                        ),
+                    )
+                ),
+            )
         snapshot = self.journal.snapshot(
             event,
             principal_id=self.principal_id,

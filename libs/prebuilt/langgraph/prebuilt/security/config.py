@@ -61,8 +61,13 @@ class SecurityConfig:
     output_destination: str = "caller"
     output_clearance: frozenset[str] = frozenset()
     checkpoint_key: bytes | None = field(default=None, repr=False)
+    analysis: Any = field(default=None, repr=False, compare=False)
 
     def __post_init__(self) -> None:
+        if self.analysis is not None:
+            from langgraph.prebuilt.security.modules.analysis_gate import AnalysisGate
+            if not any(isinstance(module, AnalysisGate) and module.policy_version == self.analysis.config.policy_version for module in self.modules):
+                raise SecurityConfigurationError("analysis:missing_policy_bridge")
         object.__setattr__(self, "modules", tuple(self.modules))
         object.__setattr__(
             self, "object_dacs", MappingProxyType(dict(self.object_dacs))
@@ -144,6 +149,7 @@ class SecurityConfig:
             observer=self.observer,
             audit_sink=self.audit_sink,
             approval_ttl_s=self.approval_ttl_s,
+            analysis=self.analysis,
         )
         placement_router = make_host_router(
             ObjectManagerPolicy(placement_stack, self.object_dacs), object_host
@@ -314,6 +320,7 @@ class SecurityConfig:
             observer=self.observer,
             audit_sink=self.audit_sink,
             approval_ttl_s=self.approval_ttl_s,
+            analysis=self.analysis,
         )
         try:
             object_dacs = dict(self.object_dacs)

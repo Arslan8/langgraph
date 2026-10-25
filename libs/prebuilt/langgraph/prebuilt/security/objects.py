@@ -83,6 +83,7 @@ class StateRequest:
     labels: SecurityLabels = SecurityLabels()
     value: Any = field(default=None, compare=False, repr=False)
     metadata: Mapping[str, Any] = field(default_factory=dict)
+    analysis_snapshot: Any = field(default=None, compare=False, repr=False)
 
     def __post_init__(self) -> None:
         if not self.resource or not self.owner_id:
@@ -114,7 +115,7 @@ class ModelInvocationRequest:
     model: str
     context: tuple[LabeledValue, ...]
     invocation_id: str
-
+    analysis_snapshot: Any = field(default=None, compare=False, repr=False)
     def __post_init__(self) -> None:
         if not self.model or not self.invocation_id:
             raise ValueError("model and invocation_id must be non-empty")
@@ -130,6 +131,7 @@ class OutputRequest:
     labels: SecurityLabels = SecurityLabels()
     clearance: frozenset[str] = frozenset()
     output_id: str = ""
+    analysis_snapshot: Any = field(default=None, compare=False, repr=False)
 
     def __post_init__(self) -> None:
         if not self.destination or not self.output_id:

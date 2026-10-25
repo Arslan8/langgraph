@@ -26,6 +26,7 @@ class AnalysisConfig:
     coverage: tuple[Coverage, ...]
     required_paths: tuple[str, ...] = ()
     strict: bool = True
+    model_destination: str = "model:local"
     max_records: int = 100000
     notification_retention: int = 4096
 

@@ -106,6 +106,7 @@ class _GuardedExecutor:
             observer=security.observer,
             audit_sink=security.audit_sink,
             approval_ttl_s=security.approval_ttl_s,
+            analysis=security.analysis,
         )
         if security.flow_policy is not None:
             security.flow_policy.validate_tools((target.name,))
@@ -176,6 +177,9 @@ class _GuardedExecutor:
                 result = host_result.value
             else:
                 result = self._invoke_in_process(principal, call, config)
+            if self.security.analysis is not None:
+                from langgraph.prebuilt.analysis.adapters.enforcement import EnforcementAdapter
+                result = EnforcementAdapter(self.security.analysis).result(result, call)
             outcome = ExecutionOutcome.SUCCEEDED
             return result
         except HostExecutionDenied as exc:
@@ -265,6 +269,9 @@ class _GuardedExecutor:
                 result = host_result.value
             else:
                 result = await self._ainvoke_in_process(principal, call, config)
+            if self.security.analysis is not None:
+                from langgraph.prebuilt.analysis.adapters.enforcement import EnforcementAdapter
+                result = await EnforcementAdapter(self.security.analysis).aresult(result, call)
             outcome = ExecutionOutcome.SUCCEEDED
             return result
         except HostExecutionDenied as exc:

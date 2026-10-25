@@ -1133,7 +1133,13 @@ class ToolNode(RunnableCallable):
             raise SecurityIndeterminateError(
                 "authorized in-process dispatch identity changed"
             )
-        return tool.invoke({**call, "type": "tool_call"}, config)
+        result = tool.invoke({**call, "type": "tool_call"}, config)
+        if self._security_config is not None and self._security_config.analysis is not None:
+            from langgraph.prebuilt.analysis.adapters.enforcement import (
+                EnforcementAdapter,
+            )
+            result = EnforcementAdapter(self._security_config.analysis).result(result, security_call)
+        return result
 
     async def _invoke_secured_tool_async(
         self,
@@ -1162,7 +1168,13 @@ class ToolNode(RunnableCallable):
             raise SecurityIndeterminateError(
                 "authorized in-process dispatch identity changed"
             )
-        return await tool.ainvoke({**call, "type": "tool_call"}, config)
+        result = await tool.ainvoke({**call, "type": "tool_call"}, config)
+        if self._security_config is not None and self._security_config.analysis is not None:
+            from langgraph.prebuilt.analysis.adapters.enforcement import (
+                EnforcementAdapter,
+            )
+            result = await EnforcementAdapter(self._security_config.analysis).aresult(result, security_call)
+        return result
 
     def _acquire_security_flow(
         self, principal: Principal, call: SecurityToolCall

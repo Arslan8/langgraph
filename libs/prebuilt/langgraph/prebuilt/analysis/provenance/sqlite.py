@@ -201,3 +201,14 @@ class SqliteProvenanceStore:
     def close(self) -> None:
         with self._lock:
             self._db.close()
+
+    def run_refs(self, tenant_id: str, run_id: str) -> tuple[ValueRef, ...]:
+        """Conservative run-context bound for opaque framework operations."""
+        with self._lock:
+            return tuple(
+                StoredValue.model_validate_json(row[0]).ref
+                for row in self._db.execute(
+                    "SELECT record FROM analysis_values WHERE tenant=? AND run=? ORDER BY id",
+                    (tenant_id, run_id),
+                )
+            )
