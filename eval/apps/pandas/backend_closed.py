@@ -20,8 +20,8 @@ def main():
     parser.add_argument("request", type=Path)
     args = parser.parse_args()
     request = json.loads(args.request.read_text())
-    if request["configuration"] != "C-closed" or request["app"] != "pandas":
-        raise ValueError("backend_closed runs only the pandas C-closed configuration")
+    if request["configuration"] not in {"C-full", "C-full-lean"} or request["app"] != "pandas":
+        raise ValueError("backend_closed runs only combined protected pandas configurations")
     root = Path(request["slanggraph_root"])
     sys.path[:0] = [
         str(root / "libs/prebuilt"),
@@ -36,7 +36,7 @@ def main():
     )
     from langchain_core.callbacks import BaseCallbackHandler
     from langchain_openai import ChatOpenAI
-    from langgraph.prebuilt.security import SqliteAuditSink
+    from langgraph.prebuilt.security import SqliteAuditSink, install_mac_policy
 
     here = Path(__file__).resolve().parent
 
@@ -48,6 +48,7 @@ def main():
 
     closed = load("pandas_integration_closed", "integration_closed.py")
     events = Path(request["events"])
+    install_mac_policy(request["operator_policy"])
 
     class Observer(BaseCallbackHandler):
         def on_llm_start(self, serialized, prompts, **kwargs):

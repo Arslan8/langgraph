@@ -368,6 +368,7 @@ class RuntimeMAC:
 
     def _check_tool_node(self, node: Any) -> None:
         from langgraph.prebuilt.security.container import DockerObjectDispatcher
+        from langgraph.prebuilt.security.linux_object import LinuxObjectDispatcher
         from langgraph.prebuilt.security.object_broker import ObjectBrokerDispatcher
         from langgraph.prebuilt.security.object_policy import (
             CedarObjectAuthorizer,
@@ -384,6 +385,7 @@ class RuntimeMAC:
             raise SecurityConfigurationError("mac:enforcement_waivers_forbidden")
         if type(executor.dispatcher) not in (
             DockerObjectDispatcher,
+            LinuxObjectDispatcher,
             ObjectBrokerDispatcher,
             _LanguageSandboxDispatcher,
         ):

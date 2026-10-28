@@ -185,6 +185,14 @@ _ENTRIES: tuple[UnsupportedFeature, ...] = (
         "runtime",
     ),
     UnsupportedFeature(
+        "linux_object:unsupported_authority",
+        _U,
+        "Cedar object grant outside exact kernel-enforced file operations",
+        "Linux object dispatch",
+        "Linux object dispatch supports canonical regular-file reads and complete writable grants",
+        "runtime",
+    ),
+    UnsupportedFeature(
         "host:unsupported_rule",
         _U,
         "grant rule without a host lowering",

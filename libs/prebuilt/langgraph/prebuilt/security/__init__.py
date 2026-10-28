@@ -129,6 +129,7 @@ from langgraph.prebuilt.security.landlock import (
 )
 from langgraph.prebuilt.security.lean_lifecycle import LeanLifecycleChecker
 from langgraph.prebuilt.security.linux import LinuxSandboxExecutor, LinuxToolSpec
+from langgraph.prebuilt.security.linux_object import LinuxObjectDispatcher
 from langgraph.prebuilt.security.mac import install_mac_policy
 from langgraph.prebuilt.security.mcp_proxy import (
     McpServerSpec,
@@ -348,6 +349,7 @@ __all__ = (
     "LandlockSandboxExecutor",
     "LeanLifecycleChecker",
     "LinuxSandboxExecutor",
+    "LinuxObjectDispatcher",
     "LinuxCapabilities",
     "LinuxToolSpec",
     "LabeledValue",

@@ -105,7 +105,7 @@ kinds; `admit_branch` yields the fourth.
 
 ### `native_deployment`
 
-Two dispatch paths yield this kind:
+Three dispatch paths yield this kind:
 
 - Docker: exact `ObjectPolicyHostExecutor` with exact `CedarObjectAuthorizer`
   (no waivers) and an exact `DockerObjectDispatcher`; identity covers the
@@ -114,13 +114,17 @@ Two dispatch paths yield this kind:
 - Direct Linux: `config.host_executor` is an exact `LinuxSandboxExecutor`
   (no dispatcher); identity covers host `linux`, runtime roots and the
   projected `LinuxToolSpec` records.
+- Cedar Linux: an exact `ObjectPolicyHostExecutor` uses an exact
+  `LinuxObjectDispatcher`; identity covers host `linux_object`, runtime roots,
+  the projected `LinuxToolSpec` records, and the optional Lean worker digest.
 
-`source_sha256` is the digest of the sorted artifact digests in both cases.
+`source_sha256` is the digest of the sorted artifact digests in these cases.
 Under an installed `RuntimeMAC` the direct Linux path remains refused with
-`mac:tool_requires_object_authorization`, because `_check_tool_node` still
-requires an `ObjectPolicyHostExecutor` with a Cedar authorizer and a
-Docker/broker/language-sandbox dispatcher; its policy backend does not consume
-`runtime_mac_forbids`.
+`mac:tool_requires_object_authorization`; the Cedar Linux path supplies the
+required object authorization and remains admitted.
+The runtime MAC admits an `ObjectPolicyHostExecutor` only with its exact Cedar
+authorizer and an admitted Docker, broker, language-sandbox, or Cedar Linux
+dispatcher; the authorizer evaluates the sealed operator forbids.
 
 ### `framework_branch`
 
@@ -143,7 +147,7 @@ below. The code registry owner registers them; this module only raises them.
 
 | Code | Raised when |
 |---|---|
-| `admission:unsupported_node_body` | A node body is not an exact `ToolNode`; the node has pre/post tool-call wrappers, injected arguments, a non-`dict` tool registry, a tool that is not an exact `StructuredTool`, or a host executor/config other than the configured one; `config` is not an exact `SecurityConfig` or has no `host_executor`; the executor is neither an exact `ObjectPolicyHostExecutor` nor an exact `LinuxSandboxExecutor`; the dispatcher is not one of the three admitted dispatchers; the language dispatcher's admission is not an exact `ManifestAdmission`; the authorizer carries waivers; a registered tool has no exact `LinuxToolSpec`; or, under closed admission, the builder, its node map or a node spec/metadata is not the exact framework container. Plain functions, async functions, metadata-promoted nodes, wrappers holding a `ToolNode` and arbitrary `Runnable` subclasses all refuse with this code (tested in `test_unsupported_node_bodies_refuse_before_any_candidate_protocol`). |
+| `admission:unsupported_node_body` | A node body is not an exact `ToolNode`; the node has pre/post tool-call wrappers, injected arguments, a non-`dict` tool registry, a tool that is not an exact `StructuredTool`, or a host executor/config other than the configured one; `config` is not an exact `SecurityConfig` or has no `host_executor`; the executor is neither an exact `ObjectPolicyHostExecutor` nor an exact `LinuxSandboxExecutor`; the dispatcher is not one of the admitted dispatchers; the language dispatcher's admission is not an exact `ManifestAdmission`; the authorizer carries waivers; a registered tool has no exact `LinuxToolSpec`; or, under closed admission, the builder, its node map or a node spec/metadata is not the exact framework container. Plain functions, async functions, metadata-promoted nodes, wrappers holding a `ToolNode` and arbitrary `Runnable` subclasses all refuse with this code (tested in `test_unsupported_node_bodies_refuse_before_any_candidate_protocol`). |
 | `admission:unsupported_branch` | A branch is not an exact `BranchSpec`, its `path` is not an exact `RunnableCallable`, its function is not the pinned framework function, `path.kwargs` is non-empty, `explode_args` is not `False`, `ends` is not `None`/`dict[str, str]`, loaded-code identity cannot be computed, or the branch name/config is malformed; or, under closed admission, the branch map or a branch spec is not the exact framework container. |
 | `admission:unsupported_async` | A `ToolNode` whose `afunc` is not the exact bound `ToolNode._afunc` (a replaced async body), or a branch whose `path.func` is `None` (async-only body) or whose `afunc` is not the framework executor shim for the pinned function. Async is permitted only where the framework adapter supplies its own lifecycle; everything else refuses before starting. |
 | `admission:descriptor_changed` | `recheck`/`describe` receive a non-descriptor, or a live link differs from the captured one: node `_security_host_executor` is not the captured executor, executor authorizer/dispatcher replaced, tool registry size or tool objects changed, `ManifestAdmission.validate()` fails, programs or source digests changed, worker/artifact digests malformed, `branch.path` replaced, pinned function or its `__code__` changed, or the recomputed kind/identity/source digest differs. `configure_graph` also raises it when a node or branch exists that was not in the admitted inventory, or when a mediated wrapper does not wrap exactly its captured implementation; `register_mac_boundary` raises it for a closed graph whose inventory and wrappers disagree. |

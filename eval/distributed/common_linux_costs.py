@@ -1,0 +1,331 @@
+"""Common one-file-read workload on sealed Linux, with and without Lean."""
+
+from __future__ import annotations
+
+import argparse
+import hashlib
+import json
+import os
+import subprocess
+import sys
+import tempfile
+import time
+import uuid
+from dataclasses import replace
+from pathlib import Path
+
+from langchain_core.messages import AIMessage
+from langchain_core.tools import tool
+from langgraph.graph import START, MessagesState, StateGraph
+from langgraph.prebuilt import ToolNode
+from langgraph.prebuilt.security import (
+    LeanLifecycleChecker,
+    LinuxObjectDispatcher,
+    LinuxToolSpec,
+    Principal,
+    SqliteAuditSink,
+    cedar_security,
+    install_mac_policy,
+    with_principal,
+)
+from langgraph.prebuilt.security import linux as linux_module
+from langgraph.prebuilt.security.enforcement import EnforcementCoordinator
+from langgraph.prebuilt.security.lean_lifecycle import LeanLifecycleSession
+from langgraph.prebuilt.security.linux import LinuxSandboxExecutor
+from langgraph.prebuilt.security.linux_object import _LinuxObjectWorker
+from langgraph.prebuilt.security.object_policy import ObjectPolicyHostExecutor
+
+POLICY = 'permit(principal == slangGraph::User::"alice", action, resource);'
+MANDATORY = 'forbid(principal == slangGraph::User::"bob", action, resource);'
+MANIFEST = "runs linux\nfs read @{path} need"
+LEAN_BINARY = "/data/langgraph/proofs/worker-route/.lake/build/bin/workerRoute"
+LEAN_SHA256 = "6097be9b7b84639959c7a0b9de31c79f23486e9f01bf1b6de575dfab25c7cb08"
+SOURCE = """from pathlib import Path
+
+def run(path):
+    return Path(path).read_text()
+"""
+
+
+@tool("common_read")
+def common_read(path: str) -> str:
+    """Read one exact file in the sealed Linux worker."""
+    raise RuntimeError("unconfined fallback is forbidden")
+
+
+def write(stream, value: dict) -> None:
+    stream.write(json.dumps(value, sort_keys=True) + "\n")
+    stream.flush()
+
+
+def session(output: Path, number: int, warmups: int, measured: int, lean: bool) -> None:
+    os.sched_setaffinity(0, {min(os.sched_getaffinity(0))})
+    install_mac_policy(MANDATORY)
+    with tempfile.TemporaryDirectory(prefix="slg-common-linux-") as folder:
+        root = Path(folder)
+        trusted = root / "trusted"
+        data = root / "data"
+        trusted.mkdir()
+        data.mkdir()
+        source = trusted / "common_worker.py"
+        allowed = data / "allowed.txt"
+        source.write_text(SOURCE)
+        allowed.write_text("COMMON_FILE_VALUE")
+        checker_started = time.perf_counter_ns()
+        checker = LeanLifecycleChecker(LEAN_BINARY, LEAN_SHA256) if lean else None
+        checker_setup_ms = (time.perf_counter_ns() - checker_started) / 1e6
+        dispatcher_started = time.perf_counter_ns()
+        dispatcher = LinuxObjectDispatcher(
+            {
+                "common_read": LinuxToolSpec(
+                    "common_worker:run",
+                    source,
+                    hashlib.sha256(source.read_bytes()).hexdigest(),
+                )
+            },
+            runtime_roots=(trusted,),
+            lifecycle_checker=checker,
+        )
+        dispatcher_setup_ms = (time.perf_counter_ns() - dispatcher_started) / 1e6
+        sink = SqliteAuditSink(root / "audit.sqlite")
+        admission_started = time.perf_counter_ns()
+        security = replace(
+            cedar_security(
+                common_read,
+                manifest=MANIFEST,
+                policy=POLICY,
+                dispatcher=dispatcher,
+            ),
+            audit_sink=sink,
+            closed_admission=True,
+        )
+        node = ToolNode([common_read], security=security)
+        builder = StateGraph(MessagesState)
+        builder.add_node("tools", node)
+        builder.add_edge(START, "tools")
+        graph = builder.compile(security=security)
+        admission_setup_ms = (time.perf_counter_ns() - admission_started) / 1e6
+        principal = Principal("alice", frozenset(), frozenset(), f"session-{number}")
+        config = with_principal({}, principal, modules=security.modules)
+        spans = {
+            "authorization_ms": 0.0,
+            "policy_lowering_ms": 0.0,
+            "lean_ms": 0.0,
+            "worker_ms": 0.0,
+            "prego_ms": 0.0,
+            "lean_worker_start_ms": 0.0,
+            "lean_go_ms": 0.0,
+            "cleanup_ms": 0.0,
+            "audit_ms": 0.0,
+            "dispatch_ms": 0.0,
+            "ready_ms": 0.0,
+            "coordinator_activation_ms": 0.0,
+        }
+        originals = {
+            "authorize": ObjectPolicyHostExecutor._authorize,
+            "compile": _LinuxObjectWorker._compile_grant,
+            "lean": LeanLifecycleChecker._require,
+            "worker": LinuxSandboxExecutor._run_worker,
+            "go": LeanLifecycleSession.permit_go,
+            "cleanup": LinuxSandboxExecutor._cleanup_worker,
+            "audit": sink.write,
+            "dispatch": dispatcher.invoke,
+            "readline": linux_module._readline_json,
+            "activate": EnforcementCoordinator.activate,
+        }
+
+        def timed(name, function):
+            def wrapper(*args, **kwargs):
+                started = time.perf_counter_ns()
+                try:
+                    return function(*args, **kwargs)
+                finally:
+                    spans[name] += (time.perf_counter_ns() - started) / 1e6
+
+            return wrapper
+
+        ObjectPolicyHostExecutor._authorize = timed("authorization_ms", originals["authorize"])
+        _LinuxObjectWorker._compile_grant = timed("policy_lowering_ms", originals["compile"])
+        LeanLifecycleChecker._require = timed("lean_ms", originals["lean"])
+        EnforcementCoordinator.activate = timed("coordinator_activation_ms", originals["activate"])
+        LinuxSandboxExecutor._cleanup_worker = timed("cleanup_ms", originals["cleanup"])
+        sink.write = timed("audit_ms", originals["audit"])
+
+        def worker_timed(*args, **kwargs):
+            spans["lean_worker_start_ms"] = spans["lean_ms"]
+            started = time.perf_counter_ns()
+            spans["worker_started_ns"] = started
+            try:
+                return originals["worker"](*args, **kwargs)
+            finally:
+                spans["worker_ms"] += (time.perf_counter_ns() - started) / 1e6
+
+        def go_timed(*args, **kwargs):
+            result = originals["go"](*args, **kwargs)
+            spans["prego_ms"] = (time.perf_counter_ns() - spans["worker_started_ns"]) / 1e6
+            spans["lean_go_ms"] = spans["lean_ms"]
+            return result
+
+        def readline_timed(*args, **kwargs):
+            result = originals["readline"](*args, **kwargs)
+            if isinstance(result, dict) and result.get("status") == "ready":
+                spans["ready_ms"] = (time.perf_counter_ns() - spans["worker_started_ns"]) / 1e6
+            return result
+
+        def dispatch_timed(*args, **kwargs):
+            started = time.perf_counter_ns()
+            try:
+                return originals["dispatch"](*args, **kwargs)
+            finally:
+                spans["dispatch_ms"] += (time.perf_counter_ns() - started) / 1e6
+
+        LinuxSandboxExecutor._run_worker = worker_timed
+        LeanLifecycleSession.permit_go = go_timed
+        linux_module._readline_json = readline_timed
+        dispatcher.invoke = dispatch_timed
+        route = "linux-lean" if lean else "linux"
+        try:
+            with output.open("x") as stream:
+                write(
+                    stream,
+                    {
+                        "kind": "setup",
+                        "route": route,
+                        "session": number,
+                        "checker_setup_ms": checker_setup_ms,
+                        "dispatcher_setup_ms": dispatcher_setup_ms,
+                        "admission_setup_ms": admission_setup_ms,
+                        "manifest": MANIFEST,
+                        "policy": POLICY,
+                        "mandatory_policy": MANDATORY,
+                    },
+                )
+                for index in range(1 + warmups + measured):
+                    phase = (
+                        "first_use" if index == 0 else "warmup" if index <= warmups else "measured"
+                    )
+                    for key in spans:
+                        spans[key] = 0.0
+                    started = time.perf_counter_ns()
+                    result = graph.invoke(
+                        {
+                            "messages": [
+                                AIMessage(
+                                    content="",
+                                    tool_calls=[
+                                        {
+                                            "name": "common_read",
+                                            "args": {"path": str(allowed)},
+                                            "id": uuid.uuid4().hex,
+                                        }
+                                    ],
+                                )
+                            ]
+                        },
+                        config=config,
+                    )
+                    elapsed = (time.perf_counter_ns() - started) / 1e6
+                    lean_prego = max(0.0, spans["lean_go_ms"] - spans["lean_worker_start_ms"])
+                    activation = max(
+                        0.0,
+                        spans["prego_ms"] - lean_prego
+                        if lean
+                        else spans["ready_ms"] + spans["coordinator_activation_ms"],
+                    )
+                    lean_after_go = max(0.0, spans["lean_ms"] - spans["lean_go_ms"])
+                    execution = max(
+                        0.0,
+                        spans["worker_ms"]
+                        - (spans["prego_ms"] if lean else activation)
+                        - spans["cleanup_ms"]
+                        - lean_after_go,
+                    )
+                    accounted = (
+                        spans["authorization_ms"]
+                        + spans["policy_lowering_ms"]
+                        + activation
+                        + execution
+                        + spans["lean_ms"]
+                        + spans["audit_ms"]
+                        + spans["cleanup_ms"]
+                    )
+                    write(
+                        stream,
+                        {
+                            "kind": "call",
+                            "route": route,
+                            "session": number,
+                            "round": index,
+                            "phase": phase,
+                            "elapsed_ms": elapsed,
+                            "authorization_ms": spans["authorization_ms"],
+                            "policy_lowering_ms": spans["policy_lowering_ms"],
+                            "activation_ms": activation,
+                            "execution_ms": execution,
+                            "mediator_transport_ms": 0.0,
+                            "lean_ms": spans["lean_ms"],
+                            "audit_ms": spans["audit_ms"],
+                            "cleanup_ms": spans["cleanup_ms"],
+                            "framework_residual_ms": elapsed - accounted,
+                            "worker_reused": False,
+                            "valid": "COMMON_FILE_VALUE" in result["messages"][-1].content,
+                        },
+                    )
+        finally:
+            ObjectPolicyHostExecutor._authorize = originals["authorize"]
+            _LinuxObjectWorker._compile_grant = originals["compile"]
+            LeanLifecycleChecker._require = originals["lean"]
+            EnforcementCoordinator.activate = originals["activate"]
+            LinuxSandboxExecutor._run_worker = originals["worker"]
+            LeanLifecycleSession.permit_go = originals["go"]
+            linux_module._readline_json = originals["readline"]
+            LinuxSandboxExecutor._cleanup_worker = originals["cleanup"]
+            sink.write = originals["audit"]
+
+
+def run(output: Path, sessions: int, warmups: int, measured: int) -> None:
+    output.mkdir(parents=True, exist_ok=False)
+    for lean in (False, True):
+        for number in range(sessions):
+            route = "linux-lean" if lean else "linux"
+            with (output / f"{route}-session-{number}.log").open("x") as log:
+                subprocess.run(
+                    [
+                        sys.executable,
+                        __file__,
+                        "--output",
+                        str(output / f"{route}-session-{number}.jsonl"),
+                        "--session",
+                        str(number),
+                        "--warmups",
+                        str(warmups),
+                        "--measured",
+                        str(measured),
+                        *(["--lean"] if lean else []),
+                    ],
+                    stdout=log,
+                    stderr=subprocess.STDOUT,
+                    timeout=1200,
+                    check=True,
+                )
+
+
+if __name__ == "__main__":
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--output", required=True, type=Path)
+    parser.add_argument("--sessions", default=5, type=int)
+    parser.add_argument("--warmups", default=5, type=int)
+    parser.add_argument("--measured", default=20, type=int)
+    parser.add_argument("--session", type=int)
+    parser.add_argument("--lean", action="store_true")
+    arguments = parser.parse_args()
+    if arguments.session is None:
+        run(arguments.output, arguments.sessions, arguments.warmups, arguments.measured)
+    else:
+        session(
+            arguments.output,
+            arguments.session,
+            arguments.warmups,
+            arguments.measured,
+            arguments.lean,
+        )

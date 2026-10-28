@@ -58,6 +58,7 @@ CASES = [
     ("direct_database", "notes/alice", "read", "direct"),
     ("direct_wal", "notes/alice", "read", "direct-wal"),
     ("direct_shm", "notes/alice", "read", "direct-shm"),
+    ("retry_broker_then_direct", "notes/alice", "read", "retry"),
     ("rpc_spoof", "notes/alice", "read", "spoof"),
 ]
 
@@ -171,10 +172,13 @@ def run(output, repetitions):
                                         if attack.startswith("omitted_")
                                         else operation
                                     )
-                                    selector = "notes/bob" if attack == "substitute" else record
+                                    selector = (
+                                        "notes/bob" if attack in {"substitute", "retry"} else record
+                                    )
                                     if (
                                         mode == "incomplete_broker_reference"
                                         and not attack.startswith("direct")
+                                        and attack != "retry"
                                     ):
                                         matched = [
                                             line
@@ -200,7 +204,7 @@ if p['attack'].startswith('direct') and p['attack'] != 'direct':
     result={'bytes_read':len(raw), 'raw_hex':raw.hex()}
 else:
     with sqlite3.connect(p['database']) as conn:
-        key='bob' if p['attack']=='direct' else p['selector'].split('/')[1]
+        key='bob' if p['attack'] in {'direct','retry'} else p['selector'].split('/')[1]
         if p['actual']=='read':
             result={'found':True,'value':conn.execute('SELECT value FROM records WHERE key=?',(key,)).fetchone()[0]}
         elif p['actual']=='write':

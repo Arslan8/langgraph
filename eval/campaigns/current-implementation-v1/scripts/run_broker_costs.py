@@ -75,6 +75,18 @@ def run_session(output: Path, session: int, warmups: int, measured: int) -> None
                 "INSERT INTO records VALUES (?, ?)",
                 [("alice", "AUTHORIZED_RECORD"), ("bob", "BOB_PRIVATE")],
             )
+        mediator_spans = {"operation_ms": 0.0}
+        mediator = sqlite_record_mediator(database, database_id="notes")
+        original_mediator_invoke = mediator.invoke
+
+        def timed_mediator_invoke(*args, **kwargs):
+            started = time.perf_counter_ns()
+            try:
+                return original_mediator_invoke(*args, **kwargs)
+            finally:
+                mediator_spans["operation_ms"] += (time.perf_counter_ns() - started) / 1e6
+
+        mediator = replace(mediator, invoke=timed_mediator_invoke)
         setup_start = time.perf_counter_ns()
         dispatcher = ObjectBrokerDispatcher(
             {
@@ -84,7 +96,7 @@ def run_session(output: Path, session: int, warmups: int, measured: int) -> None
                     hashlib.sha256(source.read_bytes()).hexdigest(),
                 )
             },
-            mediators=(sqlite_record_mediator(database, database_id="notes"),),
+            mediators=(mediator,),
             runtime_roots=tuple(
                 Path(item).resolve() for item in sys.path if item and Path(item).is_dir()
             ),
@@ -161,6 +173,7 @@ def run_session(output: Path, session: int, warmups: int, measured: int) -> None
                         "first_use" if index == 0 else "warmup" if index <= warmups else "measured"
                     )
                     spans.update(authorization_ms=0.0, audit_ms=0.0, cleanup_ms=0.0)
+                    mediator_spans["operation_ms"] = 0.0
                     dispatch.update(start_wall=0.0, elapsed_ms=0.0, activated_at=0.0)
                     request = {
                         "messages": [
@@ -183,14 +196,19 @@ def run_session(output: Path, session: int, warmups: int, measured: int) -> None
                     activation_ms = max(
                         0.0, (dispatch["activated_at"] - dispatch["start_wall"]) * 1000
                     )
-                    execution_ms = max(
+                    broker_after_activation_ms = max(
                         0.0,
                         dispatch["elapsed_ms"] - activation_ms - spans["cleanup_ms"],
+                    )
+                    mediator_transport_ms = max(
+                        0.0,
+                        broker_after_activation_ms - mediator_spans["operation_ms"],
                     )
                     accounted = (
                         spans["authorization_ms"]
                         + activation_ms
-                        + execution_ms
+                        + mediator_transport_ms
+                        + mediator_spans["operation_ms"]
                         + spans["audit_ms"]
                         + spans["cleanup_ms"]
                     )
@@ -205,7 +223,8 @@ def run_session(output: Path, session: int, warmups: int, measured: int) -> None
                             "elapsed_ms": elapsed_ms,
                             "authorization_ms": spans["authorization_ms"],
                             "activation_ms": activation_ms,
-                            "execution_ms": execution_ms,
+                            "execution_ms": mediator_spans["operation_ms"],
+                            "mediator_transport_ms": mediator_transport_ms,
                             "audit_ms": spans["audit_ms"],
                             "cleanup_ms": spans["cleanup_ms"],
                             "framework_residual_ms": elapsed_ms - accounted,
@@ -224,7 +243,7 @@ def run_session(output: Path, session: int, warmups: int, measured: int) -> None
                         stream,
                         {
                             "kind": "call",
-                            "route": "upstream",
+                            "route": "direct-broker",
                             "session": session,
                             "round": index,
                             "phase": phase,

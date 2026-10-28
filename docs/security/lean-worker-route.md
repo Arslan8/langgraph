@@ -173,7 +173,7 @@ previous proof status.
 
 ## Evidence and reruns
 
-The current [v3 model audit](../../eval/campaigns/remediation-v2/raw/checks/codex-grant-lean-audit-v2/report.json)
+The current [v3 model audit summary](../../eval/campaigns/current-implementation-v1/lean-contribution.md)
 passed all 72 required typed obligations, five negative controls, 20 driver
 tests, and fresh Lean kernel replay with stable sources. It captures the binary
 with SHA-256 `6097be9b7b84639959c7a0b9de31c79f23486e9f01bf1b6de575dfab25c7cb08`.
@@ -242,7 +242,7 @@ This suite requires a host that can run the production bubblewrap configuration.
 When explicitly enabled, missing support fails the run. Leaving it disabled
 skips these native cases and provides no native execution evidence.
 
-The current [v3 native record](../../eval/campaigns/remediation-v2/raw/grant-integration-v1/native-runtime-evidence.json)
+The current [v3 native validation record](../../eval/campaigns/current-implementation-v1/VALIDATION.md)
 records **3/3 direct native cases passing** against the `codex-grant-lean-audit-v2`
 executable: useful granted file access, denied undeclared file access, and denied
 fork. A separate observer-assisted rerun also passed 3/3; its observer records

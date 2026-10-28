@@ -210,7 +210,7 @@ def run_session(output: Path, session: int, warmups: int, measured: int) -> None
                         stream,
                         {
                             "kind": "call",
-                            "route": "upstream",
+                            "route": "direct-container",
                             "session": session,
                             "round": index,
                             "phase": phase,

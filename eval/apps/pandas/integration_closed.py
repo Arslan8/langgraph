@@ -1,4 +1,4 @@
-"""C-closed: the unchanged pandas vendor graph under closed admission (D11).
+"""Combined protected pandas configurations under closed admission (D11).
 
 Configuration C-closed differs from C only in where the security boundary is
 drawn. In C, the vendor graphs run without any admission and only the
@@ -32,10 +32,11 @@ import hashlib
 import importlib.util
 import io
 import json
+from dataclasses import replace
 from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
-CONFIGURATION = "C-closed"
+CONFIGURATIONS = frozenset({"C-full", "C-full-lean"})
 DATASET_ID = "sales"
 PRINCIPAL_ID = "alice"
 
@@ -48,15 +49,17 @@ def _load(name, filename):
 
 
 def lifecycle_checker(request):
-    """Select the pinned grant-v3 checker exactly as `integration.py` does for C."""
+    """Select Lean only for the separately identified per-call configuration."""
     selection = request.get("lean_worker")
+    if request.get("configuration") == "C-full" and selection is None:
+        return None
     if (
-        request.get("configuration") != CONFIGURATION
+        request.get("configuration") != "C-full-lean"
         or type(selection) is not dict
         or set(selection) != {"binary", "sha256", "protocol"}
         or selection["protocol"] != "worker-route-grant-v3"
     ):
-        raise ValueError("C-closed requires a selected grant-v3 Lean worker route")
+        raise ValueError("C-full-lean requires a selected grant-v3 Lean worker route")
     from langgraph.prebuilt.security.lean_lifecycle import LeanLifecycleChecker
 
     return LeanLifecycleChecker(binary_path=selection["binary"], binary_sha256=selection["sha256"])
@@ -68,10 +71,10 @@ def run_principal(run_id):
     return Principal(PRINCIPAL_ID, frozenset({"analyst"}), frozenset(), run_id)
 
 
-def principal_config(principal):
+def principal_config(principal, *, modules=()):
     from langgraph.prebuilt.security import with_principal
 
-    return with_principal({}, principal)
+    return with_principal({}, principal, modules=modules)
 
 
 # --- dataset_read -----------------------------------------------------------
@@ -208,7 +211,7 @@ def inventory(label, closed):
 
 
 def install_compute(request, audit):
-    """Install the C compute bridge; its dispatch graph is closed-admitted.
+    """Install the Cedar-authorized Linux bridge under closed admission.
 
     Returns the closed dispatch graph so its inventory can be recorded.
     """
@@ -218,15 +221,9 @@ def install_compute(request, audit):
     from langgraph.graph import START, MessagesState, StateGraph
     from langgraph.prebuilt import ToolNode
     from langgraph.prebuilt.security import (
-        DacOverrides,
-        Effect,
-        LinuxSandboxExecutor,
+        LinuxObjectDispatcher,
         LinuxToolSpec,
-        ResourceArg,
-        SecurityConfig,
-        dac,
-        effects,
-        parse_profiles,
+        cedar_security,
     )
 
     normalization(request)
@@ -237,12 +234,8 @@ def install_compute(request, audit):
     source = Path(upstream.__file__).resolve()
     events = Path(request["events"])
     checker = lifecycle_checker(request)
-    profiles = parse_profiles(
-        Path(request["effective_policy"]).read_text(), source="frozen-application.slp"
-    )
     artifact = (HERE / "worker.py").resolve()
-    executor = LinuxSandboxExecutor(
-        profiles,
+    dispatcher = LinuxObjectDispatcher(
         {
             "compute": LinuxToolSpec(
                 "worker:compute",
@@ -251,33 +244,31 @@ def install_compute(request, audit):
             )
         },
         runtime_roots=(artifact.parent, source.parents[2]),
-        default_wall_timeout_s=15,
+        wall_timeout_s=15,
         lifecycle_checker=checker,
     )
     (events.parent / "lifecycle-selection.json").write_text(
-        json.dumps(request["lean_worker"], indent=2) + "\n"
-    )
-    security = SecurityConfig(
-        dac_overrides=DacOverrides(profiles=profiles.tools),
-        host_executor=executor,
-        audit_sink=audit,
-        closed_admission=True,
+        json.dumps(request.get("lean_worker"), indent=2) + "\n"
     )
 
     @tool
-    @dac(owner="analyst", grants={"analyst": "x", "*": "-"})
-    @effects(
-        Effect.EXEC, Effect.READ, resources=[ResourceArg("sandbox_source", "path", "realpath")]
-    )
     def compute(sandbox_source: str, payload: dict) -> dict:
         """Run the generated computation, preserving the upstream sandbox checks."""
         raise RuntimeError("Unconfined fallback is forbidden")
+
+    security = cedar_security(
+        compute,
+        manifest="runs linux\nfs read @{sandbox_source} need",
+        policy=request["principal_policy"],
+        dispatcher=dispatcher,
+    )
+    security = replace(security, audit_sink=audit, closed_admission=True)
 
     builder = StateGraph(MessagesState)
     builder.add_node("dispatch", ToolNode([compute], security=security))
     builder.add_edge(START, "dispatch")
     node_graph = builder.compile(security=security)
-    config = principal_config(run_principal(request["run_id"]))
+    config = principal_config(run_principal(request["run_id"]), modules=security.modules)
 
     def bridge(
         *,
@@ -297,12 +288,14 @@ def install_compute(request, audit):
             "sandbox_serialization": serialization,
             "computation_api": request.get("computation_api"),
         }
+        if request.get("attack") is not None:
+            payload["attack"] = request["attack"]
         payload = json.loads(json.dumps(payload))
         _event(
             events,
             {
                 "kind": "computation",
-                "configuration": CONFIGURATION,
+                "configuration": request["configuration"],
                 "payload": payload,
                 "fault": None,
                 "added_boundary": True,
@@ -328,15 +321,34 @@ def install_compute(request, audit):
             config=config,
         )
         message = response["messages"][-1]
+        _event(
+            events,
+            {
+                "kind": "dispatch_result",
+                "status": message.status,
+                "content": message.content,
+            },
+        )
         (events.parent / "activation-receipts.json").write_text(
             json.dumps(
-                [receipt.canonical() for receipt in executor.activation_receipts()], indent=2
+                [receipt.canonical() for receipt in dispatcher.activation_receipts()], indent=2
             )
             + "\n"
+        )
+        (events.parent / "lowered-restrictions.json").write_text(
+            json.dumps([dict(record) for record in dispatcher.lowering_records()], indent=2) + "\n"
         )
         if message.status == "error":
             return None, message.content
         result = json.loads(message.content)
+        if result.get("attack_observation") is not None:
+            _event(
+                events,
+                {
+                    "kind": "attack_observation",
+                    **result["attack_observation"],
+                },
+            )
         if normalization(request) is not None:
             result = json_state(result)
         return result["result"], result["error"]

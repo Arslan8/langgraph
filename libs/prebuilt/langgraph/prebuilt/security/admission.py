@@ -864,6 +864,7 @@ def _tool_node_state(
     """Re-read the live dispatch path and return kind, identity, source, details."""
     from langgraph.prebuilt.security.container import DockerObjectDispatcher
     from langgraph.prebuilt.security.linux import LinuxSandboxExecutor
+    from langgraph.prebuilt.security.linux_object import LinuxObjectDispatcher
     from langgraph.prebuilt.security.object_broker import ObjectBrokerDispatcher
     from langgraph.prebuilt.security.object_policy import (
         CedarObjectAuthorizer,
@@ -923,6 +924,9 @@ def _tool_node_state(
         elif dispatcher_type is DockerObjectDispatcher:
             kind = AdmittedKind.NATIVE_DEPLOYMENT
             details = _docker_details(dispatcher, tool_names)
+        elif dispatcher_type is LinuxObjectDispatcher:
+            kind = AdmittedKind.NATIVE_DEPLOYMENT
+            details = _linux_object_details(dispatcher, tool_names)
         elif dispatcher_type is ObjectBrokerDispatcher:
             kind = AdmittedKind.TOOL_NODE
             details = _broker_details(dispatcher, tool_names)
@@ -1037,6 +1041,26 @@ def _broker_details(dispatcher: Any, tool_names: tuple[str, ...]) -> dict[str, A
     return {
         "host": "broker",
         "runtime_roots": [_path_text(root) for root in roots],
+        "specs": specs,
+        "sources": [spec["artifact_sha256"] for spec in specs],
+    }
+
+
+def _linux_object_details(
+    dispatcher: Any, tool_names: tuple[str, ...]
+) -> dict[str, Any]:
+    specs = _tool_specs(dispatcher.tools, tool_names)
+    roots = dispatcher.runtime_roots
+    checker = dispatcher.lifecycle_checker
+    if type(roots) is not tuple:
+        raise PermissionError(DESCRIPTOR_CHANGED)
+    checker_digest = None if checker is None else checker.binary_sha256
+    if checker_digest is not None and not _is_sha256(checker_digest):
+        raise PermissionError(DESCRIPTOR_CHANGED)
+    return {
+        "host": "linux_object",
+        "runtime_roots": [_path_text(root) for root in roots],
+        "lean_worker_sha256": checker_digest,
         "specs": specs,
         "sources": [spec["artifact_sha256"] for spec in specs],
     }
