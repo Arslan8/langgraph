@@ -58,10 +58,10 @@ mkdir "$raw_dir/validation"
 "$python_bin" eval/distributed/tool_census.py \
   --output "$raw_dir/tool-census" --ace-root "$ace_source"
 "$isolategpt_python" eval/distributed/baseline_isolategpt.py \
-  --output "$raw_dir/isolategpt" --source "$isolategpt_source" \
+  --output "$raw_dir/isolategpt-sandbox-probe" --source "$isolategpt_source" \
   --python "$isolategpt_python" --repetitions 5
 "$ace_python" eval/distributed/baseline_ace.py \
-  --output "$raw_dir/ace" --source "$ace_source" --repetitions 5
+  --output "$raw_dir/ace-sandbox-probe" --source "$ace_source" --repetitions 5
 "$python_bin" eval/distributed/fare_scenarios.py \
   --output "$raw_dir/fare-scenarios" --repetitions 20
 "$python_bin" eval/distributed/common_language_costs.py \

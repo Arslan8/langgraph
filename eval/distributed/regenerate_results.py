@@ -50,6 +50,8 @@ def ci95(values: list[float]) -> dict[str, float | int]:
 def read_rows(raw: Path) -> list[dict]:
     rows = []
     for path in sorted(raw.rglob("*.jsonl")):
+        if "superseded" in path.parts:
+            continue
         if path.name != "trials.jsonl" and "session-" not in path.name:
             continue
         for number, line in enumerate(path.read_text().splitlines(), 1):
@@ -98,13 +100,30 @@ def performance(rows: list[dict], phase: str = "measured") -> list[dict]:
             }
         )
     elapsed = {row["route"]: row for row in result if row["metric"] == "elapsed_ms"}
-    direct = elapsed.get("direct") or elapsed.get("upstream")
-    if direct:
-        for row in result:
-            if row["metric"] == "elapsed_ms":
-                row["added_ms"] = row["mean"] - direct["mean"]
-                row["ratio"] = row["mean"] / direct["mean"]
-                row["overhead_percent"] = (row["ratio"] - 1) * 100
+    baselines = {
+        "direct": "direct",
+        "language": "direct",
+        "linux": "direct",
+        "linux-lean": "direct",
+        "direct-container": "direct-container",
+        "container": "direct-container",
+        "direct-broker": "direct-broker",
+        "broker": "direct-broker",
+    }
+    for row in result:
+        route = row["route"]
+        row["workload"] = (
+            "sqlite-record-read" if route in {"broker", "direct-broker"} else "file-read"
+        )
+        if row["metric"] != "elapsed_ms":
+            continue
+        baseline_route = baselines.get(route)
+        baseline = elapsed.get(baseline_route) if baseline_route else None
+        row["baseline_route"] = baseline_route
+        if baseline:
+            row["added_ms"] = row["mean"] - baseline["mean"]
+            row["ratio"] = row["mean"] / baseline["mean"]
+            row["overhead_percent"] = (row["ratio"] - 1) * 100
     return result
 
 
@@ -154,6 +173,11 @@ def application(rows: list[dict]) -> list[dict]:
 def attacks(rows: list[dict]) -> list[dict]:
     groups: dict[tuple[str, str, str], list[dict]] = defaultdict(list)
     for row in rows:
+        if row.get("comparison_kind") in {
+            "sandbox_configuration_probe",
+            "sandbox_module_probe",
+        }:
+            continue
         if row.get("application") == "pandas" and row.get("attack") is None:
             continue
         case = row.get("case_id")
@@ -181,6 +205,61 @@ def attacks(rows: list[dict]) -> list[dict]:
     ]
 
 
+def external_probes(rows: list[dict]) -> list[dict]:
+    groups: dict[tuple[str, str, str], list[dict]] = defaultdict(list)
+    for row in rows:
+        kind = row.get("comparison_kind")
+        if kind not in {"sandbox_configuration_probe", "sandbox_module_probe"}:
+            continue
+        groups[(str(row.get("baseline")), str(kind), str(row.get("case_id")))].append(row)
+    return [
+        {
+            "system": system,
+            "kind": kind,
+            "case_id": case,
+            "trials": len(selected),
+            "tool_executed": sum(bool(row.get("tool_executed")) for row in selected),
+            "unauthorized_effects": sum(
+                bool(row.get("unauthorized_effect")) for row in selected
+            ),
+            "classification": sorted(
+                {str(row.get("classification")) for row in selected}
+            ),
+            "full_system_comparison": False,
+        }
+        for (system, kind, case), selected in sorted(groups.items())
+    ]
+
+
+def fare_results(rows: list[dict]) -> list[dict]:
+    groups: dict[tuple[str, str, str], list[dict]] = defaultdict(list)
+    for row in rows:
+        if row.get("runtime_path") != "StateGraph/ToolNode":
+            continue
+        groups[
+            (str(row.get("mode")), str(row.get("scenario")), str(row.get("execution_order")))
+        ].append(row)
+    return [
+        {
+            "mode": mode,
+            "scenario": scenario,
+            "execution_order": order,
+            "trials": len(selected),
+            "task_completed": sum(bool(row.get("task_completion")) for row in selected),
+            "answer_correct": sum(bool(row.get("answer_correct")) for row in selected),
+            "metro_omitted": sum(
+                not bool(row.get("security_outcome", {}).get("metro_not_omitted"))
+                for row in selected
+            ),
+            "false_metro_value": sum(
+                not bool(row.get("security_outcome", {}).get("false_metro_value_absent"))
+                for row in selected
+            ),
+        }
+        for (mode, scenario, order), selected in sorted(groups.items())
+    ]
+
+
 def markdown(summary: dict) -> str:
     lines = ["# Consolidated evaluation results", "", "## Pandas application", ""]
     lines += [
@@ -195,29 +274,35 @@ def markdown(summary: dict) -> str:
             f"{row['mean_model_ms']:.1f} [{row['model_ms_ci']['low']:.1f}, "
             f"{row['model_ms_ci']['high']:.1f}] |"
         )
-    lines += ["", "## Common-workload performance", ""]
+    lines += ["", "## Performance by equivalent workload", ""]
+    for workload, title in (
+        ("file-read", "File-read routes"),
+        ("sqlite-record-read", "SQLite record/broker routes"),
+    ):
+        lines += [f"### {title}", ""]
+        lines += [
+            "| Route | Baseline | Mean ms | 95% CI | Added ms | Ratio | Sessions/calls |",
+            "|---|---|---:|---:|---:|---:|---:|",
+        ]
+        for row in summary["performance"]:
+            if row["metric"] != "elapsed_ms" or row.get("workload") != workload:
+                continue
+            added = row.get("added_ms")
+            ratio = row.get("ratio")
+            lines.append(
+                f"| {row['route']} | {row.get('baseline_route', '—')} | "
+                f"{row['mean']:.3f} | [{row['low']:.3f}, {row['high']:.3f}] | "
+                f"{added:.3f} | {ratio:.2f}x | {row['sessions']}/{row['calls']} |"
+                if added is not None and ratio is not None
+                else f"| {row['route']} | — | {row['mean']:.3f} | "
+                f"[{row['low']:.3f}, {row['high']:.3f}] | — | — | "
+                f"{row['sessions']}/{row['calls']} |"
+            )
+        lines.append("")
     lines += [
-        "| Route | Mean ms | 95% CI | Added ms | Ratio | Sessions/calls |",
-        "|---|---:|---:|---:|---:|---:|",
-    ]
-    for row in summary["performance"]:
-        if row["metric"] != "elapsed_ms":
-            continue
-        added = row.get("added_ms")
-        ratio = row.get("ratio")
-        lines.append(
-            f"| {row['route']} | {row['mean']:.3f} | "
-            f"[{row['low']:.3f}, {row['high']:.3f}] | "
-            f"{added:.3f} | {ratio:.2f}x | {row['sessions']}/{row['calls']} |"
-            if added is not None and ratio is not None
-            else f"| {row['route']} | {row['mean']:.3f} | "
-            f"[{row['low']:.3f}, {row['high']:.3f}] | — | — | "
-            f"{row['sessions']}/{row['calls']} |"
-        )
-    lines += [
-        "",
-        "Ratios use the tiny direct file-read baseline; absolute added milliseconds "
-        "are the primary comparison.",
+        "File routes use the direct file read; broker routes use the direct SQLite "
+        "record read. Absolute added milliseconds are primary because both baselines "
+        "are small.",
         "",
         "### First invocation in each fresh session",
         "",
@@ -258,6 +343,41 @@ def markdown(summary: dict) -> str:
             f"{row['unauthorized_effects']}/{row['trials']} | "
             f"{', '.join(row['classifications']) or 'observed'} |"
         )
+    lines += [
+        "",
+        "## External sandbox/configuration probes",
+        "",
+        "These are not full-system head-to-head attacks.",
+        "",
+        "| System | Probe kind | Case | Tool executed | Unauthorized effects | Classification |",
+        "|---|---|---|---:|---:|---|",
+    ]
+    for row in summary["external_probes"]:
+        lines.append(
+            f"| {row['system']} | {row['kind']} | {row['case_id']} | "
+            f"{row['tool_executed']}/{row['trials']} | "
+            f"{row['unauthorized_effects']}/{row['trials']} | "
+            f"{', '.join(row['classification'])} |"
+        )
+    lines += [
+        "",
+        "## ACE-inspired fare adaptations on slangGraph",
+        "",
+        "These rows execute slangGraph `StateGraph`/`ToolNode`; they do not "
+        "execute ACE or IsolateGPT.",
+        "",
+        "| Mode | Scenario | Order | Task completion | Exact answer | Metro omitted | "
+        "False Metro value |",
+        "|---|---|---|---:|---:|---:|---:|",
+    ]
+    for row in summary["fare_results"]:
+        lines.append(
+            f"| {row['mode']} | {row['scenario']} | {row['execution_order']} | "
+            f"{row['task_completed']}/{row['trials']} | "
+            f"{row['answer_correct']}/{row['trials']} | "
+            f"{row['metro_omitted']}/{row['trials']} | "
+            f"{row['false_metro_value']}/{row['trials']} |"
+        )
     return "\n".join(lines) + "\n"
 
 
@@ -271,6 +391,8 @@ def run(raw: Path, output: Path) -> None:
         "performance": performance(rows),
         "cold_starts": performance(rows, "first_use"),
         "attacks": attacks(rows),
+        "external_probes": external_probes(rows),
+        "fare_results": fare_results(rows),
         "confidence_interval_unit": "independent-session means",
     }
     (output / "statistics.json").write_text(json.dumps(summary, indent=2) + "\n")

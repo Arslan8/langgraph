@@ -4,6 +4,269 @@
     "Quot.sound",
     "propext"
   ],
+  "axiom_dependencies": {
+    "GrantCoverage.activated_inventory_exact": [
+      "propext",
+      "Quot.sound"
+    ],
+    "GrantCoverage.assignment_inventory_exact": [
+      "propext"
+    ],
+    "GrantCoverage.certificateValid_iff": [
+      "propext"
+    ],
+    "GrantCoverage.certificate_implies_receipt": [
+      "propext"
+    ],
+    "GrantCoverage.certificate_inventory_accepted": [
+      "propext"
+    ],
+    "GrantCoverage.certificate_preserves_grant_identity": [
+      "propext"
+    ],
+    "GrantCoverage.certifiedRoute_exact": [
+      "propext"
+    ],
+    "GrantCoverage.certifiedRoute_iff": [
+      "propext"
+    ],
+    "GrantCoverage.complement_covered_once": [
+      "propext",
+      "Quot.sound"
+    ],
+    "GrantCoverage.constructed_grant_bound": [
+      "propext"
+    ],
+    "GrantCoverage.constructed_grant_valid": [
+      "propext"
+    ],
+    "GrantCoverage.derived_rule_semantics": [
+      "propext"
+    ],
+    "GrantCoverage.every_domain_present": [
+      "propext"
+    ],
+    "GrantCoverage.exact_generated_useful": [
+      "propext"
+    ],
+    "GrantCoverage.generated_complement_present": [
+      "propext",
+      "Quot.sound"
+    ],
+    "GrantCoverage.generated_evidence_owner_unique": [
+      "propext",
+      "Classical.choice",
+      "Quot.sound"
+    ],
+    "GrantCoverage.generated_exact_origin": [
+      "propext",
+      "Quot.sound"
+    ],
+    "GrantCoverage.generated_rule_present": [
+      "propext",
+      "Quot.sound"
+    ],
+    "GrantCoverage.grant_binding_mismatch_refuses": [
+      "propext"
+    ],
+    "GrantCoverage.invalid_certificate_refuses_every_trace": [
+      "propext"
+    ],
+    "GrantCoverage.invalid_inventory_refuses": [
+      "propext"
+    ],
+    "GrantCoverage.missing_generated_refuses": [
+      "propext"
+    ],
+    "GrantCoverage.nine_distinct_complements": [
+      "propext"
+    ],
+    "GrantCoverage.no_extra_generated_evidence": [
+      "propext",
+      "Quot.sound"
+    ],
+    "GrantCoverage.no_extra_obligations": [
+      "propext"
+    ],
+    "GrantCoverage.no_missing_generated": [
+      "propext"
+    ],
+    "GrantCoverage.obligationsAccept_iff": [
+      "propext"
+    ],
+    "GrantCoverage.rule_covered_once": [
+      "propext",
+      "Quot.sound"
+    ],
+    "GrantCoverage.runCertified_preserves_binding": [
+      "propext"
+    ],
+    "GrantCoverage.runCertified_running_exact": [
+      "propext",
+      "Quot.sound"
+    ],
+    "GrantCoverage.runCertified_running_iff": [
+      "propext",
+      "Quot.sound"
+    ],
+    "GrantCoverage.selected_no_waivers": [
+      "propext"
+    ],
+    "GrantCoverage.semantic_substitution_refuses": [
+      "propext",
+      "Quot.sound"
+    ],
+    "GrantCoverage.useful_grant_partition": [
+      "propext",
+      "Classical.choice",
+      "Quot.sound"
+    ],
+    "GrantCoverage.useful_grant_partition_route": [
+      "propext",
+      "Classical.choice",
+      "Quot.sound"
+    ],
+    "ReceiptCoverage.assignment_evidence_unique": [
+      "propext",
+      "Classical.choice",
+      "Quot.sound"
+    ],
+    "ReceiptCoverage.assignment_owner_unique": [
+      "propext",
+      "Classical.choice",
+      "Quot.sound"
+    ],
+    "ReceiptCoverage.certificateValid_iff": [
+      "propext"
+    ],
+    "ReceiptCoverage.certificate_rejects_binding_mismatch": [
+      "propext"
+    ],
+    "ReceiptCoverage.certifiedRoute_exact": [
+      "propext"
+    ],
+    "ReceiptCoverage.certifiedRoute_iff": [
+      "propext"
+    ],
+    "ReceiptCoverage.certifiedRoute_useful": [
+      "propext"
+    ],
+    "ReceiptCoverage.coverageAccept_iff": [
+      "propext"
+    ],
+    "ReceiptCoverage.evidence_obligation_assignment": [
+      "propext",
+      "Quot.sound"
+    ],
+    "ReceiptCoverage.invalid_certificate_refuses_every_trace": [
+      "propext"
+    ],
+    "ReceiptCoverage.no_extra_activated_obligations": [
+      "propext"
+    ],
+    "ReceiptCoverage.no_extra_evidence_obligations": [
+      "propext",
+      "Quot.sound"
+    ],
+    "ReceiptCoverage.no_missing_activated_obligations": [
+      "propext",
+      "Quot.sound"
+    ],
+    "ReceiptCoverage.partition_assignment_ids": [
+      "propext",
+      "Quot.sound"
+    ],
+    "ReceiptCoverage.plan_evidence_unique": [
+      "propext",
+      "Quot.sound"
+    ],
+    "ReceiptCoverage.runCertified_preserves_binding": [
+      "propext"
+    ],
+    "ReceiptCoverage.runCertified_running_exact": [
+      "propext",
+      "Quot.sound"
+    ],
+    "ReceiptCoverage.runCertified_running_iff": [
+      "propext",
+      "Quot.sound"
+    ],
+    "ReceiptCoverage.useful_partition_certificate": [
+      "propext",
+      "Classical.choice",
+      "Quot.sound"
+    ],
+    "ReceiptCoverage.useful_partition_route": [
+      "propext",
+      "Classical.choice",
+      "Quot.sound"
+    ],
+    "WorkerRoute.activation_mismatch_refuses": [
+      "propext"
+    ],
+    "WorkerRoute.authorization_denial_refuses": [
+      "propext"
+    ],
+    "WorkerRoute.authorize_mismatch_refuses": [
+      "propext"
+    ],
+    "WorkerRoute.cancellation_anywhere_refuses": [
+      "propext"
+    ],
+    "WorkerRoute.go_mismatch_refuses": [
+      "propext"
+    ],
+    "WorkerRoute.go_requires_matching_authorized_activation": [
+      "propext",
+      "Quot.sound"
+    ],
+    "WorkerRoute.result_failure_refuses": [
+      "propext"
+    ],
+    "WorkerRoute.result_mismatch_refuses": [
+      "propext"
+    ],
+    "WorkerRoute.run_preserves_binding": [
+      "propext"
+    ],
+    "WorkerRoute.step_preserves_binding": [
+      "propext"
+    ],
+    "WorkerRoute.success_excludes_cancellation": [
+      "propext"
+    ],
+    "WorkerRoute.success_iff_exact_route": [
+      "propext"
+    ],
+    "WorkerRoute.success_requires_confirmed_cleanup": [
+      "propext"
+    ],
+    "WorkerRoute.unconfirmed_activation_refuses": [
+      "propext"
+    ],
+    "WorkerRoute.unknown_cleanup_anywhere_refuses": [
+      "propext"
+    ],
+    "WorkerRoute.unsupported_refuses": [
+      "propext"
+    ],
+    "WorkerRoute.useful_route_succeeds": [
+      "propext"
+    ]
+  },
+  "binary": {
+    "bytes": 122166456,
+    "path": "/home/faculty/abk6349/.codex/worktrees/consolidated-evaluation/langgraph/eval/campaigns/distributed-monitor-v1/raw/lean-check/artifacts/workerRoute",
+    "sha256": "6097be9b7b84639959c7a0b9de31c79f23486e9f01bf1b6de575dfab25c7cb08"
+  },
+  "ci_environment": {
+    "LANGGRAPH_LEAN_WORKER_BINARY": "/home/faculty/abk6349/.codex/worktrees/consolidated-evaluation/langgraph/eval/campaigns/distributed-monitor-v1/raw/lean-check/artifacts/workerRoute"
+  },
+  "ci_requirements": [
+    "Run the Lean bridge and selected native lifecycle test files against ci_environment's captured binary.",
+    "Required CI must fail on missing binary or skipped selected-route tests; an optional local skip is not CI evidence.",
+    "Runtime test results remain separate from this model proof report."
+  ],
   "commands": [
     {
       "argv": [
@@ -14,28 +277,255 @@
         "test_check"
       ],
       "cwd": "/home/faculty/abk6349/.codex/worktrees/consolidated-evaluation/langgraph/eval/campaigns/distributed-monitor-v1/raw/lean-check/snapshot",
-      "elapsed_seconds": 0.185894,
+      "elapsed_seconds": 0.292737,
       "exit_code": 0,
-      "finished_at": "2026-10-28T20:35:25.547102+00:00",
+      "finished_at": "2026-10-28T21:13:26.291638+00:00",
       "log": "/home/faculty/abk6349/.codex/worktrees/consolidated-evaluation/langgraph/eval/campaigns/distributed-monitor-v1/raw/lean-check/logs/driver-tests.log",
-      "started_at": "2026-10-28T20:35:25.361227+00:00"
+      "started_at": "2026-10-28T21:13:25.998914+00:00"
+    },
+    {
+      "argv": [
+        "/home/faculty/abk6349/.elan/bin/lake",
+        "--version"
+      ],
+      "cwd": "/home/faculty/abk6349/.codex/worktrees/consolidated-evaluation/langgraph/eval/campaigns/distributed-monitor-v1/raw/lean-check/snapshot",
+      "elapsed_seconds": 0.069934,
+      "exit_code": 0,
+      "finished_at": "2026-10-28T21:13:26.378362+00:00",
+      "log": "/home/faculty/abk6349/.codex/worktrees/consolidated-evaluation/langgraph/eval/campaigns/distributed-monitor-v1/raw/lean-check/logs/lake-version.log",
+      "started_at": "2026-10-28T21:13:26.308441+00:00"
+    },
+    {
+      "argv": [
+        "/home/faculty/abk6349/.elan/bin/lake",
+        "env",
+        "lean",
+        "--version"
+      ],
+      "cwd": "/home/faculty/abk6349/.codex/worktrees/consolidated-evaluation/langgraph/eval/campaigns/distributed-monitor-v1/raw/lean-check/snapshot",
+      "elapsed_seconds": 0.086244,
+      "exit_code": 0,
+      "finished_at": "2026-10-28T21:13:26.464645+00:00",
+      "log": "/home/faculty/abk6349/.codex/worktrees/consolidated-evaluation/langgraph/eval/campaigns/distributed-monitor-v1/raw/lean-check/logs/lean-version.log",
+      "started_at": "2026-10-28T21:13:26.378420+00:00"
+    },
+    {
+      "argv": [
+        "/home/faculty/abk6349/.elan/bin/lake",
+        "env",
+        "lean",
+        "--print-prefix"
+      ],
+      "cwd": "/home/faculty/abk6349/.codex/worktrees/consolidated-evaluation/langgraph/eval/campaigns/distributed-monitor-v1/raw/lean-check/snapshot",
+      "elapsed_seconds": 0.082297,
+      "exit_code": 0,
+      "finished_at": "2026-10-28T21:13:26.547176+00:00",
+      "log": "/home/faculty/abk6349/.codex/worktrees/consolidated-evaluation/langgraph/eval/campaigns/distributed-monitor-v1/raw/lean-check/logs/lean-prefix.log",
+      "started_at": "2026-10-28T21:13:26.464888+00:00"
+    },
+    {
+      "argv": [
+        "/home/faculty/abk6349/.elan/bin/lake",
+        "-v",
+        "build",
+        "WorkerRoute",
+        "ReceiptCoverage",
+        "GrantCoverage",
+        "workerRoute"
+      ],
+      "cwd": "/home/faculty/abk6349/.codex/worktrees/consolidated-evaluation/langgraph/eval/campaigns/distributed-monitor-v1/raw/lean-check/snapshot",
+      "elapsed_seconds": 27.673206,
+      "exit_code": 0,
+      "finished_at": "2026-10-28T21:13:54.220538+00:00",
+      "log": "/home/faculty/abk6349/.codex/worktrees/consolidated-evaluation/langgraph/eval/campaigns/distributed-monitor-v1/raw/lean-check/logs/build.log",
+      "started_at": "2026-10-28T21:13:26.547345+00:00"
+    },
+    {
+      "argv": [
+        "/home/faculty/abk6349/.elan/bin/lake",
+        "env",
+        "lean",
+        "KernelAudit.lean",
+        "-o",
+        ".lake/build/lib/lean/KernelAudit.olean"
+      ],
+      "cwd": "/home/faculty/abk6349/.codex/worktrees/consolidated-evaluation/langgraph/eval/campaigns/distributed-monitor-v1/raw/lean-check/snapshot",
+      "elapsed_seconds": 5.623444,
+      "exit_code": 0,
+      "finished_at": "2026-10-28T21:13:59.862522+00:00",
+      "log": "/home/faculty/abk6349/.codex/worktrees/consolidated-evaluation/langgraph/eval/campaigns/distributed-monitor-v1/raw/lean-check/logs/kernel-audit.log",
+      "started_at": "2026-10-28T21:13:54.239086+00:00"
+    },
+    {
+      "argv": [
+        "/home/faculty/abk6349/.elan/bin/lake",
+        "env",
+        "lean",
+        "WrongBindingField.lean"
+      ],
+      "cwd": "/home/faculty/abk6349/.codex/worktrees/consolidated-evaluation/langgraph/eval/campaigns/distributed-monitor-v1/raw/lean-check/snapshot",
+      "elapsed_seconds": 2.426019,
+      "exit_code": 1,
+      "finished_at": "2026-10-28T21:14:02.296629+00:00",
+      "log": "/home/faculty/abk6349/.codex/worktrees/consolidated-evaluation/langgraph/eval/campaigns/distributed-monitor-v1/raw/lean-check/logs/negative-WrongBindingField.log",
+      "started_at": "2026-10-28T21:13:59.870621+00:00"
+    },
+    {
+      "argv": [
+        "/home/faculty/abk6349/.elan/bin/lake",
+        "env",
+        "lean",
+        "MissingReceiptField.lean"
+      ],
+      "cwd": "/home/faculty/abk6349/.codex/worktrees/consolidated-evaluation/langgraph/eval/campaigns/distributed-monitor-v1/raw/lean-check/snapshot",
+      "elapsed_seconds": 0.964999,
+      "exit_code": 1,
+      "finished_at": "2026-10-28T21:14:03.270299+00:00",
+      "log": "/home/faculty/abk6349/.codex/worktrees/consolidated-evaluation/langgraph/eval/campaigns/distributed-monitor-v1/raw/lean-check/logs/negative-MissingReceiptField.log",
+      "started_at": "2026-10-28T21:14:02.305307+00:00"
+    },
+    {
+      "argv": [
+        "/home/faculty/abk6349/.elan/bin/lake",
+        "env",
+        "lean",
+        "WrongGeneratedSelector.lean"
+      ],
+      "cwd": "/home/faculty/abk6349/.codex/worktrees/consolidated-evaluation/langgraph/eval/campaigns/distributed-monitor-v1/raw/lean-check/snapshot",
+      "elapsed_seconds": 0.919355,
+      "exit_code": 1,
+      "finished_at": "2026-10-28T21:14:04.198698+00:00",
+      "log": "/home/faculty/abk6349/.codex/worktrees/consolidated-evaluation/langgraph/eval/campaigns/distributed-monitor-v1/raw/lean-check/logs/negative-WrongGeneratedSelector.log",
+      "started_at": "2026-10-28T21:14:03.279350+00:00"
+    },
+    {
+      "argv": [
+        "/home/faculty/abk6349/.elan/bin/lake",
+        "env",
+        "lean",
+        "WrongTypedCondition.lean"
+      ],
+      "cwd": "/home/faculty/abk6349/.codex/worktrees/consolidated-evaluation/langgraph/eval/campaigns/distributed-monitor-v1/raw/lean-check/snapshot",
+      "elapsed_seconds": 0.913792,
+      "exit_code": 1,
+      "finished_at": "2026-10-28T21:14:05.120508+00:00",
+      "log": "/home/faculty/abk6349/.codex/worktrees/consolidated-evaluation/langgraph/eval/campaigns/distributed-monitor-v1/raw/lean-check/logs/negative-WrongTypedCondition.log",
+      "started_at": "2026-10-28T21:14:04.206728+00:00"
+    },
+    {
+      "argv": [
+        "/home/faculty/abk6349/.elan/bin/lake",
+        "env",
+        "lean",
+        "MissingGrantDigest.lean"
+      ],
+      "cwd": "/home/faculty/abk6349/.codex/worktrees/consolidated-evaluation/langgraph/eval/campaigns/distributed-monitor-v1/raw/lean-check/snapshot",
+      "elapsed_seconds": 0.957172,
+      "exit_code": 1,
+      "finished_at": "2026-10-28T21:14:06.089902+00:00",
+      "log": "/home/faculty/abk6349/.codex/worktrees/consolidated-evaluation/langgraph/eval/campaigns/distributed-monitor-v1/raw/lean-check/logs/negative-MissingGrantDigest.log",
+      "started_at": "2026-10-28T21:14:05.132726+00:00"
+    },
+    {
+      "argv": [
+        "/home/faculty/abk6349/.elan/bin/lake",
+        "env",
+        "/home/faculty/abk6349/.elan/toolchains/leanprover--lean4---v4.34.1/bin/leanchecker",
+        "--fresh",
+        "KernelAudit"
+      ],
+      "cwd": "/home/faculty/abk6349/.codex/worktrees/consolidated-evaluation/langgraph/eval/campaigns/distributed-monitor-v1/raw/lean-check/snapshot",
+      "elapsed_seconds": 81.030944,
+      "exit_code": 0,
+      "finished_at": "2026-10-28T21:15:27.125191+00:00",
+      "log": "/home/faculty/abk6349/.codex/worktrees/consolidated-evaluation/langgraph/eval/campaigns/distributed-monitor-v1/raw/lean-check/logs/kernel-replay.log",
+      "started_at": "2026-10-28T21:14:06.094262+00:00"
     }
   ],
   "compiler_refinement_proved": false,
   "decoder_refinement_proved": false,
   "driver_tests_passed": true,
-  "finished_at": "2026-10-28T20:35:25.619783+00:00",
+  "finished_at": "2026-10-28T21:15:30.032181+00:00",
+  "generated_audit": {
+    "bytes": 42524,
+    "sha256": "fbbc0b27115d893ed0e7c057b9e2ec27395a2c35703a08c9cb32f109c2a1c320"
+  },
   "independent_checker_verified": false,
-  "issues": [
-    "lake executable unavailable: lake"
-  ],
-  "kernel_replay_checked": false,
-  "kernel_typecheck_passed": false,
+  "issues": [],
+  "kernel_replay": {
+    "available": true,
+    "bytes": 51080,
+    "is_independent_implementation": false,
+    "path": "/home/faculty/abk6349/.elan/toolchains/leanprover--lean4---v4.34.1/bin/leanchecker",
+    "scope": "Lean's own kernel replay; not an external independent verifier.",
+    "sha256": "ccef1bfe9bfeecea65137d94a69033c1a89f360711f50fa3178e7ba3e696fcbe"
+  },
+  "kernel_replay_checked": true,
+  "kernel_typecheck_passed": true,
   "kind": "worker-route-grant-lean-model-audit",
-  "model_proved": false,
+  "lake_executable": {
+    "bytes": 13452832,
+    "path": "/home/faculty/abk6349/.elan/bin/lake",
+    "sha256": "e0f4b30b29c565625189744847dfef5f132b6322c5e452dbebfeae780c9749e5"
+  },
+  "lake_version": "Lake version 5.0.0-src+5045d00 (Lean version 4.34.1)",
+  "lean_executable": {
+    "bytes": 9024,
+    "path": "/home/faculty/abk6349/.elan/toolchains/leanprover--lean4---v4.34.1/bin/lean",
+    "sha256": "e8baaa71855a616dc351028f3ad2200051b0671f423a1696a100e809302d5550"
+  },
+  "lean_version": "Lean (version 4.34.1, x86_64-unknown-linux-gnu, commit 5045d0056413266e57c625dcd7c365b10e377c52, Release)",
+  "model_proved": true,
+  "negative_audit_controls": [
+    {
+      "log": "/home/faculty/abk6349/.codex/worktrees/consolidated-evaluation/langgraph/eval/campaigns/distributed-monitor-v1/raw/lean-check/logs/negative-WrongBindingField.log",
+      "name": "WrongBindingField",
+      "rejected": true,
+      "source": {
+        "bytes": 181,
+        "sha256": "631d6450fd2e060463615ea7585e21198a245f80294483edeb435b78afcf97ac"
+      }
+    },
+    {
+      "log": "/home/faculty/abk6349/.codex/worktrees/consolidated-evaluation/langgraph/eval/campaigns/distributed-monitor-v1/raw/lean-check/logs/negative-MissingReceiptField.log",
+      "name": "MissingReceiptField",
+      "rejected": true,
+      "source": {
+        "bytes": 303,
+        "sha256": "417aec9fb1cbc139338d9d028014e57e35b90b442a327379a258c03d6b2fb94f"
+      }
+    },
+    {
+      "log": "/home/faculty/abk6349/.codex/worktrees/consolidated-evaluation/langgraph/eval/campaigns/distributed-monitor-v1/raw/lean-check/logs/negative-WrongGeneratedSelector.log",
+      "name": "WrongGeneratedSelector",
+      "rejected": true,
+      "source": {
+        "bytes": 160,
+        "sha256": "07c17a8d5cd897e055c362a274d732744e9dba259076a3e676f6bcd60f2a5691"
+      }
+    },
+    {
+      "log": "/home/faculty/abk6349/.codex/worktrees/consolidated-evaluation/langgraph/eval/campaigns/distributed-monitor-v1/raw/lean-check/logs/negative-WrongTypedCondition.log",
+      "name": "WrongTypedCondition",
+      "rejected": true,
+      "source": {
+        "bytes": 136,
+        "sha256": "2e23894294f7e70f82b79d15c29bfd35778a3fa41f93d567d8683da2f8c1e630"
+      }
+    },
+    {
+      "log": "/home/faculty/abk6349/.codex/worktrees/consolidated-evaluation/langgraph/eval/campaigns/distributed-monitor-v1/raw/lean-check/logs/negative-MissingGrantDigest.log",
+      "name": "MissingGrantDigest",
+      "rejected": true,
+      "source": {
+        "bytes": 269,
+        "sha256": "7e168edba81f167ff46adb645e8ff6234ba07db7c4f2ffc8f87d030fd9d53668"
+      }
+    }
+  ],
   "os_refinement_proved": false,
   "output": "/home/faculty/abk6349/.codex/worktrees/consolidated-evaluation/langgraph/eval/campaigns/distributed-monitor-v1/raw/lean-check",
-  "passed": false,
+  "passed": true,
   "pinned_toolchain": "leanprover/lean4:v4.34.1",
   "protocol": "worker-route-grant-v3",
   "required_theorems": [
@@ -233,7 +723,7 @@
   "source_project": "/home/faculty/abk6349/.codex/worktrees/consolidated-evaluation/langgraph/proofs/worker-route",
   "source_refinement_proved": false,
   "source_stable": true,
-  "started_at": "2026-10-28T20:35:25.275273+00:00",
+  "started_at": "2026-10-28T21:13:25.908233+00:00",
   "system_complete": false,
   "unproved_obligations": [
     "Python source call placement and all native effect paths correspond to the model.",

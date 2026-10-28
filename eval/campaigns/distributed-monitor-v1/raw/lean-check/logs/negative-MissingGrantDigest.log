@@ -1,0 +1,4 @@
+MissingGrantDigest.lean:3:31: error: Fields missing: `digest`
+
+Hint: Add missing fields:
+  ,̲ ̲d̲i̲g̲e̲s̲t̲ ̲:̲=̲ ̲_̲

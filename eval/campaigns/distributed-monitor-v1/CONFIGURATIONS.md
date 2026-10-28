@@ -17,10 +17,11 @@ unsupported comparison, not as successful enforcement. `C-full` and
 `C-full-lean` use the same model, ten tasks, three graph retries, serializers,
 state normalization, dataset bytes, output validation, and oracle.
 
-ACE is run through its pinned published `ToolExecutionSandbox`. Its published
-configuration has no host-volume or record/operation-policy setting, so the
-SQLite and Unix-socket cases are recorded as `configuration_could_not_execute`.
-IsolateGPT is run through its pinned published `helpers/sandbox/sandbox.py`;
+The ACE evidence is a sandbox configuration probe through the pinned published
+`ToolExecutionSandbox`, not a full-system comparison. Its published
+configuration has no host-volume or record/operation-policy setting. The
+IsolateGPT evidence directly probes the pinned
+`helpers/sandbox/sandbox.py`, not its complete hub/spoke system;
 the per-record, operation, principal, and sealed-operator restrictions are
 recorded as `restriction_cannot_express` rather than as bypasses of a supported
 policy.

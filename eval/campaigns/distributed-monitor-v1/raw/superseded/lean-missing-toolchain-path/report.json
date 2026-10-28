@@ -1,0 +1,247 @@
+{
+  "allowed_standard_axioms": [
+    "Classical.choice",
+    "Quot.sound",
+    "propext"
+  ],
+  "commands": [
+    {
+      "argv": [
+        "/home/faculty/abk6349/.codex/worktrees/consolidated-evaluation/langgraph/libs/prebuilt/.venv/bin/python",
+        "-m",
+        "unittest",
+        "-v",
+        "test_check"
+      ],
+      "cwd": "/home/faculty/abk6349/.codex/worktrees/consolidated-evaluation/langgraph/eval/campaigns/distributed-monitor-v1/raw/lean-check/snapshot",
+      "elapsed_seconds": 0.185894,
+      "exit_code": 0,
+      "finished_at": "2026-10-28T20:35:25.547102+00:00",
+      "log": "/home/faculty/abk6349/.codex/worktrees/consolidated-evaluation/langgraph/eval/campaigns/distributed-monitor-v1/raw/lean-check/logs/driver-tests.log",
+      "started_at": "2026-10-28T20:35:25.361227+00:00"
+    }
+  ],
+  "compiler_refinement_proved": false,
+  "decoder_refinement_proved": false,
+  "driver_tests_passed": true,
+  "finished_at": "2026-10-28T20:35:25.619783+00:00",
+  "independent_checker_verified": false,
+  "issues": [
+    "lake executable unavailable: lake"
+  ],
+  "kernel_replay_checked": false,
+  "kernel_typecheck_passed": false,
+  "kind": "worker-route-grant-lean-model-audit",
+  "model_proved": false,
+  "os_refinement_proved": false,
+  "output": "/home/faculty/abk6349/.codex/worktrees/consolidated-evaluation/langgraph/eval/campaigns/distributed-monitor-v1/raw/lean-check",
+  "passed": false,
+  "pinned_toolchain": "leanprover/lean4:v4.34.1",
+  "protocol": "worker-route-grant-v3",
+  "required_theorems": [
+    "WorkerRoute.success_iff_exact_route",
+    "WorkerRoute.useful_route_succeeds",
+    "WorkerRoute.step_preserves_binding",
+    "WorkerRoute.run_preserves_binding",
+    "WorkerRoute.go_requires_matching_authorized_activation",
+    "WorkerRoute.authorization_denial_refuses",
+    "WorkerRoute.unsupported_refuses",
+    "WorkerRoute.unconfirmed_activation_refuses",
+    "WorkerRoute.authorize_mismatch_refuses",
+    "WorkerRoute.activation_mismatch_refuses",
+    "WorkerRoute.go_mismatch_refuses",
+    "WorkerRoute.result_mismatch_refuses",
+    "WorkerRoute.result_failure_refuses",
+    "WorkerRoute.cancellation_anywhere_refuses",
+    "WorkerRoute.unknown_cleanup_anywhere_refuses",
+    "WorkerRoute.success_requires_confirmed_cleanup",
+    "WorkerRoute.success_excludes_cancellation",
+    "ReceiptCoverage.coverageAccept_iff",
+    "ReceiptCoverage.certificateValid_iff",
+    "ReceiptCoverage.certificate_rejects_binding_mismatch",
+    "ReceiptCoverage.assignment_owner_unique",
+    "ReceiptCoverage.plan_evidence_unique",
+    "ReceiptCoverage.evidence_obligation_assignment",
+    "ReceiptCoverage.no_extra_evidence_obligations",
+    "ReceiptCoverage.assignment_evidence_unique",
+    "ReceiptCoverage.no_missing_activated_obligations",
+    "ReceiptCoverage.no_extra_activated_obligations",
+    "ReceiptCoverage.partition_assignment_ids",
+    "ReceiptCoverage.useful_partition_certificate",
+    "ReceiptCoverage.useful_partition_route",
+    "ReceiptCoverage.runCertified_running_iff",
+    "ReceiptCoverage.certifiedRoute_iff",
+    "ReceiptCoverage.certifiedRoute_useful",
+    "ReceiptCoverage.runCertified_preserves_binding",
+    "ReceiptCoverage.invalid_certificate_refuses_every_trace",
+    "ReceiptCoverage.runCertified_running_exact",
+    "ReceiptCoverage.certifiedRoute_exact",
+    "GrantCoverage.obligationsAccept_iff",
+    "GrantCoverage.certificateValid_iff",
+    "GrantCoverage.every_domain_present",
+    "GrantCoverage.nine_distinct_complements",
+    "GrantCoverage.generated_exact_origin",
+    "GrantCoverage.generated_rule_present",
+    "GrantCoverage.generated_complement_present",
+    "GrantCoverage.derived_rule_semantics",
+    "GrantCoverage.no_missing_generated",
+    "GrantCoverage.no_extra_obligations",
+    "GrantCoverage.rule_covered_once",
+    "GrantCoverage.complement_covered_once",
+    "GrantCoverage.semantic_substitution_refuses",
+    "GrantCoverage.missing_generated_refuses",
+    "GrantCoverage.exact_generated_useful",
+    "GrantCoverage.certificate_inventory_accepted",
+    "GrantCoverage.grant_binding_mismatch_refuses",
+    "GrantCoverage.assignment_inventory_exact",
+    "GrantCoverage.selected_no_waivers",
+    "GrantCoverage.certificate_implies_receipt",
+    "GrantCoverage.certificate_preserves_grant_identity",
+    "GrantCoverage.invalid_inventory_refuses",
+    "GrantCoverage.activated_inventory_exact",
+    "GrantCoverage.generated_evidence_owner_unique",
+    "GrantCoverage.no_extra_generated_evidence",
+    "GrantCoverage.constructed_grant_bound",
+    "GrantCoverage.constructed_grant_valid",
+    "GrantCoverage.useful_grant_partition",
+    "GrantCoverage.runCertified_running_iff",
+    "GrantCoverage.certifiedRoute_iff",
+    "GrantCoverage.certifiedRoute_exact",
+    "GrantCoverage.runCertified_running_exact",
+    "GrantCoverage.useful_grant_partition_route",
+    "GrantCoverage.runCertified_preserves_binding",
+    "GrantCoverage.invalid_certificate_refuses_every_trace"
+  ],
+  "runtime_refinement_proved": false,
+  "schema_version": 3,
+  "scope": "Kernel-checked captured finite model only; positive runtime fact provenance and deployment correspondence are separate obligations.",
+  "snapshot_after": {
+    "GrantCoverage.lean": {
+      "bytes": 24484,
+      "sha256": "655f9c73e5c02950f974089cabbc56736b54c1c260177879d675ffc8d8209975"
+    },
+    "Main.lean": {
+      "bytes": 17858,
+      "sha256": "69bf84eaf550f96a5d5b65fdce05afecd0a6fd4fc137cb77710ee2ceb1ecbdb3"
+    },
+    "ReceiptCoverage.lean": {
+      "bytes": 25648,
+      "sha256": "0b1d9221c3a0e24e169eb6d68237569c28a4afe96a5006741eb828b42c7cb096"
+    },
+    "WorkerRoute.lean": {
+      "bytes": 15063,
+      "sha256": "e06703d430c6144f99ca85eab7ae22ca915ac8a9659e7ff9666096fb418caf8a"
+    },
+    "check.py": {
+      "bytes": 62688,
+      "sha256": "aeb3faff6837a786ac1f0bc926d67e133cf3b30ee1e73240d71f0b33acd57837"
+    },
+    "lake-manifest.json": {
+      "bytes": 148,
+      "sha256": "5a0b81d204d1aef5a2d0d06821a544de01005d9adaf6b0711878cf5250cf76e7"
+    },
+    "lakefile.toml": {
+      "bytes": 284,
+      "sha256": "86cc0c72956570973acbd1be5f25dafdd3f61d1bd999267e87cf88865c4c4870"
+    },
+    "lean-toolchain": {
+      "bytes": 25,
+      "sha256": "d5edba4e4b8faad9c1baeadb265716d20d03be4d1a2647dc5e35b0c0325bea7b"
+    },
+    "test_check.py": {
+      "bytes": 12171,
+      "sha256": "c3c8aade4b5ee70d5bbb00705cfeafdf74bebb4dd3f210b926ff28cebcc5b09b"
+    }
+  },
+  "source_after": {
+    "GrantCoverage.lean": {
+      "bytes": 24484,
+      "sha256": "655f9c73e5c02950f974089cabbc56736b54c1c260177879d675ffc8d8209975"
+    },
+    "Main.lean": {
+      "bytes": 17858,
+      "sha256": "69bf84eaf550f96a5d5b65fdce05afecd0a6fd4fc137cb77710ee2ceb1ecbdb3"
+    },
+    "ReceiptCoverage.lean": {
+      "bytes": 25648,
+      "sha256": "0b1d9221c3a0e24e169eb6d68237569c28a4afe96a5006741eb828b42c7cb096"
+    },
+    "WorkerRoute.lean": {
+      "bytes": 15063,
+      "sha256": "e06703d430c6144f99ca85eab7ae22ca915ac8a9659e7ff9666096fb418caf8a"
+    },
+    "check.py": {
+      "bytes": 62688,
+      "sha256": "aeb3faff6837a786ac1f0bc926d67e133cf3b30ee1e73240d71f0b33acd57837"
+    },
+    "lake-manifest.json": {
+      "bytes": 148,
+      "sha256": "5a0b81d204d1aef5a2d0d06821a544de01005d9adaf6b0711878cf5250cf76e7"
+    },
+    "lakefile.toml": {
+      "bytes": 284,
+      "sha256": "86cc0c72956570973acbd1be5f25dafdd3f61d1bd999267e87cf88865c4c4870"
+    },
+    "lean-toolchain": {
+      "bytes": 25,
+      "sha256": "d5edba4e4b8faad9c1baeadb265716d20d03be4d1a2647dc5e35b0c0325bea7b"
+    },
+    "test_check.py": {
+      "bytes": 12171,
+      "sha256": "c3c8aade4b5ee70d5bbb00705cfeafdf74bebb4dd3f210b926ff28cebcc5b09b"
+    }
+  },
+  "source_before": {
+    "GrantCoverage.lean": {
+      "bytes": 24484,
+      "sha256": "655f9c73e5c02950f974089cabbc56736b54c1c260177879d675ffc8d8209975"
+    },
+    "Main.lean": {
+      "bytes": 17858,
+      "sha256": "69bf84eaf550f96a5d5b65fdce05afecd0a6fd4fc137cb77710ee2ceb1ecbdb3"
+    },
+    "ReceiptCoverage.lean": {
+      "bytes": 25648,
+      "sha256": "0b1d9221c3a0e24e169eb6d68237569c28a4afe96a5006741eb828b42c7cb096"
+    },
+    "WorkerRoute.lean": {
+      "bytes": 15063,
+      "sha256": "e06703d430c6144f99ca85eab7ae22ca915ac8a9659e7ff9666096fb418caf8a"
+    },
+    "check.py": {
+      "bytes": 62688,
+      "sha256": "aeb3faff6837a786ac1f0bc926d67e133cf3b30ee1e73240d71f0b33acd57837"
+    },
+    "lake-manifest.json": {
+      "bytes": 148,
+      "sha256": "5a0b81d204d1aef5a2d0d06821a544de01005d9adaf6b0711878cf5250cf76e7"
+    },
+    "lakefile.toml": {
+      "bytes": 284,
+      "sha256": "86cc0c72956570973acbd1be5f25dafdd3f61d1bd999267e87cf88865c4c4870"
+    },
+    "lean-toolchain": {
+      "bytes": 25,
+      "sha256": "d5edba4e4b8faad9c1baeadb265716d20d03be4d1a2647dc5e35b0c0325bea7b"
+    },
+    "test_check.py": {
+      "bytes": 12171,
+      "sha256": "c3c8aade4b5ee70d5bbb00705cfeafdf74bebb4dd3f210b926ff28cebcc5b09b"
+    }
+  },
+  "source_hygiene_passed": true,
+  "source_project": "/home/faculty/abk6349/.codex/worktrees/consolidated-evaluation/langgraph/proofs/worker-route",
+  "source_refinement_proved": false,
+  "source_stable": true,
+  "started_at": "2026-10-28T20:35:25.275273+00:00",
+  "system_complete": false,
+  "unproved_obligations": [
+    "Python source call placement and all native effect paths correspond to the model.",
+    "Grant, obligation, plan and receipt fields faithfully project the actual admitted Python records; authorized grant provenance, digest preimages, adapter signatures, freshness, expiry, support claims and waiver authorization remain outside this finite composition model.",
+    "The selected Linux obligation generator corresponds to the checked full-record rule expansion and nine fixed complements; custom additional-obligation profiles are not covered.",
+    "Every authorization, identity, support, activation, result, cleanup and cancellation fact is truthful, complete and ordered.",
+    "JSON encoding/decoding preserves the model inputs and rejects ambiguous or unsupported inputs.",
+    "The Lean compiler, C toolchain, binary loader and deployed executable preserve the checked definitions.",
+    "The operating system, namespace, seccomp, LSM and lifetime mechanisms enforce the claimed native properties."
+  ]
+}

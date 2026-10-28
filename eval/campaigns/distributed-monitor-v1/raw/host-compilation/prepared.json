@@ -1,7 +1,27 @@
 {
-  "tool": "common_read",
+  "tool": {
+    "name": "common_read",
+    "runs": "linux",
+    "returns": "normal",
+    "rules": [
+      {
+        "class": "fs",
+        "operation": "read",
+        "pattern": "@{path}",
+        "requirement": "need",
+        "source": "<string>:3"
+      }
+    ]
+  },
+  "policies": {
+    "owners": {
+      "common_read": "@id(\"bound-tool:call\")\npermit (\n  principal,\n  action == slangGraph::Action::\"call\",\n  resource == slangGraph::Tool::\"common_read\"\n);\n\n@id(\"bound-tool:fs:read\")\npermit (\n  principal,\n  action == slangGraph::Action::\"fs::read\",\n  resource\n) when {\n  context.tool == slangGraph::Tool::\"common_read\"\n};\n"
+    },
+    "principal": "permit(principal == slangGraph::User::\"alice\", action, resource);",
+    "share": "",
+    "mac": "",
+    "digest": "6594029fb5971f76d5366fb38a24d11c11997474da0d916a6b8d5526503acae2"
+  },
   "artifact_sha256": "003c23bb75358ebbd65ed1b93e827459696a0ea733d3c21505320a166bd170f4",
-  "manifest": "runs linux\nfs read @{path} need",
-  "principal_policy": "permit(principal == slangGraph::User::\"alice\", action, resource);",
-  "sha256": "439086c5c4d26e5e67c26aa4c71010ee334d6f916af803d8846aa667fc1d5a35"
+  "sha256": "7a75732986cd6b96a9a97d436d5134b6b6bd2cf4b94cd2f0d00a7c00fa0d7fd7"
 }

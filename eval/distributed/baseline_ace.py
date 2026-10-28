@@ -1,9 +1,9 @@
-"""Execute fixed controls through ACE's pinned ToolExecutionSandbox.
+"""Probe ACE's pinned ToolExecutionSandbox configuration surface.
 
 ACE's published tool container exposes no volume or resource-policy settings.
-The runner therefore records both a benign in-container control and the exact
-resource experiments that cannot be configured without changing ACE.  A failed
-legitimate operation is not counted as protection.
+The runner therefore records a benign in-container control and one repeated
+host-file availability probe. It does not relabel that probe as multiple
+resource attacks. A failed legitimate operation is not counted as protection.
 """
 
 from __future__ import annotations
@@ -19,17 +19,7 @@ import tempfile
 import types
 from pathlib import Path
 
-CASES = (
-    "allowed_read",
-    "wrong_record",
-    "hidden_update",
-    "hidden_delete",
-    "database_marker",
-    "wal_marker",
-    "conflicting_operator_policy",
-    "bob_after_alice",
-    "pump_direct_socket",
-)
+CASE = "host_file_availability"
 
 
 class SourceTool:
@@ -115,7 +105,12 @@ def run(output: Path, source: Path, repetitions: int) -> None:
         "baseline": "ACE",
         "revision": revision,
         "sandbox_sha256": hashlib.sha256(sandbox_file.read_bytes()).hexdigest(),
-        "cases": CASES,
+        "cases": [CASE],
+        "comparison_kind": "sandbox_configuration_probe",
+        "scope": (
+            "ACE ToolExecutionSandbox only; planner and information-flow analysis "
+            "are not executed"
+        ),
         "repetitions": repetitions,
         "configuration": "published ToolExecutionSandbox/tool-runner-image",
         "supported_settings": ["image", "environment", "detached", "port"],
@@ -135,31 +130,33 @@ def run(output: Path, source: Path, repetitions: int) -> None:
                 database = Path(folder) / "records.sqlite"
                 database.write_bytes(b"ALICE_ALLOWED BOB_ACE_SYNTHETIC_SECRET")
                 probe = _run_host_file_probe(sandbox_type, database)
-            for case in CASES:
-                stream.write(
-                    json.dumps(
-                        {
-                            "baseline": "ACE",
-                            "case_id": case,
-                            "repeat": repetition,
-                            "fixed_invocation": True,
-                            "tool_executed": probe["tool_executed"],
-                            "legitimate_result": False,
-                            "unauthorized_effect": False,
-                            "classification": "configuration_could_not_execute",
-                            "reason": (
-                                "the published ToolExecutionSandbox has no volume or "
-                                "resource-policy configuration; the host SQLite and Unix "
-                                "socket fixtures are absent from the container"
-                            ),
-                            "benign_container_control": control,
-                            "resource_probe": probe,
-                            "not_counted_as_security_success": True,
-                        },
-                        sort_keys=True,
-                    )
-                    + "\n"
+            stream.write(
+                json.dumps(
+                    {
+                        "baseline": "ACE",
+                        "case_id": CASE,
+                        "repeat": repetition,
+                        "comparison_kind": "sandbox_configuration_probe",
+                        "baseline_scope": "ToolExecutionSandbox only",
+                        "full_system_comparison": False,
+                        "fixed_invocation": True,
+                        "tool_executed": probe["tool_executed"],
+                        "legitimate_result": False,
+                        "unauthorized_effect": False,
+                        "classification": "configuration_could_not_execute",
+                        "reason": (
+                            "the published ToolExecutionSandbox has no volume or "
+                            "resource-policy configuration; the host fixture is absent "
+                            "from the container"
+                        ),
+                        "benign_container_control": control,
+                        "resource_probe": probe,
+                        "not_counted_as_security_success": True,
+                    },
+                    sort_keys=True,
                 )
+                + "\n"
+            )
 
 
 if __name__ == "__main__":

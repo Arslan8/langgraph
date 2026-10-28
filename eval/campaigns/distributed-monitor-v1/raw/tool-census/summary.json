@@ -1,14 +1,18 @@
 {
-  "collection": "ACE case-study-1 enabled tools with a checked-in source file",
-  "selection_rule": "Every enabled manifest entry whose path has source/<path>.py",
+  "collection": "ACE case-study-1 enabled tools with checked-in source",
+  "selection_rule": "Every enabled manifest entry with source/<path>.py; pass-only implementations are reported and excluded from the real-tool denominator",
   "ace_revision": "e88f6dc16e5404131fbefe5684c7f05f856edbdd",
   "manifest_sha256": "e1d99bc3aa03a415f726796ed1d6263a9a63a0138a9d3ae4d14b77e641c613e2",
-  "total": 13,
+  "source_files": 13,
+  "real_tools": 8,
   "counts": {
-    "works_unchanged": 5,
-    "requires_resource_adapter": 4,
-    "requires_host_isolation": 4
+    "placeholder_excluded": 5,
+    "works_unchanged": 0,
+    "requires_host_isolation": 6,
+    "requires_adaptation": 2
   },
-  "adapted_execution_count": 0,
-  "note": "Adapter candidates are not counted as working until an adapter-backed execution is separately demonstrated."
+  "real_language_admission_successes": 0,
+  "real_language_execution_successes": 0,
+  "host_isolated_execution_successes": 6,
+  "claim": "Only non-placeholder tools that passed closed admission and executed through ToolNode count as works_unchanged."
 }

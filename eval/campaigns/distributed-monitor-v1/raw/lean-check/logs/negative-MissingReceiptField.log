@@ -1,0 +1,4 @@
+MissingReceiptField.lean:3:35: error: Fields missing: `runtime`
+
+Hint: Add missing fields:
+  ,̲ ̲r̲u̲n̲t̲i̲m̲e̲ ̲:̲=̲ ̲_̲

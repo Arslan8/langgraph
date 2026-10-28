@@ -1,0 +1,6 @@
+WrongTypedCondition.lean:4:2: error: Type mismatch
+  rfl
+has type
+  Value.bool true = Value.bool true
+but is expected to have type
+  Value.bool true = Value.int 1

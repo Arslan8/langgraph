@@ -1,0 +1,6 @@
+WrongBindingField.lean:4:2: error: Type mismatch: After simplification, term
+  rfl
+ has type
+  True
+but is expected to have type
+  b.runtime = b.deployment

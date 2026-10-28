@@ -1,0 +1,6 @@
+WrongGeneratedSelector.lean:4:2: error: Type mismatch
+  rfl
+has type
+  rule.selector = rule.selector
+but is expected to have type
+  (deriveRule rule).selector = rule.operation

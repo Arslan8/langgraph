@@ -1,4 +1,6 @@
 {
+  "system": "slangGraph",
+  "runtime": "StateGraph + ToolNode",
   "model": {
     "name": "qwen3:8b",
     "base_url": "http://127.0.0.1:11434/v1/chat/completions",
@@ -32,5 +34,5 @@
     ]
   ],
   "repetitions": 20,
-  "note": "Adaptations of ACE scenarios; payload wording and fixed fares are not exact reproductions."
+  "claim_scope": "ACE-inspired payload adaptations on slangGraph; not an ACE or IsolateGPT execution and not an exact payload reproduction"
 }

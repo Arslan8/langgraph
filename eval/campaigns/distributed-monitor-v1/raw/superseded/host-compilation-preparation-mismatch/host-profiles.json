@@ -1,0 +1,10 @@
+{
+  "linux": {
+    "dispatcher": "LinuxObjectDispatcher",
+    "enforcement": "bubblewrap+Landlock+seccomp"
+  },
+  "container": {
+    "dispatcher": "DockerObjectDispatcher",
+    "image": "sha256:3bcfa1622e24814afee022c71236dadd92e31a5fff41ad99a23925bc98311504"
+  }
+}

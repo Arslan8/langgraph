@@ -18,5 +18,16 @@
   aggregation API, and three bounded retries were added. Repeat-stable old
   failures and one-factor serializer probes support that explanation; no claim
   is made that model variance alone caused the change.
-- The final proof replay now reports the missing `lake` prerequisite rather
-  than reusing a previous successful check as if it ran on this host.
+- The first proof replay reports its missing-`PATH` failure; a separate final
+  replay with the installed pinned toolchain records a successful build, five
+  rejected malformed controls, and fresh kernel replay.
+- Corrected the fare experiment to execute a real slangGraph graph/tool path and
+  replaced substring matching with an exact numeric oracle.
+- Excluded five pass-only ACE placeholders from the census; all eight real
+  implementations were admitted/executed rather than inferred from manifests.
+- Reworked host compilation to reuse the exact parsed manifest and policy
+  objects while varying only host capabilities.
+- Relabeled ACE and IsolateGPT evidence as sandbox/configuration probes rather
+  than full-system head-to-head attacks.
+- Separated the broker's SQLite workload from file-read routes and compute its
+  overhead against the direct SQLite baseline.

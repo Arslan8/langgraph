@@ -1,5 +1,5 @@
 # ruff: noqa: E501
-"""Fixed resource attacks through the pinned IsolateGPT sandbox implementation."""
+"""Resource probes through IsolateGPT's standalone sandbox module."""
 
 from __future__ import annotations
 
@@ -112,6 +112,8 @@ def run(output: Path, source: Path, python: Path, repetitions: int) -> None:
                 "cases": CASES,
                 "repetitions": repetitions,
                 "configuration": "published helpers/sandbox/sandbox.py with its default limits and seccomp filter",
+                "comparison_kind": "sandbox_module_probe",
+                "scope": "standalone sandbox.py only; hub/spoke system is not executed",
                 "policy_expression": "not expressible: app-level permission has no per-record operation or sealed-operator intersection",
             },
             indent=2,
@@ -189,6 +191,9 @@ print(json.dumps(result))
                     json.dumps(
                         {
                             "baseline": "IsolateGPT",
+                            "comparison_kind": "sandbox_module_probe",
+                            "baseline_scope": "helpers/sandbox/sandbox.py only",
+                            "full_system_comparison": False,
                             "case_id": case,
                             "repeat": repetition,
                             "fixed_invocation": True,

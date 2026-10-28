@@ -1,0 +1,25 @@
+{
+  "baseline": "ACE",
+  "revision": "e88f6dc16e5404131fbefe5684c7f05f856edbdd",
+  "sandbox_sha256": "8b6963e60cd5e3e7e5d8cc6d56964dfb247f998537fea474bc6a476ff4ecb93f",
+  "cases": [
+    "host_file_availability"
+  ],
+  "comparison_kind": "sandbox_configuration_probe",
+  "scope": "ACE ToolExecutionSandbox only; planner and information-flow analysis are not executed",
+  "repetitions": 5,
+  "configuration": "published ToolExecutionSandbox/tool-runner-image",
+  "supported_settings": [
+    "image",
+    "environment",
+    "detached",
+    "port"
+  ],
+  "missing_settings": [
+    "volume mount",
+    "record selector policy",
+    "operation policy",
+    "sealed operator policy",
+    "principal-scoped invocation grant"
+  ]
+}

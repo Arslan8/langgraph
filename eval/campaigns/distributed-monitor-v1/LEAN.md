@@ -28,13 +28,15 @@ libs/prebuilt/.venv/bin/python proofs/worker-route/check.py \
   --output /absolute/new/worker-audit
 ```
 
-On this campaign host, driver tests completed in 0.186 s and source hygiene
-passed, but the proof build/replay could not start because `lake` was absent.
-Accordingly `raw/lean-check/report.json` sets `passed`, `model_proved`, kernel
-checking, and all refinement flags to false. Earlier matching retained evidence
-measured 26.961 s for model build, 5.336 s for generated-kernel checking, and
-83.468 s for fresh kernel replay; it is historical context, not pooled with this
-failed reproduction.
+The superseded initial attempt in
+`raw/superseded/lean-missing-toolchain-path` records a failed prerequisite
+because `lake` was absent from `PATH`. The authoritative `raw/lean-check` replay
+used the installed pinned toolchain and passed. Driver
+tests took 0.293 s, model build 27.673 s, generated-kernel checking 5.623 s,
+and fresh kernel replay 81.031 s. All five deliberately malformed semantic
+controls were rejected. `model_proved`, kernel typechecking, and kernel replay
+are true; independent-checker and all runtime/source/decoder/compiler/OS
+refinement flags remain false, so `system_complete` remains false.
 
 No bug is credited to modeling alone because no prospective origin log exists.
 Modeling made binding, activation, cancellation, cleanup, and evidence coverage
