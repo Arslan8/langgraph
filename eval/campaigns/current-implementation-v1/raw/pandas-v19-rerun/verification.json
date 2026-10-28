@@ -1,0 +1,27 @@
+{
+  "passed": true,
+  "trials": 150,
+  "expected_trials": 150,
+  "passes_by_configuration": {
+    "C": 50,
+    "B": 50,
+    "A": 50
+  },
+  "failures": [],
+  "issues": [],
+  "source_sha256": {
+    "libs/prebuilt/langgraph/prebuilt/security/_linux_worker.py": "4c9eef1c230892b4706921c1f062d99eaf96e38973c1c25bfe4781004652e820",
+    "libs/prebuilt/langgraph/prebuilt/security/enforcement.py": "e5953d1d075d0c65d2e17ae12bc72062caad59a70afd32fccad7952a8e6efaad",
+    "libs/prebuilt/langgraph/prebuilt/security/host_boundary.py": "842d0ec5a6c1197c121300e3800d1d110d8fd1b7dcbb10589db2aeb27faa1ab6",
+    "libs/prebuilt/langgraph/prebuilt/security/landlock.py": "12146a8033e856dbee7aabb4d48a5b93ac7adc53e77fad98e25dfd3bb7bdbda4",
+    "libs/prebuilt/langgraph/prebuilt/security/lean_grant.py": "42abb5beb7bdc27e0078ca3e9262e11bc2269cb1130b98e190966cbd8dbe6aa7",
+    "libs/prebuilt/langgraph/prebuilt/security/lean_lifecycle.py": "502a64c7674068c06e91c2b646c2c53a8279c530b737df426858a9784b4b04da",
+    "libs/prebuilt/langgraph/prebuilt/security/linux.py": "749a4d1984f791861b91873a5f8a9363f50c6654d0588ffa5577ae90a09a0129",
+    "eval/apps/pandas/integration.py": "facd033228c3b594de715eeb76c14fa72842f0e8f78e7244150e7e3489c7ccf9",
+    "eval/apps/pandas/sandbox_codec.py": "937ea0fa30eac65703605793b5b99d5fa455bdcad5082024f9e544cb4b0d6632",
+    "eval/apps/pandas/worker.py": "33598d9fc0722f25c80507ab4740ccce4d392a0bd5f259ad035cbdd87bff9aba",
+    "eval/apps/pandas/workflow_contract.py": "5df59c1762962c6d889fad8323c477654ea13015c317366925981aa35a94e492",
+    "eval/remaining/application_campaign.py": "0f11ea50a83e6136da77f7eeeff41403bb7134b5f4f00778279ad3b56ab8f70f"
+  },
+  "scope": "Frozen Pandas utility cohort only; no security or performance completeness claim"
+}

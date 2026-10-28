@@ -1,0 +1,341 @@
+[
+  {
+    "activated_obligations": [
+      "domain:credential:deny_complement",
+      "domain:delegation:deny_complement",
+      "domain:filesystem:deny_complement",
+      "domain:ipc:deny_complement",
+      "domain:network:deny_complement",
+      "domain:process:deny_complement",
+      "domain:resource_limit:deny_complement",
+      "domain:runtime:deny_complement",
+      "domain:service:deny_complement",
+      "rule:fs:frozen-application.slp:6:3:0:5333326575bd43eb:operate",
+      "rule:fs:frozen-application.slp:6:3:1:bb04ec870b889061:operate",
+      "rule:fs:frozen-application.slp:6:3:2:0a1589e1c2d01627:operate",
+      "rule:fs:frozen-application.slp:6:3:2:6281b851fc98ce84:operate",
+      "rule:fs:frozen-application.slp:6:3:2:656bcbba799c658b:operate",
+      "rule:fs:frozen-application.slp:6:3:2:ca2979abc1e85861:operate",
+      "rule:fs:frozen-application.slp:6:3:2:f67a42cb04e73f69:operate",
+      "rule:limit:cpu_ms:1521d017f7a1b885:operate",
+      "rule:limit:nofile:5bbb8b19e9fb5cd1:operate",
+      "rule:limit:pids:b047554d90371d29:operate",
+      "rule:limit:wall_ms:5b3faecca5a8a7fa:operate",
+      "rule:runtime:artifact:operate",
+      "rule:runtime:env:no-bytecode:operate",
+      "rule:runtime:env:no-locale-coercion:operate",
+      "rule:runtime:env:no-user-site:operate",
+      "rule:runtime:env:path:operate",
+      "rule:runtime:env:safe-path:operate",
+      "rule:runtime:env:unbuffered:operate",
+      "rule:runtime:env:utf8:operate",
+      "rule:runtime:interpreter-root:operate",
+      "rule:runtime:interpreter:operate",
+      "rule:runtime:limit:address_space_bytes:operate",
+      "rule:runtime:limit:cpu_ms:operate",
+      "rule:runtime:limit:file_size_bytes:operate",
+      "rule:runtime:limit:nofile:operate",
+      "rule:runtime:limit:pids:operate",
+      "rule:runtime:limit:tmpfs_bytes:operate",
+      "rule:runtime:limit:wall_ms:operate",
+      "rule:runtime:protocol:diagnostic:operate",
+      "rule:runtime:protocol:request:operate",
+      "rule:runtime:protocol:response:operate",
+      "rule:runtime:root:0:operate",
+      "rule:runtime:root:1:operate",
+      "rule:runtime:tmp:create:operate",
+      "rule:runtime:tmp:delete:operate",
+      "rule:runtime:tmp:read:operate",
+      "rule:runtime:tmp:truncate:operate",
+      "rule:runtime:tmp:write:operate",
+      "rule:runtime:urandom:operate",
+      "rule:runtime:usr:operate",
+      "rule:runtime:worker:operate",
+      "rule:syscall:minimal:cad1ef17def87e7c:operate"
+    ],
+    "context_digest": "8a9a74759ef7ac9c8566aa6416991f6663368065980b682925380a2ac4c9d8fe",
+    "evidence": [
+      {
+        "activated_at": 1793179786.573434,
+        "adapter_id": "linux-bubblewrap-v1",
+        "context_digest": "8a9a74759ef7ac9c8566aa6416991f6663368065980b682925380a2ac4c9d8fe",
+        "expires_at": 1793179826.573434,
+        "native_plan_digest": "e05a33d4e05bbcd89db1b2c72c4b9df814c276abbe116c89fc4931b7083eb47c",
+        "nonce": "c7ec1ec8ea5b65b0611ac7d3c34e5693",
+        "obligation_ids": [
+          "domain:credential:deny_complement",
+          "domain:delegation:deny_complement",
+          "domain:filesystem:deny_complement",
+          "domain:ipc:deny_complement",
+          "domain:network:deny_complement",
+          "domain:process:deny_complement",
+          "domain:resource_limit:deny_complement",
+          "domain:runtime:deny_complement",
+          "domain:service:deny_complement",
+          "rule:fs:frozen-application.slp:6:3:0:5333326575bd43eb:operate",
+          "rule:fs:frozen-application.slp:6:3:1:bb04ec870b889061:operate",
+          "rule:fs:frozen-application.slp:6:3:2:0a1589e1c2d01627:operate",
+          "rule:fs:frozen-application.slp:6:3:2:6281b851fc98ce84:operate",
+          "rule:fs:frozen-application.slp:6:3:2:656bcbba799c658b:operate",
+          "rule:fs:frozen-application.slp:6:3:2:ca2979abc1e85861:operate",
+          "rule:fs:frozen-application.slp:6:3:2:f67a42cb04e73f69:operate",
+          "rule:limit:cpu_ms:1521d017f7a1b885:operate",
+          "rule:limit:nofile:5bbb8b19e9fb5cd1:operate",
+          "rule:limit:pids:b047554d90371d29:operate",
+          "rule:limit:wall_ms:5b3faecca5a8a7fa:operate",
+          "rule:runtime:artifact:operate",
+          "rule:runtime:env:no-bytecode:operate",
+          "rule:runtime:env:no-locale-coercion:operate",
+          "rule:runtime:env:no-user-site:operate",
+          "rule:runtime:env:path:operate",
+          "rule:runtime:env:safe-path:operate",
+          "rule:runtime:env:unbuffered:operate",
+          "rule:runtime:env:utf8:operate",
+          "rule:runtime:interpreter-root:operate",
+          "rule:runtime:interpreter:operate",
+          "rule:runtime:limit:address_space_bytes:operate",
+          "rule:runtime:limit:cpu_ms:operate",
+          "rule:runtime:limit:file_size_bytes:operate",
+          "rule:runtime:limit:nofile:operate",
+          "rule:runtime:limit:pids:operate",
+          "rule:runtime:limit:tmpfs_bytes:operate",
+          "rule:runtime:limit:wall_ms:operate",
+          "rule:runtime:protocol:diagnostic:operate",
+          "rule:runtime:protocol:request:operate",
+          "rule:runtime:protocol:response:operate",
+          "rule:runtime:root:0:operate",
+          "rule:runtime:root:1:operate",
+          "rule:runtime:tmp:create:operate",
+          "rule:runtime:tmp:delete:operate",
+          "rule:runtime:tmp:read:operate",
+          "rule:runtime:tmp:truncate:operate",
+          "rule:runtime:tmp:write:operate",
+          "rule:runtime:urandom:operate",
+          "rule:runtime:usr:operate",
+          "rule:runtime:worker:operate",
+          "rule:syscall:minimal:cad1ef17def87e7c:operate"
+        ],
+        "signature": "f03ebe21f3a6cdac5f1801f571a4ad2c40d3a5e41a9602e27c3945be5a18ca4c"
+      }
+    ],
+    "grant_digest": "1ebe1a25dfe6db78b8b1acda93659cb0f7a950d4f16ce35c8bac99abe89ea018",
+    "host_digest": "3b071ad67b6cebdc1e21145503c3537528e0e0e91ff1071466e322feaed6afe1",
+    "mode": "enforced",
+    "nonce": "c7ec1ec8ea5b65b0611ac7d3c34e5693",
+    "plan_digest": "31eae4b164df7d30238cbcd567bf591e51fced8caef5b1158bf9c2734786bc59",
+    "rule_enforcement": [
+      {
+        "mechanism": "linux-bubblewrap-v1",
+        "rule_id": "fs:frozen-application.slp:6:3:0:5333326575bd43eb",
+        "support": "exact"
+      },
+      {
+        "mechanism": "linux-bubblewrap-v1",
+        "rule_id": "fs:frozen-application.slp:6:3:1:bb04ec870b889061",
+        "support": "exact"
+      },
+      {
+        "mechanism": "linux-bubblewrap-v1",
+        "rule_id": "fs:frozen-application.slp:6:3:2:0a1589e1c2d01627",
+        "support": "exact"
+      },
+      {
+        "mechanism": "linux-bubblewrap-v1",
+        "rule_id": "fs:frozen-application.slp:6:3:2:6281b851fc98ce84",
+        "support": "exact"
+      },
+      {
+        "mechanism": "linux-bubblewrap-v1",
+        "rule_id": "fs:frozen-application.slp:6:3:2:656bcbba799c658b",
+        "support": "exact"
+      },
+      {
+        "mechanism": "linux-bubblewrap-v1",
+        "rule_id": "fs:frozen-application.slp:6:3:2:ca2979abc1e85861",
+        "support": "exact"
+      },
+      {
+        "mechanism": "linux-bubblewrap-v1",
+        "rule_id": "fs:frozen-application.slp:6:3:2:f67a42cb04e73f69",
+        "support": "exact"
+      },
+      {
+        "mechanism": "linux-bubblewrap-v1",
+        "rule_id": "limit:cpu_ms:1521d017f7a1b885",
+        "support": "exact"
+      },
+      {
+        "mechanism": "linux-bubblewrap-v1",
+        "rule_id": "limit:nofile:5bbb8b19e9fb5cd1",
+        "support": "exact"
+      },
+      {
+        "mechanism": "linux-bubblewrap-v1",
+        "rule_id": "limit:pids:b047554d90371d29",
+        "support": "exact"
+      },
+      {
+        "mechanism": "linux-bubblewrap-v1",
+        "rule_id": "limit:wall_ms:5b3faecca5a8a7fa",
+        "support": "exact"
+      },
+      {
+        "mechanism": "linux-bubblewrap-v1",
+        "rule_id": "runtime:artifact",
+        "support": "exact"
+      },
+      {
+        "mechanism": "linux-bubblewrap-v1",
+        "rule_id": "runtime:env:no-bytecode",
+        "support": "exact"
+      },
+      {
+        "mechanism": "linux-bubblewrap-v1",
+        "rule_id": "runtime:env:no-locale-coercion",
+        "support": "exact"
+      },
+      {
+        "mechanism": "linux-bubblewrap-v1",
+        "rule_id": "runtime:env:no-user-site",
+        "support": "exact"
+      },
+      {
+        "mechanism": "linux-bubblewrap-v1",
+        "rule_id": "runtime:env:path",
+        "support": "exact"
+      },
+      {
+        "mechanism": "linux-bubblewrap-v1",
+        "rule_id": "runtime:env:safe-path",
+        "support": "exact"
+      },
+      {
+        "mechanism": "linux-bubblewrap-v1",
+        "rule_id": "runtime:env:unbuffered",
+        "support": "exact"
+      },
+      {
+        "mechanism": "linux-bubblewrap-v1",
+        "rule_id": "runtime:env:utf8",
+        "support": "exact"
+      },
+      {
+        "mechanism": "linux-bubblewrap-v1",
+        "rule_id": "runtime:interpreter",
+        "support": "exact"
+      },
+      {
+        "mechanism": "linux-bubblewrap-v1",
+        "rule_id": "runtime:interpreter-root",
+        "support": "exact"
+      },
+      {
+        "mechanism": "linux-bubblewrap-v1",
+        "rule_id": "runtime:limit:address_space_bytes",
+        "support": "exact"
+      },
+      {
+        "mechanism": "linux-bubblewrap-v1",
+        "rule_id": "runtime:limit:cpu_ms",
+        "support": "exact"
+      },
+      {
+        "mechanism": "linux-bubblewrap-v1",
+        "rule_id": "runtime:limit:file_size_bytes",
+        "support": "exact"
+      },
+      {
+        "mechanism": "linux-bubblewrap-v1",
+        "rule_id": "runtime:limit:nofile",
+        "support": "exact"
+      },
+      {
+        "mechanism": "linux-bubblewrap-v1",
+        "rule_id": "runtime:limit:pids",
+        "support": "exact"
+      },
+      {
+        "mechanism": "linux-bubblewrap-v1",
+        "rule_id": "runtime:limit:tmpfs_bytes",
+        "support": "exact"
+      },
+      {
+        "mechanism": "linux-bubblewrap-v1",
+        "rule_id": "runtime:limit:wall_ms",
+        "support": "exact"
+      },
+      {
+        "mechanism": "linux-bubblewrap-v1",
+        "rule_id": "runtime:protocol:diagnostic",
+        "support": "exact"
+      },
+      {
+        "mechanism": "linux-bubblewrap-v1",
+        "rule_id": "runtime:protocol:request",
+        "support": "exact"
+      },
+      {
+        "mechanism": "linux-bubblewrap-v1",
+        "rule_id": "runtime:protocol:response",
+        "support": "exact"
+      },
+      {
+        "mechanism": "linux-bubblewrap-v1",
+        "rule_id": "runtime:root:0",
+        "support": "exact"
+      },
+      {
+        "mechanism": "linux-bubblewrap-v1",
+        "rule_id": "runtime:root:1",
+        "support": "exact"
+      },
+      {
+        "mechanism": "linux-bubblewrap-v1",
+        "rule_id": "runtime:tmp:create",
+        "support": "exact"
+      },
+      {
+        "mechanism": "linux-bubblewrap-v1",
+        "rule_id": "runtime:tmp:delete",
+        "support": "exact"
+      },
+      {
+        "mechanism": "linux-bubblewrap-v1",
+        "rule_id": "runtime:tmp:read",
+        "support": "exact"
+      },
+      {
+        "mechanism": "linux-bubblewrap-v1",
+        "rule_id": "runtime:tmp:truncate",
+        "support": "exact"
+      },
+      {
+        "mechanism": "linux-bubblewrap-v1",
+        "rule_id": "runtime:tmp:write",
+        "support": "exact"
+      },
+      {
+        "mechanism": "linux-bubblewrap-v1",
+        "rule_id": "runtime:urandom",
+        "support": "exact"
+      },
+      {
+        "mechanism": "linux-bubblewrap-v1",
+        "rule_id": "runtime:usr",
+        "support": "exact"
+      },
+      {
+        "mechanism": "linux-bubblewrap-v1",
+        "rule_id": "runtime:worker",
+        "support": "exact"
+      },
+      {
+        "mechanism": "linux-bubblewrap-v1",
+        "rule_id": "syscall:minimal:cad1ef17def87e7c",
+        "support": "exact"
+      }
+    ],
+    "valid_until": 1793179826.397575,
+    "artifact_digest": "33598d9fc0722f25c80507ab4740ccce4d392a0bd5f259ad035cbdd87bff9aba"
+  }
+]

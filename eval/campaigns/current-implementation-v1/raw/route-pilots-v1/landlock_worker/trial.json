@@ -1,0 +1,42 @@
+{
+  "schema_version": 1,
+  "trial_kind": "boundary_validation_pilot",
+  "performance_eligible": false,
+  "route": "landlock_worker",
+  "route_shape": "one fresh Lean-checked Linux worker invocation",
+  "revision": "bdb0cb9d467e426354ad8beba20407374947ce51",
+  "started_at": "2026-10-28T09:19:51.283494+00:00",
+  "finished_at": "2026-10-28T09:19:53.126176+00:00",
+  "command": [
+    "/data/langgraph/libs/prebuilt/.venv/bin/python",
+    "-m",
+    "pytest",
+    "-q",
+    "-vv",
+    "--durations=1",
+    "libs/prebuilt/tests/security/test_lean_native_execution.py::test_selected_native_route_reads_granted_file"
+  ],
+  "cwd": "/tmp/langgraph-coherent-eval-bdb0cb9d4",
+  "python": "Python 3.13.11",
+  "host": "e5-cse-359-01",
+  "kernel": "6.17.0-1033-oem",
+  "exit_status": 0,
+  "correctness_oracle": "Lean-selected native route returns the complete granted file with enforced receipt and confirmed cleanup",
+  "correctness_passed": true,
+  "pytest_call_ms": 610.0,
+  "subprocess_wall_ms": 1842.255316,
+  "timing_scope": "pytest process diagnostic including collection/setup/teardown; excluded from performance claims",
+  "phase_ledger": {
+    "admission_setup_ms": null,
+    "cedar_authorization_ms": null,
+    "lean_checking_ms": null,
+    "activation_ms": null,
+    "execution_ms": null,
+    "audit_ms": null,
+    "cleanup_ms": null,
+    "status": "pending reviewed in-process instrumentation; no nested span is inferred from pytest wall"
+  },
+  "stdout_sha256": "d7fa76fdbcc2c80ef595c578a6ffc7934b1f7b6318f9716a29520ef4fd37b62c",
+  "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+  "lean_worker_sha256": "6097be9b7b84639959c7a0b9de31c79f23486e9f01bf1b6de575dfab25c7cb08"
+}

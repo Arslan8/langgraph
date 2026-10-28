@@ -1,0 +1,785 @@
+{
+  "method": {
+    "confidence_interval": "two-sided 95% Student-t interval over five independent session means; t(4)=2.776445",
+    "warmups_excluded": true,
+    "first_use_reported_separately": true
+  },
+  "routes": [
+    {
+      "route": "language_typed_authorization_only",
+      "baseline": "plain",
+      "measured_calls": 100,
+      "all_valid": true,
+      "elapsed_ms": {
+        "n_sessions": 5,
+        "mean": 22.569551753113046,
+        "ci95": [
+          21.842491999970616,
+          23.296611506255477
+        ]
+      },
+      "baseline_ms": {
+        "n_sessions": 5,
+        "mean": 0.0009831064380705357,
+        "ci95": [
+          0.0007867560494783097,
+          0.0011794568266627616
+        ]
+      },
+      "added_ms": {
+        "n_sessions": 5,
+        "mean": 22.568568646674976,
+        "ci95": [
+          21.841660387872757,
+          23.295476905477194
+        ]
+      },
+      "runtime_multiple": {
+        "n_sessions": 5,
+        "mean": 23378.73664040754,
+        "ci95": [
+          19267.344165429993,
+          27490.129115385087
+        ]
+      },
+      "percent_overhead": {
+        "n_sessions": 5,
+        "mean": 2337773.664040754,
+        "ci95": [
+          1926634.4165429994,
+          2748912.9115385087
+        ]
+      },
+      "first_use_ms": {
+        "n_sessions": 5,
+        "mean": 24.097901990171522,
+        "ci95": [
+          20.972631505982484,
+          27.22317247436056
+        ]
+      },
+      "phases": {}
+    },
+    {
+      "route": "broker_authorization_only",
+      "baseline": "plain",
+      "measured_calls": 100,
+      "all_valid": true,
+      "elapsed_ms": {
+        "n_sessions": 5,
+        "mean": 628.3661369414767,
+        "ci95": [
+          621.0924994595524,
+          635.639774423401
+        ]
+      },
+      "baseline_ms": {
+        "n_sessions": 5,
+        "mean": 0.0009831064380705357,
+        "ci95": [
+          0.0007867560494783097,
+          0.0011794568266627616
+        ]
+      },
+      "added_ms": {
+        "n_sessions": 5,
+        "mean": 628.3651538350387,
+        "ci95": [
+          621.0913800881845,
+          635.6389275818929
+        ]
+      },
+      "runtime_multiple": {
+        "n_sessions": 5,
+        "mean": 653199.1908610421,
+        "ci95": [
+          516144.26417634834,
+          790254.1175457359
+        ]
+      },
+      "percent_overhead": {
+        "n_sessions": 5,
+        "mean": 65319819.086104214,
+        "ci95": [
+          51614326.41763484,
+          79025311.75457358
+        ]
+      },
+      "first_use_ms": {
+        "n_sessions": 5,
+        "mean": 628.6726992228068,
+        "ci95": [
+          619.2575472208249,
+          638.0878512247888
+        ]
+      },
+      "phases": {}
+    },
+    {
+      "route": "language",
+      "baseline": "upstream",
+      "measured_calls": 100,
+      "all_valid": true,
+      "elapsed_ms": {
+        "n_sessions": 5,
+        "mean": 46.30080529,
+        "ci95": [
+          46.18226239822343,
+          46.41934818177657
+        ]
+      },
+      "baseline_ms": {
+        "n_sessions": 5,
+        "mean": 0.04673575,
+        "ci95": [
+          0.0452746406186954,
+          0.0481968593813046
+        ]
+      },
+      "added_ms": {
+        "n_sessions": 5,
+        "mean": 46.25406954,
+        "ci95": [
+          46.13414850008544,
+          46.37399057991457
+        ]
+      },
+      "runtime_multiple": {
+        "n_sessions": 5,
+        "mean": 991.2285871039081,
+        "ci95": [
+          958.229302536041,
+          1024.2278716717751
+        ]
+      },
+      "percent_overhead": {
+        "n_sessions": 5,
+        "mean": 99022.85871039082,
+        "ci95": [
+          95722.9302536041,
+          102322.78716717754
+        ]
+      },
+      "first_use_ms": {
+        "n_sessions": 5,
+        "mean": 58.684550200000004,
+        "ci95": [
+          57.05389538521967,
+          60.31520501478034
+        ]
+      },
+      "phases": {
+        "authorization_ms": {
+          "n_sessions": 5,
+          "mean": 35.685464079999996,
+          "ci95": [
+            35.57360797646464,
+            35.79732018353535
+          ]
+        },
+        "activation_ms": {
+          "n_sessions": 5,
+          "mean": 0.13431261,
+          "ci95": [
+            0.13025476614612352,
+            0.13837045385387647
+          ]
+        },
+        "execution_ms": {
+          "n_sessions": 5,
+          "mean": 0.30944161000000003,
+          "ci95": [
+            0.30551785917340535,
+            0.3133653608265947
+          ]
+        },
+        "audit_ms": {
+          "n_sessions": 5,
+          "mean": 7.17004991,
+          "ci95": [
+            7.054116368793645,
+            7.285983451206356
+          ]
+        },
+        "framework_residual_ms": {
+          "n_sessions": 5,
+          "mean": 3.0015370800000003,
+          "ci95": [
+            2.937847045070133,
+            3.0652271149298675
+          ]
+        }
+      },
+      "setup_ms": {
+        "n_sessions": 5,
+        "mean": 326.041523,
+        "ci95": [
+          312.27838420664665,
+          339.8046617933533
+        ]
+      },
+      "raw_bypass_refused": true
+    },
+    {
+      "route": "landlock",
+      "baseline": "upstream",
+      "measured_calls": 100,
+      "all_valid": true,
+      "elapsed_ms": {
+        "n_sessions": 5,
+        "mean": 610.50872027,
+        "ci95": [
+          597.6555867492783,
+          623.3618537907217
+        ]
+      },
+      "baseline_ms": {
+        "n_sessions": 5,
+        "mean": 0.04727574,
+        "ci95": [
+          0.04547832154711998,
+          0.04907315845288001
+        ]
+      },
+      "added_ms": {
+        "n_sessions": 5,
+        "mean": 610.46144453,
+        "ci95": [
+          597.6099185996613,
+          623.3129704603386
+        ]
+      },
+      "runtime_multiple": {
+        "n_sessions": 5,
+        "mean": 12918.541421907998,
+        "ci95": [
+          12648.254100119882,
+          13188.828743696113
+        ]
+      },
+      "percent_overhead": {
+        "n_sessions": 5,
+        "mean": 1291754.1421907996,
+        "ci95": [
+          1264725.410011988,
+          1318782.8743696113
+        ]
+      },
+      "first_use_ms": {
+        "n_sessions": 5,
+        "mean": 638.322265,
+        "ci95": [
+          627.8109102480265,
+          648.8336197519735
+        ]
+      },
+      "phases": {
+        "authorization_ms": {
+          "n_sessions": 5,
+          "mean": 153.22250123999999,
+          "ci95": [
+            152.042272046809,
+            154.40273043319098
+          ]
+        },
+        "lean_ms": {
+          "n_sessions": 5,
+          "mean": 279.7772154,
+          "ci95": [
+            277.60738872734635,
+            281.94704207265363
+          ]
+        },
+        "activation_ms": {
+          "n_sessions": 5,
+          "mean": 94.79822282,
+          "ci95": [
+            89.31989411714379,
+            100.27655152285622
+          ]
+        },
+        "execution_ms": {
+          "n_sessions": 5,
+          "mean": 15.557732149999996,
+          "ci95": [
+            13.713362103148906,
+            17.402102196851086
+          ]
+        },
+        "audit_ms": {
+          "n_sessions": 5,
+          "mean": 11.10587718,
+          "ci95": [
+            5.485303484536299,
+            16.7264508754637
+          ]
+        },
+        "cleanup_ms": {
+          "n_sessions": 5,
+          "mean": 0.09069708000000001,
+          "ci95": [
+            0.0769624672049492,
+            0.10443169279505082
+          ]
+        },
+        "framework_residual_ms": {
+          "n_sessions": 5,
+          "mean": 55.956474400000005,
+          "ci95": [
+            55.76669343489197,
+            56.14625536510804
+          ]
+        }
+      },
+      "checker_setup_ms": {
+        "n_sessions": 5,
+        "mean": 116.26448640000001,
+        "ci95": [
+          105.43513859965829,
+          127.09383420034173
+        ]
+      },
+      "executor_setup_ms": {
+        "n_sessions": 5,
+        "mean": 55.126349600000005,
+        "ci95": [
+          49.91046901633075,
+          60.34223018366926
+        ]
+      },
+      "admission_setup_ms": {
+        "n_sessions": 5,
+        "mean": 348.6101598,
+        "ci95": [
+          264.4368359534495,
+          432.78348364655056
+        ]
+      }
+    },
+    {
+      "route": "container",
+      "baseline": "upstream",
+      "measured_calls": 100,
+      "all_valid": true,
+      "elapsed_ms": {
+        "n_sessions": 5,
+        "mean": 172.83701603,
+        "ci95": [
+          170.74939798750918,
+          174.92463407249082
+        ]
+      },
+      "baseline_ms": {
+        "n_sessions": 5,
+        "mean": 0.052040529999999995,
+        "ci95": [
+          0.05068616069203235,
+          0.05339489930796764
+        ]
+      },
+      "added_ms": {
+        "n_sessions": 5,
+        "mean": 172.78497550000003,
+        "ci95": [
+          170.69778182641176,
+          174.8721691735883
+        ]
+      },
+      "runtime_multiple": {
+        "n_sessions": 5,
+        "mean": 3322.2203231170365,
+        "ci95": [
+          3237.7954093806547,
+          3406.6452368534183
+        ]
+      },
+      "percent_overhead": {
+        "n_sessions": 5,
+        "mean": 332122.03231170366,
+        "ci95": [
+          323679.54093806545,
+          340564.5236853419
+        ]
+      },
+      "first_use_ms": {
+        "n_sessions": 5,
+        "mean": 1501.7419095999999,
+        "ci95": [
+          1156.3509819280403,
+          1847.1328372719595
+        ]
+      },
+      "phases": {
+        "authorization_ms": {
+          "n_sessions": 5,
+          "mean": 27.374368529999998,
+          "ci95": [
+            26.530611450621073,
+            28.218125609378923
+          ]
+        },
+        "activation_ms": {
+          "n_sessions": 5,
+          "mean": 115.26448726654053,
+          "ci95": [
+            114.20376820135654,
+            116.32520633172452
+          ]
+        },
+        "execution_ms": {
+          "n_sessions": 5,
+          "mean": 19.12717141345947,
+          "ci95": [
+            18.963313148915276,
+            19.291029678003667
+          ]
+        },
+        "audit_ms": {
+          "n_sessions": 5,
+          "mean": 7.580355249999999,
+          "ci95": [
+            7.327551646648168,
+            7.833158853351831
+          ]
+        },
+        "framework_residual_ms": {
+          "n_sessions": 5,
+          "mean": 3.490633569999999,
+          "ci95": [
+            3.4181438214338353,
+            3.563123318566163
+          ]
+        }
+      },
+      "dispatcher_setup_ms": {
+        "n_sessions": 5,
+        "mean": 60.135646599999994,
+        "ci95": [
+          55.42880942403843,
+          64.84248377596157
+        ]
+      },
+      "admission_setup_ms": {
+        "n_sessions": 5,
+        "mean": 315.42981960000003,
+        "ci95": [
+          312.47064692009013,
+          318.3889922799099
+        ]
+      },
+      "cleanup_ms": {
+        "n_sessions": 5,
+        "mean": 646.2116148,
+        "ci95": [
+          611.330812604197,
+          681.092416995803
+        ]
+      },
+      "all_removals_confirmed": true
+    },
+    {
+      "route": "broker",
+      "baseline": "upstream",
+      "measured_calls": 100,
+      "all_valid": true,
+      "elapsed_ms": {
+        "n_sessions": 5,
+        "mean": 651.43547797,
+        "ci95": [
+          650.7765330831224,
+          652.0944228568775
+        ]
+      },
+      "baseline_ms": {
+        "n_sessions": 5,
+        "mean": 0.13991237,
+        "ci95": [
+          0.1384617881917744,
+          0.1413629518082256
+        ]
+      },
+      "added_ms": {
+        "n_sessions": 5,
+        "mean": 651.2955656,
+        "ci95": [
+          650.6367338503537,
+          651.9543973496463
+        ]
+      },
+      "runtime_multiple": {
+        "n_sessions": 5,
+        "mean": 4656.282330039592,
+        "ci95": [
+          4608.203437380337,
+          4704.361222698847
+        ]
+      },
+      "percent_overhead": {
+        "n_sessions": 5,
+        "mean": 465528.2330039592,
+        "ci95": [
+          460720.34373803367,
+          470336.1222698847
+        ]
+      },
+      "first_use_ms": {
+        "n_sessions": 5,
+        "mean": 658.527985,
+        "ci95": [
+          647.9166794180562,
+          669.1392905819437
+        ]
+      },
+      "phases": {
+        "authorization_ms": {
+          "n_sessions": 5,
+          "mean": 28.474385539999997,
+          "ci95": [
+            28.155595520264928,
+            28.793175559735065
+          ]
+        },
+        "activation_ms": {
+          "n_sessions": 5,
+          "mean": 116.35942220687866,
+          "ci95": [
+            115.16395150217272,
+            117.5548929115846
+          ]
+        },
+        "execution_ms": {
+          "n_sessions": 5,
+          "mean": 486.3408086231213,
+          "ci95": [
+            484.79155889397896,
+            487.8900583522636
+          ]
+        },
+        "audit_ms": {
+          "n_sessions": 5,
+          "mean": 15.786770289999998,
+          "ci95": [
+            15.24481823528945,
+            16.328722344710545
+          ]
+        },
+        "cleanup_ms": {
+          "n_sessions": 5,
+          "mean": 0.57359613,
+          "ci95": [
+            0.5337405465995255,
+            0.6134517134004744
+          ]
+        },
+        "framework_residual_ms": {
+          "n_sessions": 5,
+          "mean": 3.9004951799999916,
+          "ci95": [
+            3.8260570848250604,
+            3.974933275174923
+          ]
+        }
+      },
+      "dispatcher_setup_ms": {
+        "n_sessions": 5,
+        "mean": 0.7993124,
+        "ci95": [
+          0.6350117644671386,
+          0.9636130355328615
+        ]
+      },
+      "admission_setup_ms": {
+        "n_sessions": 5,
+        "mean": 303.905993,
+        "ci95": [
+          301.2928390152989,
+          306.51914698470114
+        ]
+      }
+    }
+  ],
+  "landlock": [],
+  "pandas_v19": {
+    "trials": 150,
+    "modes": {
+      "A": {
+        "successes": 50,
+        "attempts": 50,
+        "failures": [],
+        "mean_task_wall_ms": 9888.272432583617,
+        "mean_repeat_wall_ms": {
+          "n_sessions": 5,
+          "mean": 9888.272432583617,
+          "ci95": [
+            9762.534395980856,
+            10014.010469186378
+          ]
+        },
+        "repeat_mean_wall_ms": [
+          10068.465222802479,
+          9842.635626503034,
+          9857.974019600078,
+          9828.592559008393,
+          9843.694735004101
+        ],
+        "model_calls": 125,
+        "runtime_multiple_vs_A": 1.0,
+        "percent_overhead_vs_A": 0.0,
+        "runtime_multiple_vs_A_interval": {
+          "n_sessions": 5,
+          "mean": 1.0,
+          "ci95": [
+            1.0,
+            1.0
+          ]
+        },
+        "percent_overhead_vs_A_interval": {
+          "n_sessions": 5,
+          "mean": 0.0,
+          "ci95": [
+            0.0,
+            0.0
+          ]
+        }
+      },
+      "B": {
+        "successes": 50,
+        "attempts": 50,
+        "failures": [],
+        "mean_task_wall_ms": 10489.762791662943,
+        "mean_repeat_wall_ms": {
+          "n_sessions": 5,
+          "mean": 10489.762791662943,
+          "ci95": [
+            10388.653133292377,
+            10590.872450033508
+          ]
+        },
+        "repeat_mean_wall_ms": [
+          10634.384561510524,
+          10449.35193360434,
+          10444.398528203601,
+          10469.983392499853,
+          10450.695542496396
+        ],
+        "model_calls": 125,
+        "runtime_multiple_vs_A": 1.0608286597259706,
+        "percent_overhead_vs_A": 6.082865972597062,
+        "runtime_multiple_vs_A_interval": {
+          "n_sessions": 5,
+          "mean": 1.0608515310070052,
+          "ci95": [
+            1.0567273263995665,
+            1.064975735614444
+          ]
+        },
+        "percent_overhead_vs_A_interval": {
+          "n_sessions": 5,
+          "mean": 6.0851531007005155,
+          "ci95": [
+            5.6727326399566325,
+            6.497573561444399
+          ]
+        }
+      },
+      "C": {
+        "successes": 50,
+        "attempts": 50,
+        "failures": [],
+        "mean_task_wall_ms": 11743.413551439298,
+        "mean_repeat_wall_ms": {
+          "n_sessions": 5,
+          "mean": 11743.413551439298,
+          "ci95": [
+            11624.2918252701,
+            11862.535277608496
+          ]
+        },
+        "repeat_mean_wall_ms": [
+          11867.907356104115,
+          11697.731853101868,
+          11647.457579395268,
+          11681.715529394569,
+          11822.255439200671
+        ],
+        "model_calls": 124,
+        "runtime_multiple_vs_A": 1.1876102354080236,
+        "percent_overhead_vs_A": 18.761023540802356,
+        "runtime_multiple_vs_A_interval": {
+          "n_sessions": 5,
+          "mean": 1.187652902698131,
+          "ci95": [
+            1.1769559245658772,
+            1.198349880830385
+          ]
+        },
+        "percent_overhead_vs_A_interval": {
+          "n_sessions": 5,
+          "mean": 18.76529026981311,
+          "ci95": [
+            17.69559245658772,
+            19.834988083038503
+          ]
+        }
+      }
+    }
+  },
+  "pandas_closed": {
+    "trials": 50,
+    "modes": {
+      "C-closed": {
+        "successes": 45,
+        "attempts": 50,
+        "failures": [
+          {
+            "case_id": "monthly_mean",
+            "repeat": 0,
+            "status": "error",
+            "error": null
+          },
+          {
+            "case_id": "monthly_mean",
+            "repeat": 1,
+            "status": "error",
+            "error": null
+          },
+          {
+            "case_id": "monthly_mean",
+            "repeat": 2,
+            "status": "error",
+            "error": null
+          },
+          {
+            "case_id": "monthly_mean",
+            "repeat": 3,
+            "status": "error",
+            "error": null
+          },
+          {
+            "case_id": "monthly_mean",
+            "repeat": 4,
+            "status": "error",
+            "error": null
+          }
+        ],
+        "mean_task_wall_ms": 13866.751143899746,
+        "mean_repeat_wall_ms": {
+          "n_sessions": 5,
+          "mean": 13866.751143899746,
+          "ci95": [
+            13812.569496015598,
+            13920.932791783895
+          ]
+        },
+        "repeat_mean_wall_ms": [
+          13892.191600101069,
+          13901.811866997741,
+          13891.085457499139,
+          13852.166417404078,
+          13796.500377496704
+        ],
+        "model_calls": 125
+      }
+    }
+  }
+}

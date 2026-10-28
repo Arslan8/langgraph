@@ -1,0 +1,8 @@
+# Generated copies of the 122 MB pinned Lean executable. The exact digest and
+# external reproduction path are recorded in frozen-config.json.
+raw/pandas-v19-rerun/workerRoute
+raw/pandas-closed-rerun/workerRoute
+
+# Imported framework snapshots may contain interpreter caches; source is kept.
+**/__pycache__/
+*.py[cod]

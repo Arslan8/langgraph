@@ -1,0 +1,27 @@
+{
+  "app": "pandas",
+  "task": "Return a one-cell table counting duplicate rows, keeping the first occurrence.",
+  "model": {
+    "name": "qwen3:8b",
+    "base_url": "http://localhost:11434/v1",
+    "temperature": 0,
+    "seed": 20261005,
+    "digest": "500a1f067a9f782620b40bee6f7b0c89e17ae61f686b92c24933e4ca4b2b8b41",
+    "timeout_seconds": 600,
+    "max_retries": 0,
+    "reasoning_effort": "none"
+  },
+  "fixture_root": "/data/langgraph/eval/campaigns/current-implementation-v1/raw/pandas-v19-rerun/duplicate_count-B-4/fixture",
+  "output": "/data/langgraph/eval/campaigns/current-implementation-v1/raw/pandas-v19-rerun/duplicate_count-B-4/output.json",
+  "events": "/data/langgraph/eval/campaigns/current-implementation-v1/raw/pandas-v19-rerun/duplicate_count-B-4/events.jsonl",
+  "configuration": "B",
+  "integration": true,
+  "slanggraph_root": "/data/langgraph/eval/campaigns/current-implementation-v1/raw/pandas-v19-rerun/framework",
+  "run_id": "duplicate_count-B-4",
+  "effective_policy": "/data/langgraph/eval/campaigns/current-implementation-v1/raw/pandas-v19-rerun/duplicate_count-B-4/policy.slp",
+  "sandbox_serialization": "recursive-json-v2",
+  "workflow_contract": "preserve-request-v5",
+  "computation_api": "period-aggregation-v1",
+  "graph_retries": 3,
+  "lean_worker": null
+}

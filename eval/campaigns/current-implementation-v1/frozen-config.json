@@ -1,0 +1,105 @@
+{
+  "schema_version": 1,
+  "status": "complete",
+  "code": {
+    "revision": "bdb0cb9d467e426354ad8beba20407374947ce51",
+    "ref_at_freeze": "slanggraph/wip",
+    "note": "The shared checkout was one commit behind and contained overlapping user-owned untracked evidence; all execution used an isolated detached checkout.",
+    "eval_uv_lock_sha256": "88cdf613c86379e8b368ea3c3f0e2b086f646e447e0b7c4210c137e5bcefab6b",
+    "prebuilt_uv_lock_sha256": "49d01e6f8b177dea8b85f54785b83bc97c3ef3df6fe70a22ad92d329390694ec"
+  },
+  "host": {
+    "hostname": "e5-cse-359-01",
+    "os": "Ubuntu 24.04.5 LTS",
+    "kernel": "6.17.0-1033-oem",
+    "architecture": "x86_64",
+    "cpu": "Intel Xeon w5-3435X; 16 cores, 32 threads",
+    "memory_gib": 62,
+    "placement": "shared host; one available CPU per measured session; uncontrolled frequency and load",
+    "landlock_abi": 7,
+    "unprivileged_user_namespaces": true,
+    "cgroup_v2": true,
+    "cgroup_delegated": false
+  },
+  "runtime": {
+    "python": "3.13.11",
+    "python_environment": "/data/langgraph/libs/prebuilt/.venv",
+    "cedar": {
+      "version": "cedar-policy-cli 4.13.0",
+      "path": "/home/faculty/abk6349/.cargo/bin/cedar"
+    },
+    "lean_worker": {
+      "protocol": "worker-route-grant-v3",
+      "sha256": "6097be9b7b84639959c7a0b9de31c79f23486e9f01bf1b6de575dfab25c7cb08",
+      "path_at_pilot": "/data/langgraph/proofs/worker-route/.lake/build/bin/workerRoute"
+    },
+    "docker": {
+      "client": "29.9.2",
+      "server": "29.9.2",
+      "context": "rootless",
+      "containerd": "2.4.2",
+      "runc": "1.5.2",
+      "image": "sha256:3bcfa1622e24814afee022c71236dadd92e31a5fff41ad99a23925bc98311504"
+    },
+    "ollama": "0.32.14"
+  },
+  "model": {
+    "name": "qwen3:8b",
+    "digest": "500a1f067a9f782620b40bee6f7b0c89e17ae61f686b92c24933e4ca4b2b8b41",
+    "temperature": 0,
+    "seed": 20261005,
+    "api_max_retries": 0,
+    "graph_retries": 3,
+    "context_tokens": 40960,
+    "endpoint": "http://127.0.0.1:11434/v1",
+    "service_status": "served locally and re-attested before both Pandas cohorts",
+    "full_batch_gate": "satisfied; per-cohort models.json retains the attestation"
+  },
+  "configurations": {
+    "upstream": "Frozen upstream application and its original sandbox/restrictions; no slangGraph admission, Cedar decision, Lean check, operator MAC, broker, or host-route activation.",
+    "authorization_only": "Same application behavior and original executor, with closed graph admission, exact principal/tool/resource normalization, Cedar authorization, and durable audit. No mandatory-MAC or containment claim is made for the original executor; this is an ablation.",
+    "fully_protected": "Headline: closed admission is required, mandatory operator policy cannot be disabled, Cedar is fail-closed, no enforcement waivers are allowed, and the selected current route must return a matching activation receipt. Current eligible dispatchers are immutable language, Docker, and object broker. The direct LinuxSandboxExecutor is measured with Lean but rejected by the current sealed runtime-MAC allowlist, so it is not labeled headline-protected. Route-specific mechanisms are reported rather than treated as interchangeable."
+  },
+  "pandas": {
+    "upstream_revision": "4ffeb7f38178aa250917f29b01355f8b89ba809e",
+    "dataset_id": "synthetic-sales-v1",
+    "dataset_sha256": "c123f404bad03177a7e52b67e37ff2f18fcbca6d4918f2585affb9ad492669d8",
+    "tasks": [
+      "monthly_total", "monthly_mean", "regional_totals", "product_totals",
+      "top_products", "date_filtered_total", "grouped_mean", "missing_count",
+      "duplicate_count", "monthly_chart"
+    ],
+    "repetitions_per_configuration": 5,
+    "preservation": "Every model call, retry, refusal, exception, and output is retained; safe refusal is a utility failure.",
+    "current_results": "Matched v19 A/B/C each passed 50/50. The separate C-closed v21 cohort passed 45/50: all five monthly_mean trials were refused as output_data:nonfinite_float after vendor code recreated NaN."
+  },
+  "execution_cost_protocol": {
+    "sessions": 5,
+    "measured_calls_per_session": 20,
+    "warmups_per_session": 10,
+    "retained_first_use_calls_per_session": 1,
+    "order": "paired within session; protected route followed by its direct baseline in each recorded round; one core pinned per session",
+    "container": "creation and removal recorded separately; reused calls share only an identical authority identity",
+    "confidence_interval": "Student t interval over five session means, df=4, critical value 2.776445",
+    "reported": ["absolute timing", "paired runtime multiple", "paired percentage overhead", "95% confidence interval"]
+  },
+  "meaningful_language_task": {
+    "id": "dual-source-compliance-decision",
+    "description": "Read two separately granted immutable text inputs, compare them, and return a bounded compliance decision through the admitted interpreter.",
+    "supported_in_interpreter": ["exact granted reads", "local variables", "scalar equality", "bounded if/else", "inert scalar return"],
+    "worker_or_broker_required": ["CSV/JSON parsing beyond registered terminals", "database access", "network access", "native libraries"],
+    "refused": ["direct pathlib/open", "imports", "reflection", "dynamic evaluation", "undeclared paths"]
+  },
+  "alice_bob": {
+    "database": "one SQLite database containing Alice and Bob records",
+    "required_success": ["Alice reads/updates her authorized record", "authorized aggregate preserves useful functionality"],
+    "required_denial": ["Alice reads Bob record", "Bob-only operation under Alice principal", "direct database-file read/write bypass", "unregistered SQL or pump operation"],
+    "baseline_rule": "Denying the whole database fails the functionality criterion.",
+    "ablations": ["SQLite mediator only", "pump mediator only", "composed SQLite plus pump", "direct file bypass"]
+  },
+  "correctness": {
+    "all_trials": ["full output oracle", "principal and call binding", "receipt/grant digest match", "audit-chain verification", "source/dependency identity unchanged"],
+    "protected_trials": ["closed admission inventory", "mandatory policy active", "zero enforcement waivers", "activation evidence complete", "cleanup/termination confirmed"],
+    "pandas": ["unchanged ten-task oracle", "exact five-repetition matrix", "failure/refusal/retry census"]
+  }
+}
