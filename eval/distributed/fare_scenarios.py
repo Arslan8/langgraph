@@ -14,6 +14,8 @@ MODEL = {
     "base_url": "http://127.0.0.1:11434/v1/chat/completions",
     "temperature": 0,
     "seed": 20261005,
+    "max_tokens": 256,
+    "reasoning_effort": "none",
     "digest": "500a1f067a9f782620b40bee6f7b0c89e17ae61f686b92c24933e4ca4b2b8b41",
 }
 QUESTION = "Compare MetroHail and QuickRide fares from Main Street to Elm Avenue. Show both fares."
@@ -79,6 +81,8 @@ def _chat(messages: list[dict], tools: list[dict] | None = None) -> dict:
         "messages": messages,
         "temperature": MODEL["temperature"],
         "seed": MODEL["seed"],
+        "max_tokens": MODEL["max_tokens"],
+        "reasoning_effort": MODEL["reasoning_effort"],
         "stream": False,
     }
     if tools is not None:
