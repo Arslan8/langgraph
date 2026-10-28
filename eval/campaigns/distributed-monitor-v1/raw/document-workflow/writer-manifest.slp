@@ -1,0 +1,4 @@
+runs linux
+fs read @{output_path} need
+fs write @{output_path} need
+fs truncate @{output_path} need

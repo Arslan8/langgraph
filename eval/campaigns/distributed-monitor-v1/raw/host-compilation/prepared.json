@@ -1,0 +1,7 @@
+{
+  "tool": "common_read",
+  "artifact_sha256": "003c23bb75358ebbd65ed1b93e827459696a0ea733d3c21505320a166bd170f4",
+  "manifest": "runs linux\nfs read @{path} need",
+  "principal_policy": "permit(principal == slangGraph::User::\"alice\", action, resource);",
+  "sha256": "439086c5c4d26e5e67c26aa4c71010ee334d6f916af803d8846aa667fc1d5a35"
+}

@@ -77,7 +77,16 @@ mkdir "$raw_dir/validation"
 "$python_bin" eval/distributed/regenerate_results.py \
   --raw "$raw_dir" --output "$campaign_dir"
 
-find "$campaign_dir" -type f -not -path '*/.git/*' \
-  -not -name SHA256SUMS -print0 \
-  | sort -z \
-  | xargs -0 sha256sum > "$campaign_dir/SHA256SUMS"
+(
+  cd "$campaign_dir"
+  find . -type f -not -path '*/.git/*' \
+    -not -path '*/framework/*' \
+    -not -path '*/framework-source-blobs/*' \
+    -not -path '*/harness/*' \
+    -not -path '*/__pycache__/*' \
+    -not -path '*/lean-check/snapshot/*' \
+    -not -name workerRoute \
+    -not -name SHA256SUMS -print0 \
+    | sort -z \
+    | xargs -0 sha256sum > SHA256SUMS
+)

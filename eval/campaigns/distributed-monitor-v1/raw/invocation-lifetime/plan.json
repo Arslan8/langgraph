@@ -1,0 +1,32 @@
+{
+  "sequence": [
+    [
+      "alice_control",
+      "alice",
+      "notes/alice",
+      "none"
+    ],
+    [
+      "bob_substitutes_alice",
+      "bob",
+      "notes/bob",
+      "substitute_alice"
+    ],
+    [
+      "bob_replays_identity_fields",
+      "bob",
+      "notes/bob",
+      "spoof_alice"
+    ],
+    [
+      "bob_control",
+      "bob",
+      "notes/bob",
+      "none"
+    ]
+  ],
+  "repetitions": 5,
+  "worker_sha256": "9c1d131f39cd32f119fcb03cca91115f2fda2dc7e60b1f51ecd2bb3141d9e133",
+  "worker_reuse": false,
+  "reason": "ObjectBrokerDispatcher creates a fresh confined worker and spawn-bound broker session for every invocation"
+}

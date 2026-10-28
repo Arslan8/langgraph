@@ -1,0 +1,22 @@
+{
+  "cases": [
+    "none",
+    "read_forbidden",
+    "write_outside"
+  ],
+  "repetitions": 5,
+  "writer_sha256": "365352c8e7ad1f71e40dff6591e05fa4b3a1b90b6e95d93322ff8e0b5149747e",
+  "language_supported": [
+    "exact granted text reads",
+    "string equality",
+    "closed branching",
+    "bounded string result"
+  ],
+  "worker_required": [
+    "filesystem write"
+  ],
+  "refused": [
+    "undeclared document read",
+    "write outside report path"
+  ]
+}

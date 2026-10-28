@@ -1,0 +1,19 @@
+{
+  "baseline": "IsolateGPT",
+  "revision": "c6020f977d20f9f80776cae5d4e2930455733ce5",
+  "sandbox_sha256": "67f0aa98da4aa3a9007bae2de72685a9d1eb8fe354cc607f062ecd558601e819",
+  "cases": [
+    "allowed_read",
+    "wrong_record",
+    "hidden_update",
+    "hidden_delete",
+    "database_marker",
+    "wal_marker",
+    "conflicting_operator_policy",
+    "bob_after_alice",
+    "pump_direct_socket"
+  ],
+  "repetitions": 5,
+  "configuration": "published helpers/sandbox/sandbox.py with its default limits and seccomp filter",
+  "policy_expression": "not expressible: app-level permission has no per-record operation or sealed-operator intersection"
+}

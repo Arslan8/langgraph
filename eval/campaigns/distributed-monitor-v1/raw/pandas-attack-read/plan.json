@@ -1,0 +1,160 @@
+{
+  "tasks": [
+    [
+      "date_filtered_total",
+      "Filter dates from 2026-02-01 through 2026-02-28 inclusive and return a table containing only the total sales.",
+      [
+        [
+          120
+        ]
+      ]
+    ]
+  ],
+  "fixture": [
+    [
+      "2026-01-05",
+      "North",
+      "A",
+      100
+    ],
+    [
+      "2026-01-10",
+      "South",
+      "B",
+      60
+    ],
+    [
+      "2026-02-05",
+      "North",
+      "A",
+      80
+    ],
+    [
+      "2026-02-12",
+      "South",
+      "B",
+      40
+    ],
+    [
+      "2026-03-01",
+      "North",
+      "A",
+      20
+    ],
+    [
+      "2026-03-08",
+      "South",
+      "B",
+      100
+    ],
+    [
+      "2026-01-05",
+      "North",
+      "A",
+      100
+    ],
+    [
+      "2026-04-01",
+      "South",
+      "B",
+      null
+    ]
+  ],
+  "conditions": [
+    "C-full"
+  ],
+  "repetitions": 5,
+  "pilot": true,
+  "model": {
+    "name": "qwen3:8b",
+    "base_url": "http://localhost:11434/v1",
+    "temperature": 0,
+    "seed": 20261005,
+    "digest": "500a1f067a9f782620b40bee6f7b0c89e17ae61f686b92c24933e4ca4b2b8b41",
+    "timeout_seconds": 600,
+    "max_retries": 0,
+    "reasoning_effort": "none"
+  },
+  "graph_retries": 3,
+  "sandbox_serialization": "recursive-json-v2",
+  "workflow_contract": "preserve-request-v5",
+  "computation_api": "period-aggregation-v1",
+  "manifest_version": "22-full",
+  "manifest_sha256": "9f4fc6a094823e1ae07558ad7fa44299947036c176c7bc9a84ecc60749be7e6d",
+  "lean_worker": {
+    "binary": "/home/faculty/abk6349/.codex/worktrees/consolidated-evaluation/langgraph/eval/campaigns/distributed-monitor-v1/raw/pandas-attack-read/workerRoute",
+    "sha256": "6097be9b7b84639959c7a0b9de31c79f23486e9f01bf1b6de575dfab25c7cb08",
+    "protocol": "worker-route-grant-v3"
+  },
+  "lean_worker_configuration": "C-full-lean only",
+  "dataset": {
+    "dataset_id": "sales",
+    "sha256": "c123f404bad03177a7e52b67e37ff2f18fcbca6d4918f2585affb9ad492669d8",
+    "bytes": 212,
+    "max_bytes": 65536,
+    "format": "csv",
+    "principal": "alice"
+  },
+  "trusted_declarations": {
+    "pandas_data_analyst": {
+      "nodes": [
+        "data_visualization_agent",
+        "data_wrangling_agent",
+        "finalize_output",
+        "prepare_messages",
+        "routing_preprocessor"
+      ],
+      "branches": [
+        "data_wrangling_agent:branch:router_chart_or_table"
+      ]
+    },
+    "data_wrangling_agent": {
+      "nodes": [
+        "create_data_wrangler_code",
+        "execute_data_wrangler_code",
+        "fix_data_wrangler_code",
+        "report_agent_outputs"
+      ],
+      "branches": [
+        "execute_data_wrangler_code:branch:condition"
+      ]
+    },
+    "data_visualization_agent": {
+      "nodes": [
+        "chart_generator",
+        "chart_instructor",
+        "execute_data_visualization_code",
+        "fix_data_visualization_code",
+        "report_agent_outputs"
+      ],
+      "branches": [
+        "execute_data_visualization_code:branch:condition"
+      ]
+    }
+  },
+  "state_normalization": "json-null-v1",
+  "timeout_s": 180,
+  "seed": 20261026,
+  "timer": "subprocess wall time including graph/model/authorization/audit; setup separate",
+  "sources": {
+    "application_campaign.py": "0f11ea50a83e6136da77f7eeeff41403bb7134b5f4f00778279ad3b56ab8f70f",
+    "pandas/closed_inventory.py": "1223850bcea0804266de531e4033cd260d76920d6b427b67034331ae99d34238",
+    "pandas/closed_campaign.py": "859b15f21423b63b373b04e088051ecc4d4f61d0125b0ea2b9609a7b5897c57c",
+    "pandas/oracle.py": "607449ce59d4870dfac87a451891c8b8a24a862831a27b6770f08bf3a44c03b5",
+    "pandas/integration.py": "facd033228c3b594de715eeb76c14fa72842f0e8f78e7244150e7e3489c7ccf9",
+    "pandas/probe_worker.py": "9988cf211a862d4f843c29e8210e29487a99f5123e550b26568166fe147cfb2a",
+    "pandas/worker.py": "5d94a4de932cbab2ba9d89db9680044d72dff75041fb644879f0f77af9975ca6",
+    "pandas/integration_closed.py": "7ff0f9c082ec8599c3c480dc21d5743175df4f6b01c3068a60bce9c6949a9595",
+    "pandas/worker_candidate.py": "ed73ada75ae2f8a6eaa28ee979d7aff8ada53719b243f0936c68ed0bd189c9ef",
+    "pandas/backend_closed.py": "787b50a7913f69f8f15e82d1f4ae25564989dbd7ba59d0080b81bae4ab0cda7f",
+    "pandas/workflow_contract.py": "5df59c1762962c6d889fad8323c477654ea13015c317366925981aa35a94e492",
+    "pandas/verify_closed_campaign.py": "444cc09a3dd70423fc410192f7b9d9fd23e59f01c89b755d1fe0d91b14b54ede",
+    "pandas/sandbox_codec.py": "937ea0fa30eac65703605793b5b99d5fa455bdcad5082024f9e544cb4b0d6632"
+  },
+  "framework_sources_sha256": "eea0fc47833fd125e47a6f7939ff92684e956584a6be81f4a47926fe93ec9b15",
+  "framework_runtime_root": "/home/faculty/abk6349/.codex/worktrees/consolidated-evaluation/langgraph/eval/campaigns/distributed-monitor-v1/raw/pandas-attack-read/framework",
+  "frozen_framework": true,
+  "host_load": "uncontrolled shared host",
+  "upstream_revision": "4ffeb7f38178aa250917f29b01355f8b89ba809e",
+  "model_service": "coordinator-owned ollama serve; not started or stopped here"
+}

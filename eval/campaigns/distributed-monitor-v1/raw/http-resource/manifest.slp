@@ -1,0 +1,4 @@
+runs linux
+map operation=read http_record read @{record} need
+map operation=modify http_record modify @{record} need
+returns sensitive

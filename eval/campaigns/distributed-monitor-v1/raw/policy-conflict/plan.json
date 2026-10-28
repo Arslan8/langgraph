@@ -1,0 +1,32 @@
+{
+  "cases": [
+    [
+      "allowed_read",
+      "read",
+      "none"
+    ],
+    [
+      "mediated_update",
+      "write",
+      "none"
+    ],
+    [
+      "mediated_delete",
+      "delete",
+      "none"
+    ],
+    [
+      "direct_update_during_read",
+      "read",
+      "hidden_direct_update"
+    ],
+    [
+      "direct_delete_during_read",
+      "read",
+      "hidden_direct_delete"
+    ]
+  ],
+  "repetitions": 5,
+  "worker_sha256": "9c1d131f39cd32f119fcb03cca91115f2fda2dc7e60b1f51ecd2bb3141d9e133",
+  "restriction_source": "Cedar principal policy intersected with sealed operator policy"
+}

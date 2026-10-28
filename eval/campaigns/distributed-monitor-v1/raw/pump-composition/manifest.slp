@@ -1,0 +1,8 @@
+
+runs linux
+map operation=inspect   pump inspect   @{device_id} need
+map operation=start     pump start     @{device_id} need
+map operation=stop      pump stop      @{device_id} need
+map operation=set_flow  pump set_flow  @{device_id} need
+map operation=calibrate pump calibrate @{device_id} need
+returns sensitive

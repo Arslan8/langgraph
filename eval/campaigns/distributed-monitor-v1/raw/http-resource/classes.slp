@@ -1,0 +1,8 @@
+class http_record {
+  operations read modify
+  object record
+  normalizer identity
+  attrs
+  enforced_by broker
+  lowering local.http.v1
+}

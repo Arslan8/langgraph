@@ -1,0 +1,31 @@
+{
+  "baseline": "ACE",
+  "revision": "e88f6dc16e5404131fbefe5684c7f05f856edbdd",
+  "sandbox_sha256": "8b6963e60cd5e3e7e5d8cc6d56964dfb247f998537fea474bc6a476ff4ecb93f",
+  "cases": [
+    "allowed_read",
+    "wrong_record",
+    "hidden_update",
+    "hidden_delete",
+    "database_marker",
+    "wal_marker",
+    "conflicting_operator_policy",
+    "bob_after_alice",
+    "pump_direct_socket"
+  ],
+  "repetitions": 5,
+  "configuration": "published ToolExecutionSandbox/tool-runner-image",
+  "supported_settings": [
+    "image",
+    "environment",
+    "detached",
+    "port"
+  ],
+  "missing_settings": [
+    "volume mount",
+    "record selector policy",
+    "operation policy",
+    "sealed operator policy",
+    "principal-scoped invocation grant"
+  ]
+}

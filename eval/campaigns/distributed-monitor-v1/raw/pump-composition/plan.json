@@ -1,0 +1,53 @@
+{
+  "cases": [
+    [
+      "allowed_inspect",
+      "charlie",
+      "inspect",
+      "none",
+      null
+    ],
+    [
+      "allowed_set_flow",
+      "alice",
+      "set_flow",
+      "none",
+      25.0
+    ],
+    [
+      "allowed_calibrate",
+      "bob",
+      "calibrate",
+      "none",
+      1.5
+    ],
+    [
+      "denied_declared",
+      "charlie",
+      "set_flow",
+      "none",
+      77.0
+    ],
+    [
+      "broker_escalation",
+      "charlie",
+      "inspect",
+      "broker_escalation",
+      null
+    ],
+    [
+      "direct_socket",
+      "charlie",
+      "inspect",
+      "direct_socket",
+      null
+    ]
+  ],
+  "modes": [
+    "call_authorization_native",
+    "transport_only",
+    "production_composition"
+  ],
+  "repetitions": 5,
+  "worker_sha256": "6b291e6f2a5d76e42ce25181ff6b1db2896bcc503905db12f0fe03231d80d6f5"
+}

@@ -111,7 +111,10 @@ def performance(rows: list[dict], phase: str = "measured") -> list[dict]:
 def application(rows: list[dict]) -> list[dict]:
     groups: dict[str, list[dict]] = defaultdict(list)
     for row in rows:
-        if row.get("application") == "pandas":
+        # The attacked application runs share the C-full mode name but answer a
+        # separate security question.  Keep them out of the utility/timing
+        # cohort while retaining them in the attack table below.
+        if row.get("application") == "pandas" and row.get("attack") is None:
             groups[str(row.get("mode"))].append(row)
     result = []
     for mode, selected in sorted(groups.items()):

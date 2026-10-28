@@ -1,0 +1,38 @@
+{
+  "cases": [
+    [
+      "allowed_read",
+      "alice",
+      "read",
+      "none"
+    ],
+    [
+      "broker_modify_during_read",
+      "alice",
+      "read",
+      "broker_modify"
+    ],
+    [
+      "direct_read_bob",
+      "alice",
+      "read",
+      "direct_read_bob"
+    ],
+    [
+      "direct_modify_during_read",
+      "alice",
+      "read",
+      "direct_modify"
+    ],
+    [
+      "allowed_admin_modify",
+      "admin",
+      "modify",
+      "none"
+    ]
+  ],
+  "repetitions": 5,
+  "worker_sha256": "0a37a4d20a08d6b8b3302e3054ba215f9b872102bc4b85a657a894c86f43accb",
+  "adapter_file": "eval/distributed/http_resource.py",
+  "core_changes": []
+}

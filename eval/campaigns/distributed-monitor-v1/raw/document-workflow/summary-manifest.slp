@@ -1,0 +1,3 @@
+runs inprocess
+fs read @{policy_path} need
+fs read @{procedure_path} need
