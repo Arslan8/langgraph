@@ -1,0 +1,619 @@
+"""Security mediation for tools and delegated graphs outside ToolNode."""
+
+from __future__ import annotations
+
+import inspect
+from collections.abc import Callable, Mapping, Sequence
+from typing import Any, overload
+
+from langchain_core.runnables import Runnable, RunnableConfig
+from langchain_core.tools.base import BaseTool
+from langchain_core.tools.structured import StructuredTool
+from langgraph.types import interrupt
+from pydantic import BaseModel
+
+from langgraph.prebuilt._tool_adapter import preserve_tool_config
+from langgraph.prebuilt.security.binding import (
+    _bind_principal,
+    history_for,
+    next_call_index,
+    principal_from,
+)
+from langgraph.prebuilt.security.blobs import copy_blobs
+from langgraph.prebuilt.security.config import SecurityConfig
+from langgraph.prebuilt.security.descriptor import (
+    _declarations,
+    normalize_resource,
+    security_for_tool,
+)
+from langgraph.prebuilt.security.errors import (
+    SecurityAuditError,
+    SecurityConfigurationError,
+    SecurityIndeterminateError,
+)
+from langgraph.prebuilt.security.execution import (
+    UNENFORCED_CONSTRAINTS,
+    HostExecutionDenied,
+    HostExecutionError,
+    TerminationRecovery,
+)
+from langgraph.prebuilt.security.flow import ToolFlowRule
+from langgraph.prebuilt.security.host_boundary import (
+    AuthorizedHostRouter,
+    make_authorized_host_router,
+)
+from langgraph.prebuilt.security.introspect import (
+    ToolInventoryEntry,
+    _register_guarded_tool,
+)
+from langgraph.prebuilt.security.stack import (
+    SecurityStack,
+    coerce_approval,
+    record_approval,
+)
+from langgraph.prebuilt.security.types import (
+    Decision,
+    ExecutionOutcome,
+    Principal,
+    Tool,
+    ToolCall,
+    Verdict,
+)
+
+
+class SecurityDeniedError(PermissionError):
+    """Raised when security mediation rejects direct execution or delegation."""
+
+
+class _GuardedStructuredTool(StructuredTool):
+    def as_tool(
+        self,
+        args_schema: type[BaseModel] | None = None,
+        *,
+        name: str | None = None,
+        description: str | None = None,
+        arg_types: dict[str, type] | None = None,
+    ) -> BaseTool:
+        return preserve_tool_config(
+            self,
+            super().as_tool(
+                args_schema, name=name, description=description, arg_types=arg_types
+            ),
+        )
+
+
+class _GuardedExecutor:
+    def __init__(self, target: BaseTool, security: SecurityConfig) -> None:
+        self.target = target
+        self.security = security
+        descriptor, author_dac = security_for_tool(target)
+        overrides = security.dac_overrides
+        if overrides is not None:
+            unknown = set(overrides).difference({target.name})
+            if unknown:
+                names = ", ".join(sorted(unknown))
+                raise ValueError(f"DAC overrides reference unknown tools: {names}")
+        policy = overrides.get(target.name, author_dac) if overrides else author_dac
+        self.tool = Tool(
+            target.name,
+            policy,
+            descriptor.effects,
+            descriptor.resources,
+        )
+        self.stack = SecurityStack(
+            security.modules,
+            policy_timeout_s=security.policy_timeout_s,
+            observer=security.observer,
+            audit_sink=security.audit_sink,
+            approval_ttl_s=security.approval_ttl_s,
+            analysis=security.analysis,
+        )
+        if security.flow_policy is not None:
+            security.flow_policy.validate_tools((target.name,))
+        if security.host_executor is not None:
+            security.host_executor.validate_tools((target.name,))
+        self.host_router: AuthorizedHostRouter | None = (
+            make_authorized_host_router(security.host_executor)
+            if security.host_executor is not None
+            else None
+        )
+        for module in self.stack.modules:
+            slot = self.tool.security.allocate(module.name)
+            module.tool_alloc_security(self.tool, slot)
+        _register_guarded_tool(
+            ToolInventoryEntry(
+                name=target.name,
+                descriptor=descriptor,
+                dac=policy,
+                path=(),
+                source="guarded_tool",
+                labels={
+                    name: slot.snapshot() for name, slot in self.tool.security.items()
+                },
+            )
+        )
+
+    def invoke(self, args: Mapping[str, Any], config: RunnableConfig) -> Any:
+        principal, call = self._prepare(args, config)
+        decision, call = self.stack.prepare(principal, call)
+        if decision.verdict is Verdict.ALLOW:
+            decision = self.stack.permission(principal, call)
+        if decision.verdict is Verdict.ESCALATE:
+            decision = self._resume(principal, call, decision)
+        if decision.verdict is not Verdict.ALLOW:
+            raise SecurityDeniedError(decision.reason)
+        authorization = decision
+        policy_constraints = decision.constraints
+        if policy_constraints and self.security.host_executor is None:
+            # Typed restrictions apply to a host grant; dropping them would
+            # silently retain the tool's unconfined in-process authority.
+            raise SecurityDeniedError(UNENFORCED_CONSTRAINTS)
+        decision, flow_reservation = self._acquire_flow(principal, call)
+        if decision.verdict is not Verdict.ALLOW:
+            raise SecurityDeniedError(decision.reason)
+        try:
+            self.stack.record_framework_event(
+                principal,
+                call,
+                "dispatch",
+                Decision(Verdict.ALLOW, "dispatch:reserved"),
+            )
+        except SecurityAuditError as exc:
+            self._release_flow(principal, flow_reservation)
+            raise SecurityDeniedError("audit_failure") from exc
+        result: Any = None
+        outcome = ExecutionOutcome.INDETERMINATE
+        termination_confirmed = True
+        flow_recovery: TerminationRecovery | None = None
+        try:
+            if self.host_router is not None:
+                host_result = self.host_router.invoke(principal, call, authorization)
+                self.stack.record_framework_event(
+                    principal,
+                    call,
+                    "activation",
+                    Decision(Verdict.ALLOW, host_result.receipt.audit_reason()),
+                )
+                result = host_result.value
+            else:
+                result = self._invoke_in_process(principal, call, config)
+            result = self._analysis_result(result, call)
+            outcome = ExecutionOutcome.SUCCEEDED
+            return result
+        except HostExecutionDenied as exc:
+            outcome = ExecutionOutcome.DENIED_BEFORE_DISPATCH
+            raise SecurityDeniedError(str(exc)) from exc
+        except HostExecutionError as exc:
+            outcome = exc.outcome
+            termination_confirmed = exc.termination_confirmed
+            flow_recovery = exc.recovery
+            try:
+                self.stack.record_framework_event(
+                    principal,
+                    call,
+                    "activation",
+                    Decision(Verdict.ALLOW, exc.receipt.audit_reason()),
+                )
+            except SecurityAuditError as audit_exc:
+                raise SecurityIndeterminateError(
+                    "tool activation evidence could not be persisted"
+                ) from audit_exc
+            raise
+        finally:
+            try:
+                self.stack.post(principal, call, result)
+                self.stack.record_framework_event(
+                    principal,
+                    call,
+                    "outcome",
+                    Decision(Verdict.ALLOW, f"execution:{outcome.value}"),
+                    outcome=outcome,
+                )
+            except SecurityAuditError as exc:
+                raise SecurityIndeterminateError(
+                    "tool outcome is indeterminate because completion audit failed"
+                ) from exc
+            finally:
+                self._finalize_flow(
+                    principal,
+                    flow_reservation,
+                    termination_confirmed,
+                    flow_recovery,
+                )
+
+    async def ainvoke(self, args: Mapping[str, Any], config: RunnableConfig) -> Any:
+        principal, call = self._prepare(args, config)
+        decision, call = await self.stack.aprepare(principal, call)
+        if decision.verdict is Verdict.ALLOW:
+            decision = await self.stack.apermission(principal, call)
+        if decision.verdict is Verdict.ESCALATE:
+            decision = await self._aresume(principal, call, decision)
+        if decision.verdict is not Verdict.ALLOW:
+            raise SecurityDeniedError(decision.reason)
+        authorization = decision
+        policy_constraints = decision.constraints
+        if policy_constraints and self.security.host_executor is None:
+            # Typed restrictions apply to a host grant; dropping them would
+            # silently retain the tool's unconfined in-process authority.
+            raise SecurityDeniedError(UNENFORCED_CONSTRAINTS)
+        decision, flow_reservation = self._acquire_flow(principal, call)
+        if decision.verdict is not Verdict.ALLOW:
+            raise SecurityDeniedError(decision.reason)
+        try:
+            self.stack.record_framework_event(
+                principal,
+                call,
+                "dispatch",
+                Decision(Verdict.ALLOW, "dispatch:reserved"),
+            )
+        except SecurityAuditError as exc:
+            self._release_flow(principal, flow_reservation)
+            raise SecurityDeniedError("audit_failure") from exc
+        result: Any = None
+        outcome = ExecutionOutcome.INDETERMINATE
+        termination_confirmed = True
+        flow_recovery: TerminationRecovery | None = None
+        try:
+            if self.host_router is not None:
+                host_result = await self.host_router.ainvoke(
+                    principal, call, authorization
+                )
+                self.stack.record_framework_event(
+                    principal,
+                    call,
+                    "activation",
+                    Decision(Verdict.ALLOW, host_result.receipt.audit_reason()),
+                )
+                result = host_result.value
+            else:
+                result = await self._ainvoke_in_process(principal, call, config)
+            result = await self._aanalysis_result(result, call)
+            outcome = ExecutionOutcome.SUCCEEDED
+            return result
+        except HostExecutionDenied as exc:
+            outcome = ExecutionOutcome.DENIED_BEFORE_DISPATCH
+            raise SecurityDeniedError(str(exc)) from exc
+        except HostExecutionError as exc:
+            outcome = exc.outcome
+            termination_confirmed = exc.termination_confirmed
+            flow_recovery = exc.recovery
+            try:
+                self.stack.record_framework_event(
+                    principal,
+                    call,
+                    "activation",
+                    Decision(Verdict.ALLOW, exc.receipt.audit_reason()),
+                )
+            except SecurityAuditError as audit_exc:
+                raise SecurityIndeterminateError(
+                    "tool activation evidence could not be persisted"
+                ) from audit_exc
+            raise
+        finally:
+            try:
+                await self.stack.apost(principal, call, result)
+                self.stack.record_framework_event(
+                    principal,
+                    call,
+                    "outcome",
+                    Decision(Verdict.ALLOW, f"execution:{outcome.value}"),
+                    outcome=outcome,
+                )
+            except SecurityAuditError as exc:
+                raise SecurityIndeterminateError(
+                    "tool outcome is indeterminate because completion audit failed"
+                ) from exc
+            finally:
+                self._finalize_flow(
+                    principal,
+                    flow_reservation,
+                    termination_confirmed,
+                    flow_recovery,
+                )
+
+    def _analysis_result(self, result, call):
+        if self.security.analysis is None:
+            return result
+        from langgraph.prebuilt.analysis.adapters.enforcement import EnforcementAdapter
+
+        return EnforcementAdapter(self.security.analysis).result(result, call)
+
+    async def _aanalysis_result(self, result, call):
+        if self.security.analysis is None:
+            return result
+        from langgraph.prebuilt.analysis.adapters.enforcement import EnforcementAdapter
+
+        return await EnforcementAdapter(self.security.analysis).aresult(result, call)
+
+    def _invoke_in_process(
+        self, principal: Principal, call: ToolCall, config: RunnableConfig
+    ) -> Any:
+        """Invoke the fixed target with the exact authorized argument mapping."""
+        if self.security.host_executor is not None:
+            raise HostExecutionDenied("host:in_process_execution_disabled")
+        if call.tool is not self.tool:
+            raise SecurityIndeterminateError("authorized tool identity changed")
+        if principal.user_id == "" or principal.session_id == "":
+            raise SecurityIndeterminateError("authorized principal identity changed")
+        return self.target.invoke(dict(call.args), config=config)
+
+    async def _ainvoke_in_process(
+        self, principal: Principal, call: ToolCall, config: RunnableConfig
+    ) -> Any:
+        """Invoke the fixed target with the exact authorized argument mapping."""
+        if self.security.host_executor is not None:
+            raise HostExecutionDenied("host:in_process_execution_disabled")
+        if call.tool is not self.tool:
+            raise SecurityIndeterminateError("authorized tool identity changed")
+        if principal.user_id == "" or principal.session_id == "":
+            raise SecurityIndeterminateError("authorized principal identity changed")
+        return await self.target.ainvoke(dict(call.args), config=config)
+
+    def _prepare(
+        self, args: Mapping[str, Any], config: RunnableConfig
+    ) -> tuple[Principal, ToolCall]:
+        principal = principal_from(config)
+        if principal is None:
+            if self.security.require_principal:
+                raise SecurityDeniedError("no_principal")
+            principal = Principal(
+                "__anonymous__", frozenset(), frozenset(), "anonymous"
+            )
+        call_index = next_call_index(config)
+        try:
+            normalized = _normalize_args(self.tool, args)
+        except Exception as exc:
+            raise SecurityDeniedError("normalization_error") from exc
+        history = history_for(self.security.audit_sink, principal)
+        return principal, ToolCall(
+            self.tool,
+            args,
+            normalized,
+            f"guarded:{self.tool.name}:{call_index}",
+            call_index,
+            history,
+        )
+
+    def _acquire_flow(
+        self, principal: Principal, call: ToolCall
+    ) -> tuple[Decision, ToolFlowRule | None]:
+        policy = self.security.flow_policy
+        if policy is None:
+            return Decision(Verdict.ALLOW, "flow:disabled"), None
+        try:
+            decision, reservation = policy.acquire(principal, call.tool.name)
+        except BaseException:
+            decision, reservation = Decision(Verdict.DENY, "flow:store_error"), None
+        try:
+            self.stack.record_framework_event(principal, call, "flow", decision)
+        except BaseException:
+            policy.release(principal, reservation)
+            raise
+        return decision, reservation
+
+    def _release_flow(
+        self, principal: Principal, reservation: ToolFlowRule | None
+    ) -> None:
+        policy = self.security.flow_policy
+        if policy is not None:
+            policy.release(principal, reservation)
+
+    def _finalize_flow(
+        self,
+        principal: Principal,
+        reservation: ToolFlowRule | None,
+        termination_confirmed: bool,
+        recovery: TerminationRecovery | None,
+    ) -> None:
+        policy = self.security.flow_policy
+        if policy is None:
+            return
+        if termination_confirmed:
+            policy.release(principal, reservation)
+            return
+        if recovery is None:
+            raise SecurityIndeterminateError(
+                "uncertain worker has no termination recovery identity"
+            )
+        try:
+            policy.retain(principal, reservation, recovery)
+        except BaseException as exc:
+            raise SecurityIndeterminateError(
+                "uncertain worker reservation could not be retained"
+            ) from exc
+
+    def _resume(
+        self, principal: Principal, call: ToolCall, decision: Decision
+    ) -> Decision:
+        escalation = decision.escalation
+        if escalation is None:
+            return Decision(Verdict.DENY, "invalid_escalation")
+        response = interrupt(dict(escalation.to_payload()))
+        approval = coerce_approval(response, escalation)
+        if not record_approval(principal, approval):
+            return Decision(Verdict.DENY, "approval_replay")
+        resumed = self.stack.resume_permission(principal, approval)
+        if resumed.verdict is not Verdict.ALLOW:
+            return resumed
+        return self.stack.permission(principal, call, approval=approval)
+
+    async def _aresume(
+        self, principal: Principal, call: ToolCall, decision: Decision
+    ) -> Decision:
+        escalation = decision.escalation
+        if escalation is None:
+            return Decision(Verdict.DENY, "invalid_escalation")
+        response = interrupt(dict(escalation.to_payload()))
+        approval = coerce_approval(response, escalation)
+        if not record_approval(principal, approval):
+            return Decision(Verdict.DENY, "approval_replay")
+        resumed = await self.stack.aresume_permission(principal, approval)
+        if resumed.verdict is not Verdict.ALLOW:
+            return resumed
+        return await self.stack.apermission(principal, call, approval=approval)
+
+
+@overload
+def guarded_tool(
+    target: Callable[..., Any] | BaseTool, *, security: SecurityConfig
+) -> StructuredTool: ...
+
+
+@overload
+def guarded_tool(
+    target: None = None, *, security: SecurityConfig
+) -> Callable[[Callable[..., Any] | BaseTool], StructuredTool]: ...
+
+
+def guarded_tool(
+    target: Callable[..., Any] | BaseTool | None = None, *, security: SecurityConfig
+) -> StructuredTool | Callable[[Callable[..., Any] | BaseTool], StructuredTool]:
+    """Create a tool whose direct sync and async invocations are mediated."""
+
+    def decorate(function: Callable[..., Any] | BaseTool) -> StructuredTool:
+        if isinstance(function, BaseTool):
+            original = function
+        else:
+            original = StructuredTool.from_function(
+                func=function if not inspect.iscoroutinefunction(function) else None,
+                coroutine=function if inspect.iscoroutinefunction(function) else None,
+                name=function.__name__,
+                description=inspect.getdoc(function) or function.__name__,
+            )
+        executor = _GuardedExecutor(original, security)
+
+        def arguments(args: tuple[Any, ...], kwargs: dict[str, Any]) -> dict[str, Any]:
+            # BaseTool passes string inputs positionally, and schema-less legacy
+            # tools accept arbitrary single-key mappings. Preserve both forms
+            # before authorization instead of inferring a schema from **kwargs.
+            if not args:
+                return kwargs
+            if len(args) != 1 or kwargs:
+                raise TypeError("a string tool input must be the only argument")
+            return {next(iter(original.args)): args[0]}
+
+        def guarded_sync(*args: Any, config: RunnableConfig, **kwargs: Any) -> Any:
+            return executor.invoke(arguments(args, kwargs), config)
+
+        async def guarded_async(
+            *args: Any, config: RunnableConfig, **kwargs: Any
+        ) -> Any:
+            return await executor.ainvoke(arguments(args, kwargs), config)
+
+        declarations = {
+            "descriptor": security_for_tool(original)[0],
+            "dac": executor.tool.dac,
+        }
+        # Security declarations belong to the callable, not trace metadata.
+        # Tracers deep-copy/serialize metadata; immutable policy mappings are
+        # neither trace payloads nor pickleable objects.
+        _declarations(guarded_sync).update(declarations)
+        _declarations(guarded_async).update(declarations)
+        guarded = _GuardedStructuredTool.from_function(
+            func=guarded_sync,
+            coroutine=guarded_async,
+            name=original.name,
+            description=original.description,
+            args_schema=original.args_schema,
+            infer_schema=False,
+            return_direct=original.return_direct,
+        )
+        return guarded
+
+    return decorate(target) if target is not None else decorate
+
+
+class _DelegatedRunnable(Runnable[Any, Any]):
+    def __init__(
+        self,
+        graph: Runnable[Any, Any],
+        scopes: frozenset[str],
+        security: SecurityConfig,
+    ) -> None:
+        self.graph = graph
+        self.scopes = scopes
+        self.security = security
+        self.stack = SecurityStack(
+            security.modules,
+            policy_timeout_s=security.policy_timeout_s,
+            observer=security.observer,
+            audit_sink=security.audit_sink,
+        )
+
+    def invoke(
+        self, input: Any, config: RunnableConfig | None = None, **kwargs: Any
+    ) -> Any:
+        child_config = self._child_config(config)
+        return self.graph.invoke(input, config=child_config, **kwargs)
+
+    async def ainvoke(
+        self, input: Any, config: RunnableConfig | None = None, **kwargs: Any
+    ) -> Any:
+        child_config = await self._achild_config(config)
+        return await self.graph.ainvoke(input, config=child_config, **kwargs)
+
+    def _child_config(self, config: RunnableConfig | None) -> RunnableConfig:
+        parent, child = self._principals(config)
+        decision = self.stack.cred_transfer(parent, child)
+        if decision.verdict is not Verdict.ALLOW:
+            raise SecurityDeniedError(decision.reason)
+        return _bind_principal(config, child)
+
+    async def _achild_config(self, config: RunnableConfig | None) -> RunnableConfig:
+        parent, child = self._principals(config)
+        decision = await self.stack.acred_transfer(parent, child)
+        if decision.verdict is not Verdict.ALLOW:
+            raise SecurityDeniedError(decision.reason)
+        return _bind_principal(config, child)
+
+    def _principals(self, config: RunnableConfig | None) -> tuple[Principal, Principal]:
+        parent = principal_from(config)
+        if parent is None:
+            raise SecurityDeniedError("delegation requires a principal")
+        child = Principal(
+            user_id=parent.user_id,
+            roles=parent.roles,
+            scopes=self.scopes,
+            session_id=parent.session_id,
+            delegated_by=parent.user_id,
+            security=copy_blobs(parent.security),
+        )
+        return parent, child
+
+
+def delegate(
+    graph: Runnable[Any, Any],
+    *,
+    scopes: Sequence[str],
+    security: SecurityConfig | None = None,
+) -> Runnable[Any, Any]:
+    """Wrap a child graph with an explicitly reduced delegated principal."""
+    inherited = getattr(graph, "_security_config", None)
+    if inherited is None:
+        inherited = getattr(getattr(graph, "builder", None), "_security_config", None)
+    if security is not None and inherited is not None and security is not inherited:
+        raise SecurityConfigurationError(
+            "delegation cannot replace an inherited SecurityConfig"
+        )
+    configured = security if security is not None else inherited
+    if not isinstance(configured, SecurityConfig):
+        raise SecurityConfigurationError(
+            "delegation requires an explicit or inherited SecurityConfig"
+        )
+    return _DelegatedRunnable(graph, frozenset(scopes), configured)
+
+
+def _normalize_args(tool: Tool, args: Mapping[str, Any]) -> dict[str, Any]:
+    normalized: dict[str, Any] = {}
+    for resource in tool.resources:
+        if resource.arg not in args:
+            continue
+        value = normalize_resource(resource, args[resource.arg])
+        normalized[resource.arg] = value
+        if resource.normalizer in {"domain", "email_domain"}:
+            normalized[f"{resource.arg}_domain"] = value
+        elif resource.normalizer == "sql_statement_kind":
+            normalized[f"{resource.arg}_statement_kind"] = value
+        elif resource.normalizer == "shell_argv0":
+            normalized[f"{resource.arg}_argv0"] = value
+    return normalized

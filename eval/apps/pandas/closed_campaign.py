@@ -1,4 +1,4 @@
-"""Combined protected cohorts over the frozen ten pandas tasks.
+"""Combined protected cohorts and matched baseline over ten frozen Pandas tasks.
 
 Reuses the frozen task list, fixture rows, utility oracle and framework
 capture helpers from `eval/remaining/application_campaign.py` by import, so the
@@ -29,6 +29,13 @@ from pathlib import Path
 HERE = Path(__file__).resolve().parent
 ROOT = HERE.parents[2]
 MODES = ("C-full", "C-full-lean")
+MATCHED_MODES = ("Baseline", "slangGraph")
+INTERNAL_CONFIGURATION = {
+    "Baseline": "Baseline",
+    "slangGraph": "C-full-lean",
+    "C-full": "C-full",
+    "C-full-lean": "C-full-lean",
+}
 MANIFESTS = {
     "v22": HERE / "policy/manifest-v22-full.json",
 }
@@ -67,7 +74,11 @@ def main():
     parser.add_argument("--repetitions", type=int, default=5)
     parser.add_argument("--pilot", action="store_true")
     parser.add_argument("--manifest", choices=sorted(MANIFESTS), default="v22")
-    parser.add_argument("--configuration", choices=(*MODES, "all"), default="all")
+    parser.add_argument(
+        "--configuration",
+        choices=(*MODES, *MATCHED_MODES, "all", "matched"),
+        default="all",
+    )
     parser.add_argument("--attack", choices=("read_bob", "update_bob"))
     args = parser.parse_args()
     if args.repetitions < 1:
@@ -76,12 +87,20 @@ def main():
     manifest = json.loads(manifest_path.read_text())
     out = args.output.resolve()
     out.mkdir(parents=True, exist_ok=False)
+    setup_started = time.perf_counter()
     selection = manifest["lean_worker"]
     lean_worker = campaign.capture_lean_worker(out, Path(selection["binary"]), selection["sha256"])
-    modes = list(MODES) if args.configuration == "all" else [args.configuration]
+    if args.configuration == "all":
+        modes = list(MODES)
+    elif args.configuration == "matched":
+        modes = list(MATCHED_MODES)
+    else:
+        modes = [args.configuration]
     tasks = [TASKS[5]] if args.pilot else TASKS
     if args.attack and not args.pilot:
         parser.error("attacked application runs use --pilot to freeze one utility task")
+    if args.attack and "Baseline" in modes:
+        parser.error("the matched Baseline cohort contains benign tasks only")
     tags = json.load(urllib.request.urlopen("http://127.0.0.1:11434/api/tags", timeout=10))
     if not any(
         m["name"] == manifest["model"]["name"] and m["digest"] == manifest["model"]["digest"]
@@ -89,6 +108,32 @@ def main():
     ):
         raise SystemExit("Pinned model is not served")
     campaign.dump(out / "models.json", tags)
+    warmup_response = None
+    warmup_ms = 0.0
+    if modes == list(MATCHED_MODES):
+        warmup_started = time.perf_counter()
+        warmup_request = urllib.request.Request(
+            manifest["model"]["base_url"].rstrip("/") + "/chat/completions",
+            data=json.dumps(
+                {
+                    "model": manifest["model"]["name"],
+                    "messages": [{"role": "user", "content": "Reply only: ready"}],
+                    "temperature": 0,
+                    "seed": manifest["model"]["seed"],
+                    "max_tokens": 8,
+                    "stream": False,
+                }
+            ).encode(),
+            headers={
+                "Content-Type": "application/json",
+                "Authorization": "Bearer ollama",
+            },
+        )
+        with urllib.request.urlopen(
+            warmup_request, timeout=manifest["model"]["timeout_seconds"]
+        ) as response:
+            warmup_response = json.load(response)
+        warmup_ms = (time.perf_counter() - warmup_started) * 1000
     snapshot = out / "harness"
     shutil.copytree(
         HERE, snapshot / "pandas", ignore=shutil.ignore_patterns("__pycache__", "*.pyc")
@@ -99,17 +144,96 @@ def main():
         for p in snapshot.rglob("*.py")
     }
     manifest_sha256 = hashlib.sha256(manifest_path.read_bytes()).hexdigest()
+    framework_revision = subprocess.check_output(
+        ["git", "rev-parse", "HEAD"], cwd=ROOT, text=True
+    ).strip()
     framework_root = campaign.freeze_framework(out)
     framework_sources = campaign.capture_framework(out, framework_root)
     campaign.dump(out / "framework-sources.json", framework_sources)
     framework_digest = campaign.identity_digest(framework_sources)
     dataset = manifest["dataset"]
+    preflight_fixture = write_fixture(out / "preflight-fixture")
+    preflight_fixture_sha256 = hashlib.sha256(preflight_fixture.read_bytes()).hexdigest()
+    if preflight_fixture_sha256 != dataset["sha256"]:
+        raise SystemExit("Preflight fixture differs from the pinned dataset digest")
+    common_settings = {
+        "tasks": tasks,
+        "fixture": ROWS,
+        "model": manifest["model"],
+        "graph_retries": manifest["graph_retries"],
+        "sandbox_serialization": manifest["sandbox_serialization"],
+        "workflow_contract": manifest["workflow_contract"],
+        "computation_api": manifest["computation_api"],
+        "state_normalization": manifest.get("state_normalization"),
+        "dataset": dataset,
+        "timeout_s": 180,
+        "cpu": min(os.sched_getaffinity(0)),
+        "python": str(UPSTREAM / ".venv/bin/python"),
+        "backend_source_sha256": sources["pandas/backend_closed.py"],
+        "integration_source_sha256": sources["pandas/integration_closed.py"],
+    }
+    common_settings_sha256 = hashlib.sha256(
+        json.dumps(common_settings, sort_keys=True).encode()
+    ).hexdigest()
+    treatments = {
+        "Baseline": {
+            "internal_configuration": "Baseline",
+            "closed_admission": False,
+            "principal_authorization": False,
+            "sealed_operator_policy": False,
+            "host_isolation": False,
+            "resource_mediation": False,
+            "security_audit": False,
+            "runtime_contract_validator": False,
+            "computation": "direct vendor sandbox subprocess",
+        },
+        "slangGraph": {
+            "internal_configuration": "C-full-lean",
+            "closed_admission": True,
+            "principal_authorization": True,
+            "sealed_operator_policy": True,
+            "host_isolation": "bubblewrap+Landlock+seccomp",
+            "resource_mediation": "Cedar exact-file object grant and dataset operation",
+            "security_audit": True,
+            "runtime_contract_validator": "worker-route-grant-v3 per call",
+            "computation": "ObjectPolicyHostExecutor/LinuxObjectDispatcher",
+        },
+    }
+    if args.configuration == "matched" and set(modes) != set(treatments):
+        raise AssertionError("Matched treatment selection changed")
+    campaign.dump(
+        out / "preflight.json",
+        {
+            "common_settings": common_settings,
+            "common_settings_sha256": common_settings_sha256,
+            "dataset_sha256_verified": preflight_fixture_sha256,
+            "source_digests": sources,
+            "treatments": treatments,
+            "model_warmup_ms": warmup_ms,
+            "model_warmup_response": warmup_response,
+            "assertion": "All non-security settings and source/dataset bytes are common",
+        },
+    )
+    setup_ms = (time.perf_counter() - setup_started) * 1000
+    campaign.dump(
+        out / "setup.json",
+        {
+            "campaign_setup_ms": setup_ms,
+            "model_warmup_ms": warmup_ms,
+            "excluded_from_every_trial_wall_timer": True,
+            "exclusion_is_symmetric": True,
+        },
+    )
     campaign.dump(
         out / "plan.json",
         dict(
             tasks=tasks,
             fixture=ROWS,
             conditions=modes,
+            reader_labels={mode: mode for mode in modes},
+            internal_configurations={mode: INTERNAL_CONFIGURATION[mode] for mode in modes},
+            treatments={mode: treatments.get(mode) for mode in modes},
+            common_settings_sha256=common_settings_sha256,
             repetitions=args.repetitions,
             pilot=args.pilot,
             model=manifest["model"],
@@ -120,22 +244,30 @@ def main():
             manifest_version=manifest["version"],
             manifest_sha256=manifest_sha256,
             lean_worker=lean_worker,
-            lean_worker_configuration="C-full-lean only",
+            lean_worker_configuration="slangGraph/C-full-lean only",
             dataset=dataset,
             trusted_declarations=manifest["trusted_declarations"],
             state_normalization=manifest.get("state_normalization"),
             timeout_s=180,
             seed=20261026,
-            timer="subprocess wall time including graph/model/authorization/audit; setup separate",
+            timer=(
+                "same subprocess wall boundary including interpreter startup, application "
+                "preparation, model, computation, and all recurring enforcement; common "
+                "campaign setup/model warmup excluded and recorded separately"
+            ),
             sources=sources,
             framework_sources_sha256=framework_digest,
+            framework_revision=framework_revision,
             framework_runtime_root=str(framework_root),
             frozen_framework=True,
             host_load="uncontrolled shared host",
             upstream_revision=subprocess.check_output(
                 ["git", "rev-parse", "HEAD"], cwd=UPSTREAM, text=True
             ).strip(),
-            model_service="coordinator-owned ollama serve; not started or stopped here",
+            model_service="coordinator-owned ollama serve; shared recorded warmup",
+            timeout_treatment=(
+                "180 second cap; primary analysis uses capped duration for every timeout"
+            ),
         ),
     )
     trials = out / "trials.jsonl"
@@ -143,6 +275,7 @@ def main():
         jobs = [(mode, *task) for mode in modes for task in tasks]
         random.Random(20261026 + repetition).shuffle(jobs)
         for mode, case, prompt, expected in jobs:
+            internal_configuration = INTERNAL_CONFIGURATION[mode]
             run_id = f"{case}-{mode}-{repetition}"
             folder = out / run_id
             folder.mkdir()
@@ -153,8 +286,9 @@ def main():
                 raise SystemExit("Fixture bytes differ from the pinned dataset digest")
             principal_policy = manifest["principal_policy"]
             operator_policy = manifest["operator_policy"]
-            (folder / "principal.cedar").write_text(principal_policy + "\n")
-            (folder / "operator.cedar").write_text(operator_policy + "\n")
+            if internal_configuration != "Baseline":
+                (folder / "principal.cedar").write_text(principal_policy + "\n")
+                (folder / "operator.cedar").write_text(operator_policy + "\n")
             attack_database = folder / "private" / "records.sqlite"
             attack_marker = None
             if args.attack:
@@ -173,7 +307,8 @@ def main():
                 fixture_root=str(fixture),
                 output=str(folder / "output.json"),
                 events=str(folder / "events.jsonl"),
-                configuration=mode,
+                configuration=internal_configuration,
+                reader_label=mode,
                 integration=True,
                 slanggraph_root=str(framework_root),
                 run_id=run_id,
@@ -183,7 +318,7 @@ def main():
                 workflow_contract=manifest["workflow_contract"],
                 computation_api=manifest["computation_api"],
                 graph_retries=manifest["graph_retries"],
-                lean_worker=lean_worker if mode == "C-full-lean" else None,
+                lean_worker=lean_worker if internal_configuration == "C-full-lean" else None,
                 dataset=dict(
                     path=str(sales.resolve()),
                     sha256=dataset["sha256"],
@@ -228,6 +363,7 @@ def main():
                 except subprocess.TimeoutExpired:
                     status = "timeout"
             elapsed = (time.perf_counter() - start) * 1000
+            analysis_wall_ms = 180_000.0 if status == "timeout" else elapsed
             trial_sources_after = campaign.capture_framework(out, framework_root)
             campaign.dump(folder / "framework-sources-after.json", trial_sources_after)
             result = (
@@ -244,6 +380,9 @@ def main():
             )
             starts = [x["monotonic"] for x in events if x.get("kind") == "model_start"]
             ends = [x["monotonic"] for x in events if x.get("kind") == "model_end"]
+            process_starts = [x for x in events if x.get("kind") == "process_start"]
+            workflow_starts = [x for x in events if x.get("kind") == "workflow_start"]
+            workflow_ends = [x for x in events if x.get("kind") == "workflow_end"]
             dispatch = [x for x in events if x.get("kind") == "dispatch_result"]
             dispatch_errors = [x for x in dispatch if x.get("status") == "error"]
             process_text = (
@@ -256,6 +395,19 @@ def main():
             if args.attack:
                 with sqlite3.connect(attack_database) as connection:
                     attack_after = dict(connection.execute("SELECT key,value FROM records"))
+            activation_path = folder / "activation-receipts.json"
+            audit_path = folder / "security.sqlite"
+            baseline_evidence_path = folder / "baseline-security-evidence.json"
+            if internal_configuration == "C-full-lean" and status == "completed":
+                if not activation_path.exists() or not json.loads(activation_path.read_text()):
+                    raise SystemExit(f"Protected allowed call lacks activation evidence: {run_id}")
+                if not audit_path.exists() or audit_path.stat().st_size == 0:
+                    raise SystemExit(f"Protected allowed call lacks audit evidence: {run_id}")
+            if internal_configuration == "Baseline":
+                if activation_path.exists() or audit_path.exists():
+                    raise SystemExit(f"Baseline unexpectedly activated security: {run_id}")
+                if not baseline_evidence_path.exists():
+                    raise SystemExit(f"Baseline evidence assertion missing: {run_id}")
             row = dict(
                 schema_version=2,
                 application="pandas",
@@ -281,7 +433,13 @@ def main():
                 repeat=repetition,
                 session=repetition,
                 mode=mode,
-                concrete_executor="ObjectPolicyHostExecutor/LinuxObjectDispatcher",
+                internal_configuration=internal_configuration,
+                common_settings_sha256=common_settings_sha256,
+                concrete_executor=(
+                    "direct vendor sandbox subprocess"
+                    if internal_configuration == "Baseline"
+                    else "ObjectPolicyHostExecutor/LinuxObjectDispatcher"
+                ),
                 run_id=run_id,
                 status=status,
                 exit_status=code,
@@ -298,6 +456,14 @@ def main():
                 attack_observations=observations,
                 attack_resource_after=attack_after,
                 wall_ms=elapsed,
+                analysis_wall_ms=analysis_wall_ms,
+                timeout_cap_ms=180_000,
+                timeout_censored=status == "timeout",
+                startup_setup_ms=(
+                    workflow_starts[0].get("startup_setup_ms") if workflow_starts else None
+                ),
+                workflow_ms=(workflow_ends[-1].get("workflow_ms") if workflow_ends else None),
+                process_start_recorded=bool(process_starts),
                 model_calls=len(starts),
                 model_ms=sum((b - a) * 1000 for a, b in zip(starts, ends, strict=False)),
                 computation_calls=sum(x.get("kind") == "computation" for x in events),
@@ -327,14 +493,22 @@ def main():
                 if (folder / "security.sqlite").exists()
                 else "not-applicable",
                 expected=expected,
-                protections={
-                    "closed_admission": True,
-                    "sealed_operator_policy": True,
-                    "host_isolation": "bubblewrap+Landlock+seccomp",
-                    "resource_mediation": "Cedar exact-file object grant",
-                    "audit": True,
-                    "lean_per_call": mode == "C-full-lean",
-                },
+                baseline_security_evidence=(
+                    json.loads(baseline_evidence_path.read_text())
+                    if baseline_evidence_path.exists()
+                    else None
+                ),
+                protections=treatments.get(
+                    mode,
+                    {
+                        "closed_admission": True,
+                        "sealed_operator_policy": True,
+                        "host_isolation": "bubblewrap+Landlock+seccomp",
+                        "resource_mediation": "Cedar exact-file object grant",
+                        "security_audit": True,
+                        "runtime_contract_validator": internal_configuration == "C-full-lean",
+                    },
+                ),
             )
             with trials.open("a") as stream:
                 stream.write(json.dumps(row) + "\n")

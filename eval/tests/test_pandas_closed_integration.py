@@ -20,6 +20,10 @@ def _load(name, relative):
 closed = _load("pandas_integration_closed_test", "apps/pandas/integration_closed.py")
 
 
+def test_baseline_does_not_select_lifecycle_checker():
+    assert closed.lifecycle_checker({"configuration": "Baseline", "lean_worker": None}) is None
+
+
 def test_pinned_declarations_match_recorded_vendor_inventory():
     evidence = ROOT / "campaigns/remediation-v2/raw/pandas-closed-v1/inventory.json"
     if not evidence.is_file():

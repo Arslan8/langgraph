@@ -32,11 +32,12 @@ import hashlib
 import importlib.util
 import io
 import json
+import types
 from dataclasses import replace
 from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
-CONFIGURATIONS = frozenset({"C-full", "C-full-lean"})
+CONFIGURATIONS = frozenset({"Baseline", "C-full", "C-full-lean"})
 DATASET_ID = "sales"
 PRINCIPAL_ID = "alice"
 
@@ -51,6 +52,8 @@ def _load(name, filename):
 def lifecycle_checker(request):
     """Select Lean only for the separately identified per-call configuration."""
     selection = request.get("lean_worker")
+    if request.get("configuration") == "Baseline" and selection is None:
+        return None
     if request.get("configuration") == "C-full" and selection is None:
         return None
     if (
@@ -158,6 +161,28 @@ def load_dataset(request, principal):
     return pd.read_csv(io.BytesIO(data))
 
 
+def load_dataset_baseline(request):
+    """Read identical pinned bytes directly, without slangGraph mediation."""
+    import pandas as pd
+
+    pin = request["dataset"]
+    path = Path(pin["path"])
+    data = path.read_bytes()
+    digest = hashlib.sha256(data).hexdigest()
+    if digest != pin["sha256"] or len(data) > pin["max_bytes"]:
+        raise ValueError("Baseline dataset differs from the common pin")
+    _event(
+        request["events"],
+        {
+            "kind": "dataset_read_baseline",
+            "bytes": len(data),
+            "sha256": digest,
+            "security_mediation": False,
+        },
+    )
+    return pd.read_csv(io.BytesIO(data))
+
+
 # --- closed compilation -----------------------------------------------------
 
 
@@ -216,6 +241,77 @@ def install_compute(request, audit):
     Returns the closed dispatch graph so its inventory can be recorded.
     """
     import ai_data_science_team.utils.sandbox as upstream
+
+    original = upstream.run_code_sandboxed_subprocess
+    serialization = request["sandbox_serialization"]
+    codec = _load("pandas_sandbox_codec_closed", "sandbox_codec.py")
+    if serialization not in codec.VERSIONS:
+        raise ValueError("Unsupported sandbox serialization version")
+    selected = types.FunctionType(
+        original.__code__,
+        {
+            **original.__globals__,
+            "SANDBOX_RUNNER_SCRIPT": codec.repair_runner(
+                upstream.SANDBOX_RUNNER_SCRIPT,
+                serialization,
+                request.get("computation_api"),
+            ),
+        },
+        original.__name__,
+        original.__defaults__,
+        original.__closure__,
+    )
+    selected.__kwdefaults__ = original.__kwdefaults__
+    source = Path(upstream.__file__).resolve()
+    events = Path(request["events"])
+    if request["configuration"] == "Baseline":
+
+        def direct_bridge(
+            *,
+            code_snippet,
+            function_name,
+            data,
+            timeout=10,
+            memory_limit_mb=512,
+            data_format="dataframe",
+        ):
+            payload = json.loads(
+                json.dumps(
+                    {
+                        "code": code_snippet,
+                        "function_name": function_name,
+                        "data": data,
+                        "memory_limit_mb": memory_limit_mb,
+                        "data_format": data_format,
+                        "sandbox_serialization": serialization,
+                        "computation_api": request.get("computation_api"),
+                    }
+                )
+            )
+            _event(
+                events,
+                {
+                    "kind": "computation",
+                    "configuration": "Baseline",
+                    "payload": payload,
+                    "fault": None,
+                    "added_boundary": False,
+                },
+            )
+            return selected(
+                code_snippet=payload["code"],
+                function_name=payload["function_name"],
+                data=payload["data"],
+                timeout=timeout,
+                memory_limit_mb=payload["memory_limit_mb"],
+                data_format=payload["data_format"],
+            )
+
+        for module_name in ["data_wrangling_agent", "data_visualization_agent"]:
+            module = importlib.import_module("ai_data_science_team.agents." + module_name)
+            module.run_code_sandboxed_subprocess = direct_bridge
+        return None
+
     from langchain_core.messages import AIMessage
     from langchain_core.tools import tool
     from langgraph.graph import START, MessagesState, StateGraph
@@ -227,12 +323,6 @@ def install_compute(request, audit):
     )
 
     normalization(request)
-    serialization = request["sandbox_serialization"]
-    codec = _load("pandas_sandbox_codec_closed", "sandbox_codec.py")
-    if serialization not in codec.VERSIONS:
-        raise ValueError("Unsupported sandbox serialization version")
-    source = Path(upstream.__file__).resolve()
-    events = Path(request["events"])
     checker = lifecycle_checker(request)
     artifact = (HERE / "worker.py").resolve()
     dispatcher = LinuxObjectDispatcher(
