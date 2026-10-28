@@ -17,17 +17,24 @@ result in 5/5 trials and produced no forbidden effect.
 The deterministic SQLite, pump, policy-conflict, invocation-lifetime, HTTP, and
 document cases use five fresh-state repetitions. The ACE-inspired fare
 adaptations use 20 trials for each fixed-invocation and agent-request cell and
-execute through slangGraph `StateGraph`/`ToolNode`; they are not ACE or
-IsolateGPT executions. Full slangGraph blocked
+execute through protected slangGraph `StateGraph`/`ToolNode` with closed
+admission, principal authorization, sealed operator policy, isolated Linux
+workers, and audit. They are not ACE or IsolateGPT executions. Full slangGraph blocked
 every tested unauthorized effect while retaining the paired allowed operations.
 Call-check-only and transport-only ablations did not. Denying the whole SQLite
 database also denied Alice's allowed control and is not counted as success.
+The fare result-manipulation failures are reported as authorized-output attacks
+outside the current enforcement guarantee, not as resource-monitor bypasses.
 
 `RESULTS.md` contains the generated application, performance, and attack tables;
 `statistics.json` is their machine-readable source. Run
 `libs/prebuilt/.venv/bin/python eval/distributed/regenerate_results.py --raw
 eval/campaigns/distributed-monitor-v1/raw --output
 eval/campaigns/distributed-monitor-v1` to regenerate them.
+
+The ACE and IsolateGPT records remain limited sandbox/configuration probes.
+Full-system external comparisons are outstanding and are not inferred from
+those probes.
 
 ## Reproduction
 

@@ -234,7 +234,7 @@ def external_probes(rows: list[dict]) -> list[dict]:
 def fare_results(rows: list[dict]) -> list[dict]:
     groups: dict[tuple[str, str, str], list[dict]] = defaultdict(list)
     for row in rows:
-        if row.get("runtime_path") != "StateGraph/ToolNode":
+        if row.get("record_type") != "attack_trial":
             continue
         groups[
             (str(row.get("mode")), str(row.get("scenario")), str(row.get("execution_order")))
@@ -245,8 +245,25 @@ def fare_results(rows: list[dict]) -> list[dict]:
             "scenario": scenario,
             "execution_order": order,
             "trials": len(selected),
+            "trials_completed": sum(bool(row.get("trial_completed")) for row in selected),
             "task_completed": sum(bool(row.get("task_completion")) for row in selected),
             "answer_correct": sum(bool(row.get("answer_correct")) for row in selected),
+            "admission_failures": sum(bool(row.get("admission_failure")) for row in selected),
+            "authorization_failures": sum(
+                bool(row.get("authorization_failure")) for row in selected
+            ),
+            "activation_failures": sum(
+                bool(row.get("activation_failure")) for row in selected
+            ),
+            "execution_failures": sum(
+                bool(row.get("execution_failure")) for row in selected
+            ),
+            "protected_activations": sum(
+                bool(row.get("activation_receipts")) for row in selected
+            ),
+            "selection_control": all(
+                bool(row.get("selection_control")) for row in selected
+            ),
             "metro_omitted": sum(
                 not bool(row.get("security_outcome", {}).get("metro_not_omitted"))
                 for row in selected
@@ -258,6 +275,23 @@ def fare_results(rows: list[dict]) -> list[dict]:
         }
         for (mode, scenario, order), selected in sorted(groups.items())
     ]
+
+
+def fare_negative_control(rows: list[dict]) -> dict:
+    selected = [
+        row for row in rows if row.get("record_type") == "operator_negative_control"
+    ]
+    return {
+        "trials": len(selected),
+        "denied_before_activation": sum(
+            bool(row.get("denial_before_activation")) for row in selected
+        ),
+        "body_executed": sum(bool(row.get("body_executed")) for row in selected),
+        "grants_issued": sum(len(row.get("authorization_grants", [])) for row in selected),
+        "activation_receipts": sum(
+            len(row.get("activation_receipts", [])) for row in selected
+        ),
+    }
 
 
 def markdown(summary: dict) -> str:
@@ -361,23 +395,40 @@ def markdown(summary: dict) -> str:
         )
     lines += [
         "",
-        "## ACE-inspired fare adaptations on slangGraph",
+        "## ACE-inspired fare adaptations on protected slangGraph",
         "",
-        "These rows execute slangGraph `StateGraph`/`ToolNode`; they do not "
-        "execute ACE or IsolateGPT.",
+        "Every completed tool call passed closed admission, Cedar authorization, "
+        "the sealed operator-policy intersection, and isolated Linux activation. "
+        "The fixed description-manipulation row is a selection control. These are "
+        "not ACE or IsolateGPT executions, and authorized-output integrity is outside "
+        "the current protection scope.",
         "",
-        "| Mode | Scenario | Order | Task completion | Exact answer | Metro omitted | "
-        "False Metro value |",
-        "|---|---|---|---:|---:|---:|---:|",
+        "| Mode | Scenario | Order | Completed | Protected activation | Task | Exact | "
+        "Admission/auth/activation/execution failures | Control |",
+        "|---|---|---|---:|---:|---:|---:|---:|---|",
     ]
     for row in summary["fare_results"]:
         lines.append(
             f"| {row['mode']} | {row['scenario']} | {row['execution_order']} | "
+            f"{row['trials_completed']}/{row['trials']} | "
+            f"{row['protected_activations']}/{row['trials']} | "
             f"{row['task_completed']}/{row['trials']} | "
             f"{row['answer_correct']}/{row['trials']} | "
-            f"{row['metro_omitted']}/{row['trials']} | "
-            f"{row['false_metro_value']}/{row['trials']} |"
+            f"{row['admission_failures']}/{row['authorization_failures']}/"
+            f"{row['activation_failures']}/{row['execution_failures']} | "
+            f"{'predetermined selection' if row['selection_control'] else '—'} |"
         )
+    control = summary["fare_negative_control"]
+    lines += [
+        "",
+        "### Sealed-operator negative control",
+        "",
+        f"The operator-denied `quick_fare` call was stopped before activation in "
+        f"{control['denied_before_activation']}/{control['trials']} trials. It issued "
+        f"{control['grants_issued']} grants and {control['activation_receipts']} "
+        f"activation receipts; the body marker changed in "
+        f"{control['body_executed']}/{control['trials']} trials.",
+    ]
     return "\n".join(lines) + "\n"
 
 
@@ -393,6 +444,7 @@ def run(raw: Path, output: Path) -> None:
         "attacks": attacks(rows),
         "external_probes": external_probes(rows),
         "fare_results": fare_results(rows),
+        "fare_negative_control": fare_negative_control(rows),
         "confidence_interval_unit": "independent-session means",
     }
     (output / "statistics.json").write_text(json.dumps(summary, indent=2) + "\n")

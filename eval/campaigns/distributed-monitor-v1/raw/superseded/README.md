@@ -4,6 +4,8 @@ These records are retained for auditability but are excluded by
 `regenerate_results.py`.
 
 - `fare-bare-model`: called the model directly and used a substring oracle.
+- `fare-security-disabled`: used real graph/tool orchestration and the corrected
+  oracle, but did not configure the reference monitor.
 - `tool-census-placeholders`: counted pass-only placeholder sources.
 - `host-compilation-preparation-mismatch`: changed the manifest in the
   missing-capability case and did not reuse the same parsed objects.

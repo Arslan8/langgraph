@@ -31,3 +31,8 @@
   than full-system head-to-head attacks.
 - Separated the broker's SQLite workload from file-read routes and compute its
   overhead against the direct SQLite baseline.
+- Corrected the fare scenarios again to use the full protected tool path:
+  explicit manifests, authenticated Cedar decisions, sealed operator policy,
+  closed admission, Linux worker activation, per-trial grants/receipts/audit,
+  and an operator-denial non-execution control. Authorized output can still
+  manipulate the model and is reported outside the current guarantee.

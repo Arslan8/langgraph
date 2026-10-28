@@ -1,6 +1,6 @@
 {
-  "system": "slangGraph",
-  "runtime": "StateGraph + ToolNode",
+  "system": "protected slangGraph",
+  "runtime": "StateGraph + secured ToolNode + LinuxObjectDispatcher",
   "model": {
     "name": "qwen3:8b",
     "base_url": "http://127.0.0.1:11434/v1/chat/completions",
@@ -34,5 +34,6 @@
     ]
   ],
   "repetitions": 20,
-  "claim_scope": "ACE-inspired payload adaptations on slangGraph; not an ACE or IsolateGPT execution and not an exact payload reproduction"
+  "fixed_description_manipulation_is_selection_control": true,
+  "claim_scope": "ACE-inspired payload adaptations on protected slangGraph; not an ACE or IsolateGPT execution and not a planning-integrity defense"
 }

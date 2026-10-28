@@ -8,9 +8,10 @@
 | Wrong record, hidden update/delete, direct DB/WAL, pump socket | Complete | `raw/sqlite-composition`, `raw/pump-composition` |
 | Sealed operator conflict | Complete | `raw/policy-conflict`, reads succeed and all writes fail |
 | Invocation authority lifetime | Partially complete | Replay/substitution blocked; production broker fresh-spawns, so exact reused-worker experiment is structurally unsupported |
-| External sandbox/configuration probes | Complete | One repeated ACE `ToolExecutionSandbox` availability probe and IsolateGPT standalone-sandbox probes; neither is a full-system comparison |
+| External sandbox/configuration probes | Complete (limited scope) | One repeated ACE `ToolExecutionSandbox` availability probe and IsolateGPT standalone-sandbox probes; neither is a full-system comparison |
+| Full-system ACE and IsolateGPT comparisons | Outstanding | Existing probes do not execute ACE's complete planner/flow system or IsolateGPT's complete hub/spoke system |
 | Corresponding baseline agent requests | Outstanding | Fixed invocations establish effects; only fare scenarios include agent requests |
-| ACE-style fare adaptations | Complete | Actual slangGraph graph/tool execution with exact-value oracle; not an ACE/IsolateGPT execution |
+| ACE-style fare adaptations | Complete | Protected slangGraph: closed admission, Cedar principal authorization, sealed operator policy, isolated Linux activation, audit evidence, and exact-value oracle |
 | Retry boundary | Complete | `retry_broker_then_direct` |
 | Path substitution | Complete | sealed-dispatcher test swaps a symlink and remains denied |
 | Import-time effect | Complete | lifecycle test confirms isolation precedes module initialization |

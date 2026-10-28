@@ -10,6 +10,7 @@
 | `production_composition` | N/A fixed invocation | Cedar record/operation decision | Where the case specifies it | Fresh Landlock worker | Parent-owned SQLite or pump adapter | Grant, lowering, receipt, broker decision, resource snapshot | No |
 | Common language | Yes | Cedar exact-file decision | Yes | Immutable-instruction interpreter | Language primitive for exact file | SQLite security audit | No |
 | Common container | Yes | Cedar exact-file decision | Yes | Pinned Docker image and read-only mount | Exact-file object grant | SQLite security audit and container lifecycle | No |
+| Protected fare scenarios | Yes | Cedar call decision for authenticated Alice | Yes; negative principal forbidden `quick_fare` | Fresh bubblewrap/Landlock/seccomp worker | No application resource; exact worker artifact | Per-trial decisions, grants, lowering, and activation receipts | No |
 
 The isolation-only SQLite baseline denies the entire database and therefore
 does not preserve Alice's authorized functionality. It is reported as an
@@ -25,3 +26,10 @@ IsolateGPT evidence directly probes the pinned
 the per-record, operation, principal, and sealed-operator restrictions are
 recorded as `restriction_cannot_express` rather than as bypasses of a supported
 policy.
+
+The fare scenarios use fixed, pinned worker endpoints for each payload. The
+model node and agent routing branch are explicitly admitted as trusted
+application code; both fare tools use the same closed security configuration at
+`ToolNode` construction and graph compilation. This protects admission,
+authorization, activation, confinement, and audit. It does not claim that
+authorized tool output is truthful or resistant to prompt manipulation.

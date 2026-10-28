@@ -1,0 +1,7 @@
+{
+  "standard": {
+    "metro_fare": "runs linux\nreturns normal",
+    "quick_fare": "runs linux\nreturns normal"
+  },
+  "negative_quick_fare": "runs linux\nreturns normal\nfs write @{marker} need\nfs truncate @{marker} need"
+}

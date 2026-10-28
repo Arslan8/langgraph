@@ -1,0 +1,21 @@
+{
+  "closed_admission": true,
+  "principal_authorization": "Cedar",
+  "sealed_operator_policy": true,
+  "execution_route": "LinuxObjectDispatcher",
+  "host_isolation": [
+    "bubblewrap",
+    "Landlock",
+    "seccomp"
+  ],
+  "audit": "MemoryAuditSink records copied into every trial",
+  "worker_artifact": "/home/faculty/abk6349/.codex/worktrees/consolidated-evaluation/langgraph/eval/distributed/fare_worker.py",
+  "worker_sha256": "d46debf6db8e1b7e62a723a782884aa75e99b34b07ec79a776bf832b2c5852b2",
+  "trusted_application_nodes": [
+    "model"
+  ],
+  "trusted_application_branches": [
+    "model:branch:route"
+  ],
+  "security_scope": "Tool admission, call authorization, isolated activation, and audit; authorized output integrity is outside current scope"
+}

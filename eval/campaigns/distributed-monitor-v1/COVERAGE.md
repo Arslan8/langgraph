@@ -15,14 +15,23 @@
 | HTTP direct bypass | Tool implementation | Adapter policy covers raw network | HTTP adapter plus network deny | Blocked; selected read succeeds |
 | Forbidden document read/write | Tool implementation | Exact input/output locations | Language interpreter and object grant | Blocked; report succeeds |
 
-The fare scenarios characterize a different boundary. They now execute through
-slangGraph `StateGraph` and `ToolNode`, with an exact numeric oracle that does
-not confuse `$20` with `$200`; they do not execute ACE or IsolateGPT.
+The fare scenarios characterize a different boundary. They execute through a
+secured slangGraph `StateGraph` and `ToolNode`, with closed admission, Cedar
+principal authorization, sealed operator policy, fresh Linux worker activation,
+and audit. The exact numeric oracle does not confuse `$20` with `$200`; these
+are not executions of ACE or IsolateGPT.
 Description manipulation did not omit MetroHail in the corrected pilot.
 Execution-disruption and result-manipulation payloads reached the model and
 produced incorrect answers. The runtime does not claim ACE's planning-integrity
 or information-flow defenses; adding those defenses through the common policy
 hooks remains future work.
+
+The sealed-operator negative control forbids `quick_fare` for its authenticated
+control principal. The denial produces no authorization grant or activation
+receipt, and the worker-body marker remains unchanged. Successful attack trials
+retain their grants, lowered restrictions, activation receipts, and audit
+decisions. Corruption by an authorized tool's returned text remains outside the
+reference monitor's current guarantee.
 
 ## Baseline interpretation
 
