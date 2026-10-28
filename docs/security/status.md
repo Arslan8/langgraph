@@ -46,7 +46,7 @@ means the new refusing hook or route is not shipped.
 | --- | --- | --- | --- | --- |
 | Principal | `bind` | `cred_prepare` | Implemented | Authenticated principal binding and private module blobs are tested. |
 | Principal | `transfer`, `attenuate` | session transfer, `cred_transfer`, subset check | Partial | Every explicit router dispatch checks the child subset and runs `cred_transfer`, including identity transfers; automatically discovering every framework dispatch and every minted credential remains open. |
-| ToolCall | `prepare`, `invoke`, `post` | three existing tool-call hooks through `HostRouter` | Partial | Host-confined `ToolNode` and `guarded_tool` execution enters the verified router; their trusted in-process compatibility paths still execute outside it. |
+| ToolCall | `prepare`, `invoke`, `post` | three existing tool-call hooks through `HostRouter` | Partial | Host-confined `ToolNode` and `guarded_tool` execution enters the verified router; their legacy unadmitted in-process compatibility paths still execute outside it. |
 | Dispatch | subgraph, `Send`, parallel branch, subagent, nested agent | `cred_transfer` plus child-subset check | Partial | All five sync/async router forms and completeness tests exist. Tool-call parallel branches use the identity-transfer route; general subgraph, `Send`, subagent, and nested-agent placement is not automatic. |
 | ToolRegistry | static `register`, `override` | `tool_alloc_security`, inference, audit | Implemented | The object manager routes static registration and audited overrides through allocation and inference. |
 | ToolRegistry | dynamic `register` | `tool_alloc_security`, runtime inference | Partial | Runtime allocation and undeclared default-deny exist; arbitrary application mutation of registries is not intercepted. |
@@ -73,7 +73,7 @@ tested once per router entry point.
 | Authority | Intended primary enforcer | Current state | Required before claim |
 | --- | --- | --- | --- |
 | Framework principals and delegation | coordinator and policy evaluator | Partial | Explicit router dispatches have one subset check; placement for every implicit dispatch and minted credential remains. |
-| Tool arguments and invocation | `HostRouter` hook stack | Partial | Host-confined execution routes through it; trusted in-process compatibility remains outside the certificate. |
+| Tool arguments and invocation | `HostRouter` hook stack | Partial | Host-confined execution routes through it; legacy unadmitted in-process compatibility remains outside the certificate. |
 | State channels | coordinator object manager | Partial | Refusing hooks, routes, profile-declared reads, and ToolRuntime mediation exist; core state channels are not automatically rewritten. |
 | Store keys | coordinator object manager | Partial | Owner/labels and same-/cross-principal tests exist; direct references need placement. |
 | Checkpoints | coordinator object manager | Partial | Hash-chain verification, replay defense, and principal binding exist in `ObjectManagerHost`; checkpointer integration remains. |
@@ -116,7 +116,7 @@ target operation table:
 These features do not yet establish the ten-class object-manager claim. The
 remaining gap is placement: general graph state/checkpoint APIs, model nodes,
 publication APIs, and four non-parallel dispatch forms are not automatically
-routed. Trusted in-process tool compatibility also remains outside the router.
+routed. Legacy unadmitted in-process tool compatibility also remains outside the router.
 Zero-or-waived disposition of the escape findings is not shipped. The Cedar
 backend is the default and fails closed if its CLI, validation, evaluation, or
 output is unavailable or malformed.
@@ -125,7 +125,7 @@ output is unavailable or malformed.
 
 | Required path | Status |
 | --- | --- |
-| Model proposes a tool call | Partial: configured host-confined calls use the verified router; trusted in-process compatibility remains outside it. |
+| Model proposes a tool call | Partial: configured host-confined calls use the verified router; legacy unadmitted in-process compatibility remains outside it. |
 | Proposal arrives via subgraph, `Send`, or subagent | Partial: the refusing forms exist, but automatic framework placement is pending. |
 | Injected content changes an argument | Implemented for secured Tool APIs: prepare transforms are normalized and the effective request is rebound before dispatch. |
 | Injected content is written to state and read later | Partial: labeled object-manager storage is mediated; core state placement is pending. |

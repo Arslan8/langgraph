@@ -104,7 +104,7 @@ def line(resource, *, trusted=False, operation="increment"):
         resource._object_id,
         {},
         Requirement.NEED,
-        EnforcementKind.TRUSTED_TOOL if trusted else EnforcementKind.BROKER,
+        EnforcementKind.LANGUAGE_SANDBOX if trusted else EnforcementKind.BROKER,
         resource.lowering,
     )
 

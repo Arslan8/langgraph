@@ -73,6 +73,9 @@ _NODE_TRUST = (
     "self._inject_tool_args",
     "self._injected_args.get",
     "self._normalize_tool_response",
+    # Lifecycle callbacks receive a fresh name/id dict, never authorization objects.
+    "self._notify_tool_phase",
+    "self._anotify_tool_phase",
     "self._release_security_flow",
     "self._security_denial",
     "self._security_trace_config",
@@ -89,7 +92,7 @@ _NODE_TRUST = (
 _REVIEWED_DIGESTS = {
     "authorization-stack": "465eeff9d5953752738be9fe2e5aeb93cbee606df27e7063ebe85b27e7ed246f",
     "guarded-request-binding": "618de901277adc73396c1e08ab27562560a8f010e0aa7a2ec6763a7052144717",
-    "toolnode-request-binding": "330a9b46bdfb9524a1b98e460383b6f653c7b2722d3f66c560439293ed53ccc5",
+    "toolnode-request-binding": "96d570d9470e7155270ea07662505ca913245560196678c66b66ea476e572a61",
     "in-process-dispatch-binding": "b4e3816578032535a10fc9b87e24536b7bd0defbb23b925ba91fb1cc5c9d1cc7",
     "guarded-in-process-dispatch": "e8297c70f9e05987e8d3be3ddf7cca4bc6bc69d6531ba11824aea91553df01e6",
     "linux-grant-activation": "ce921b3854f9f5f45ddaaf4762faa2c9cbd7198218f052f58399fa97118abbd5",
@@ -258,6 +261,8 @@ def _evidence(source_root: Path) -> list[dict[str, Any]]:
                 "ToolNode._aprepare_security_request",
                 "ToolNode._resume_security",
                 "ToolNode._aresume_security",
+                "ToolNode._notify_tool_phase",
+                "ToolNode._anotify_tool_phase",
             ),
         ),
         (

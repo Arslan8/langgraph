@@ -14,6 +14,7 @@ import hashlib
 import inspect
 import json
 import operator
+import symtable
 import sys
 import warnings
 from collections.abc import Iterator, Mapping
@@ -57,6 +58,7 @@ _TYPE_BASES: dict[str, tuple[str, ...]] = {
     "PermissionError": ("OSError",),
     "TimeoutError": ("OSError",),
     "ValueError": ("Exception",),
+    "AttributeError": ("Exception",),
     "RuntimeError": ("Exception",),
     "NotImplementedError": ("RuntimeError",),
     "TypeError": ("Exception",),
@@ -83,6 +85,20 @@ class ReadSource:
     """
 
     target: str
+
+
+@dataclass(frozen=True)
+class ReturnProtocol:
+    """Allowed origins of an API's exact normal return value.
+
+    An operation result requires a proved authorized dispatch on that path.
+    An escalation is the unmodified authorizer result with its verdict narrowed
+    to ESCALATE. This is provenance, not a grant to publish either value. In
+    particular a caller must still handle the pending-approval alternative.
+    """
+
+    operations: tuple[str, ...]
+    escalations: tuple[str, ...] = ()
 
 
 def _valid_selector(selector: str, *, result: bool) -> bool:
@@ -123,6 +139,7 @@ class VerificationSpec:
     refusing_authorizers: tuple[str, ...] = ()
     allow_none_return: bool = False
     entry_bindings: dict[str, dict[str, tuple[str, ...]]] = field(default_factory=dict)
+    return_protocols: dict[str, ReturnProtocol] = field(default_factory=dict)
 
     def __post_init__(self) -> None:
         if type(self.allow_none_return) is not bool:
@@ -130,7 +147,9 @@ class VerificationSpec:
         if (
             not self.sources
             or not self.surfaces
-            or not (self.operations or self.return_requirements)
+            or not (
+                self.operations or self.return_requirements or self.return_protocols
+            )
         ):
             raise ValueError(
                 "sources, surfaces and effect or return obligations are required"
@@ -171,6 +190,18 @@ class VerificationSpec:
             ):
                 raise ValueError("bindings must use explicit argument/result selectors")
         operation_map = {item.target: item for item in self.operations}
+        authorizer_targets = {item.target for item in self.authorizers}
+        for entry, protocol in self.return_protocols.items():
+            if (
+                not entry
+                or not isinstance(protocol, ReturnProtocol)
+                or not (protocol.operations or protocol.escalations)
+                or set(protocol.operations) - operation_map.keys()
+                or set(protocol.escalations) - authorizer_targets
+                or len(set(protocol.operations)) != len(protocol.operations)
+                or len(set(protocol.escalations)) != len(protocol.escalations)
+            ):
+                raise ValueError("return protocols must name declared terminals")
         if set(self.requirements) - operation_map.keys():
             raise ValueError("requirements must name declared operation targets")
         for target, requirements in self.requirements.items():
@@ -237,6 +268,9 @@ class _State:
     verdicts: dict[str, frozenset[str]] = field(default_factory=dict)
     decision_scopes: dict[str, tuple[str, ...]] = field(default_factory=dict)
     grant_scopes: dict[tuple[str, ...], tuple[str, ...]] = field(default_factory=dict)
+    terminal_results: dict[str, str] = field(default_factory=dict)
+    dispatched_results: set[str] = field(default_factory=set)
+    result_dependencies: dict[str, tuple[str, ...]] = field(default_factory=dict)
     exit: str = "normal"
     result: str = "constant:None"
     tuples: dict[str, tuple[str, ...]] = field(default_factory=dict)
@@ -251,7 +285,12 @@ class _State:
     open_mappings: dict[str, _MappingTail] = field(default_factory=dict)
     mapping_presence: dict[tuple[str, str], bool] = field(default_factory=dict)
     unknown_mappings: set[str] = field(default_factory=set)
+    native_dictionaries: set[str] = field(default_factory=set)
+    native_item_views: dict[str, str] = field(default_factory=dict)
+    native_item_snapshots: dict[str, str] = field(default_factory=dict)
     objects: dict[str, str] = field(default_factory=dict)
+    exact_types: dict[str, str] = field(default_factory=dict)
+    open_slots: dict[str, set[str]] = field(default_factory=dict)
     fields: dict[str, dict[str, str]] = field(default_factory=dict)
     unknown_objects: set[str] = field(default_factory=set)
     predicates: dict[tuple[str, ...], bool] = field(default_factory=dict)
@@ -271,6 +310,10 @@ class _State:
     def revoke(self, receiver: str | None = None) -> None:
         """Forget grants whose bound object graph can be changed by a write."""
         if receiver is not None:
+            for token in tuple(self.terminal_results):
+                if self.depends_on(token, receiver):
+                    self.terminal_results.pop(token)
+                    self.dispatched_results.discard(token)
             if receiver in self.lists:
                 self.list_versions[receiver] = self.list_versions.get(receiver, 0) + 1
             if receiver in self.mappings:
@@ -298,6 +341,8 @@ class _State:
             self.predicates.clear()
             return
         self.pending.clear()
+        self.terminal_results.clear()
+        self.dispatched_results.clear()
         self.approved.clear()
         self.verdicts.clear()
         self.decision_scopes.clear()
@@ -310,6 +355,15 @@ class _State:
             token = pending.pop()
             if token == receiver or token.startswith(receiver + "."):
                 return True
+            if token.startswith(
+                ("input:", "input-value:", "input-item:")
+            ) and receiver.startswith(
+                ("input:", "input-value:", "input-item:", "instance:", "namespace:")
+            ):
+                # Different external names are not evidence of disjoint object
+                # identity. This does not make a freshly allocated local object
+                # alias an older input; known stored aliases are traversed below.
+                return True
             # Attribute selectors still depend on the containing object.
             root = token
             while (
@@ -318,6 +372,7 @@ class _State:
                 and root not in self.tuples
                 and root not in self.lists
                 and root not in self.contents
+                and root not in self.result_dependencies
                 and "." in root
             ):
                 root = root.rsplit(".", 1)[0]
@@ -329,6 +384,8 @@ class _State:
                 or root in self.unknown_lists
                 or root in self.unknown_mappings
                 or root in self.open_mappings
+                or root in self.open_slots
+                or root in self.native_dictionaries
                 or root in self.unknown_contexts
             ):
                 return True
@@ -339,6 +396,7 @@ class _State:
             pending.extend(self.tuples.get(root, ()))
             pending.extend(self.lists.get(root, ()))
             pending.extend(self.contents.get(root, ()))
+            pending.extend(self.result_dependencies.get(root, ()))
         return False
 
 
@@ -355,6 +413,8 @@ class _Record:
     frozen: bool
     slots: bool
     factories: tuple[tuple[str, ast.expr], ...] = ()
+    init: bool = True
+    native_mapping: bool = False
 
 
 def _literal_default(node: ast.expr) -> bool:
@@ -407,6 +467,8 @@ class _Program:
         self.constants: dict[str, ast.Constant] = {}
         self.export_literals: dict[str, ast.expr] = {}
         self.aliases: dict[str, dict[str, str]] = {}
+        self.local_names: dict[tuple[str, int, str], set[str]] = {}
+        self.scope_writes: dict[tuple[str, int, str], set[str]] = {}
         self.binding_lines: dict[tuple[str, str], int] = {}
         self.postponed_modules: set[str] = set()
         self.issues: list[dict[str, Any]] = []
@@ -443,6 +505,31 @@ class _Program:
                 )
             try:
                 tree = ast.parse(source)
+                scopes = [symtable.symtable(source, module, "exec")]
+                while scopes:
+                    scope = scopes.pop()
+                    scopes.extend(scope.get_children())
+                    if scope.get_type() == "function":
+                        # A one-line function named listcomp/genexpr can share
+                        # its key with a nested comprehension. The enclosing
+                        # function's compiler scope is visited first.
+                        self.local_names.setdefault(
+                            (module, scope.get_lineno(), scope.get_name()),
+                            {
+                                symbol.get_name()
+                                for symbol in scope.get_symbols()
+                                if symbol.is_local()
+                            },
+                        )
+                        self.scope_writes.setdefault(
+                            (module, scope.get_lineno(), scope.get_name()),
+                            {
+                                symbol.get_name()
+                                for symbol in scope.get_symbols()
+                                if (symbol.is_global() or symbol.is_nonlocal())
+                                and (symbol.is_assigned() or symbol.is_imported())
+                            },
+                        )
             except SyntaxError as exc:
                 self.issues.append(
                     {
@@ -658,6 +745,49 @@ class _Program:
                 self.named_tuples[owner] = named_tuple
         for owner in self.classes:
             self.typed_dict_model(owner)
+        self.slots: dict[str, tuple[str, ...]] = {}
+        self.slot_declarations: set[int] = set()
+        for owner, node in self.classes.items():
+            declarations = [
+                member
+                for member in node.body
+                if isinstance(member, ast.Assign)
+                and len(member.targets) == 1
+                and isinstance(member.targets[0], ast.Name)
+                and member.targets[0].id == "__slots__"
+            ]
+            if len(declarations) != 1:
+                continue
+            declaration = declarations[0]
+            module = owner.rsplit(".", 1)[0]
+            if (
+                node.keywords
+                or node.decorator_list
+                or any(
+                    self.qualify(module, ast.unparse(base))
+                    not in {"object", "builtins.object"}
+                    for base in node.bases
+                )
+                or not isinstance(declaration.value, ast.Tuple)
+                or any(
+                    not isinstance(item, ast.Constant)
+                    or type(item.value) is not str
+                    or not item.value.isidentifier()
+                    or item.value.startswith("__")
+                    for item in declaration.value.elts
+                )
+            ):
+                continue
+            names = tuple(item.value for item in declaration.value.elts)
+            methods = {
+                member.name
+                for member in node.body
+                if isinstance(member, (ast.FunctionDef, ast.AsyncFunctionDef))
+            }
+            if len(set(names)) != len(names) or set(names) & methods:
+                continue
+            self.slots[owner] = names
+            self.slot_declarations.add(id(declaration))
         # Every class body executes when its module is loaded, even when no API
         # constructs it. Unsupported definition effects cannot hide in an
         # otherwise unreachable helper class.
@@ -738,6 +868,7 @@ class _Program:
             if isinstance(member, ast.AnnAssign):
                 if (
                     module not in self.postponed_modules
+                    or member.simple != 1
                     or not isinstance(member.target, ast.Name)
                     or member.value is not None
                 ):
@@ -857,6 +988,7 @@ class _Program:
             if isinstance(member, ast.AnnAssign):
                 if (
                     not isinstance(member.target, ast.Name)
+                    or member.simple != 1
                     or member.target.id.startswith("_")
                     or any(name == member.target.id for name, _ in fields)
                     or (member.value is not None and not _literal_default(member.value))
@@ -870,6 +1002,32 @@ class _Program:
             ):
                 return None
         return tuple(fields)
+
+    def native_mapping_base(self, module: str, node: ast.ClassDef) -> bool:
+        """Resolve the bounded native Mapping base without evaluating aliases."""
+        if len(node.bases) != 1:
+            return False
+        base = node.bases[0]
+        if isinstance(base, ast.Subscript):
+            if (
+                not isinstance(base.slice, ast.Tuple)
+                or len(base.slice.elts) != 2
+                or not isinstance(base.slice.elts[0], (ast.Name, ast.Attribute))
+                or not isinstance(base.slice.elts[1], (ast.Name, ast.Attribute))
+                or self.qualify(module, ast.unparse(base.slice.elts[0]))
+                not in {"str", "builtins.str"}
+                or self.qualify(module, ast.unparse(base.slice.elts[1])) != "typing.Any"
+            ):
+                return False
+            base = base.value
+        if not isinstance(base, (ast.Name, ast.Attribute)):
+            return False
+        spelling = ast.unparse(base)
+        return (
+            self.qualify(module, spelling) == "collections.abc.Mapping"
+            and self.binding_lines.get((module, spelling.split(".", 1)[0]), 0)
+            < node.lineno
+        )
 
     def record_model(self, owner: str, node: ast.ClassDef) -> _Record | None:
         """Recognize the supported standard dataclass constructor semantics."""
@@ -888,7 +1046,7 @@ class _Program:
             self.functions.keys() | self.classes.keys() | self.constants.keys()
         ):
             return None
-        if node.bases or node.keywords or module not in self.postponed_modules:
+        if node.keywords or module not in self.postponed_modules:
             return None
         options: dict[str, bool] = {}
         if isinstance(decorator, ast.Call):
@@ -896,13 +1054,45 @@ class _Program:
                 return None
             for keyword in decorator.keywords:
                 if (
-                    keyword.arg not in {"frozen", "slots"}
+                    keyword.arg not in {"frozen", "slots", "init", "eq"}
                     or not isinstance(keyword.value, ast.Constant)
                     or type(keyword.value.value) is not bool
                     or keyword.arg in options
                 ):
                     return None
                 options[keyword.arg] = keyword.value.value
+        native_mapping = self.native_mapping_base(module, node)
+        if node.bases and not native_mapping:
+            return None
+        if not options.get("init", True) or native_mapping:
+            # An explicit initializer is interpreted from source. The native
+            # ABC contributes no storage or accepted opaque helper methods.
+            if options != {"frozen": True, "slots": True, "init": False, "eq": False}:
+                return None
+            methods = {
+                member.name: member
+                for member in node.body
+                if isinstance(member, (ast.FunctionDef, ast.AsyncFunctionDef))
+            }
+            required = {"__init__"} | (
+                {"__getitem__", "__iter__", "__len__"} if native_mapping else set()
+            )
+            if any(
+                name not in methods
+                or not isinstance(methods[name], ast.FunctionDef)
+                or methods[name].decorator_list
+                for name in required
+            ):
+                return None
+            if any(
+                name in methods
+                for name in {
+                    "__subclasshook__",
+                    "__instancecheck__",
+                    "__subclasscheck__",
+                }
+            ):
+                return None
         fields: list[tuple[str, ast.expr | None]] = []
         factories: list[tuple[str, ast.expr]] = []
         optional = False
@@ -913,10 +1103,10 @@ class _Program:
         }
         for member in node.body:
             if isinstance(member, (ast.FunctionDef, ast.AsyncFunctionDef)):
-                if member.name == "__init__":
+                if member.name == "__init__" and options.get("init", True):
                     return None
             elif isinstance(member, ast.AnnAssign):
-                if not isinstance(member.target, ast.Name):
+                if not isinstance(member.target, ast.Name) or member.simple != 1:
                     return None
                 if (
                     member.target.id.startswith("__")
@@ -988,6 +1178,8 @@ class _Program:
             options.get("frozen", False),
             options.get("slots", False),
             tuple(factories),
+            options.get("init", True),
+            native_mapping,
         )
 
     def record_default(
@@ -1176,6 +1368,17 @@ class _Program:
             return ("object",)
         if owner in self.named_tuples:
             return (owner, "tuple", "object")
+        record = self.records.get(owner)
+        if record is not None and record.native_mapping:
+            return (
+                owner,
+                "collections.abc.Mapping",
+                "collections.abc.Collection",
+                "collections.abc.Sized",
+                "collections.abc.Iterable",
+                "collections.abc.Container",
+                "object",
+            )
         if owner in self.mro_cache:
             return self.mro_cache[owner]
         if owner in trail or owner not in self.classes or owner in self.typed_dicts:
@@ -1255,7 +1458,8 @@ class _Program:
                     "reason": "base-class order, metaclasses or class decorators require a model",
                 }
             )
-        for base in node.bases:
+        native_mapping = owner in self.records and self.records[owner].native_mapping
+        for base in () if native_mapping else node.bases:
             name = self.qualify(module, ast.unparse(base))
             if name in self.typed_dicts:
                 self.issues.append(
@@ -1307,7 +1511,7 @@ class _Program:
                     "__eq__",
                     "__ne__",
                     "__hash__",
-                }:
+                } and not (native_mapping and member.name == "__len__"):
                     self.issues.append(
                         {
                             "module": module,
@@ -1316,6 +1520,8 @@ class _Program:
                         }
                     )
                 result[member.name] = f"{owner}.{member.name}"
+            elif id(member) in self.slot_declarations:
+                continue
             elif (
                 isinstance(member, ast.AnnAssign)
                 and (member.value is None or owner in self.records)
@@ -1353,6 +1559,9 @@ class _Program:
             node = self.classes[name]
             if node.keywords or (node.decorator_list and name not in self.records):
                 return None
+            record = self.records.get(name)
+            if record is not None and record.native_mapping:
+                return frozenset(self.linearization(name) or ())
             module = name.rsplit(".", 1)[0]
             bases = tuple(
                 self.qualify(module, ast.unparse(base)) for base in node.bases
@@ -1918,6 +2127,8 @@ class _Engine:
         self.dispatches: list[dict[str, Any]] = []
         self.authorizations: list[dict[str, Any]] = []
         self.publications: list[dict[str, Any]] = []
+        self.return_outcomes: list[dict[str, Any]] = []
+        self.mapping_normalizations: list[dict[str, Any]] = []
         self.entry_arguments: list[str] = []
         self.edges: set[tuple[str, str]] = set()
         self.visited: set[str] = set()
@@ -1968,7 +2179,7 @@ class _Engine:
         if name in _CAST_NAMES:
             return "builtin:" + name
         builtin = name.removeprefix("builtins.")
-        if builtin in {"isinstance", "len", "super"}:
+        if builtin in {"isinstance", "len", "super", "type"}:
             return "builtin:" + builtin
         if name == "types.MappingProxyType":
             return "builtin:" + name
@@ -1983,6 +2194,7 @@ class _Engine:
                 "Exception",
                 "PermissionError",
                 "ValueError",
+                "AttributeError",
                 "RuntimeError",
                 "TypeError",
                 "KeyError",
@@ -2159,7 +2371,12 @@ class _Engine:
             builtin = target.removeprefix("builtins.")
             if builtin == "dict":
                 return "mapping-constructor:dict"
-            if builtin in _TYPE_BASES or builtin in {"isinstance", "len", "super"}:
+            if builtin in _TYPE_BASES or builtin in {
+                "isinstance",
+                "len",
+                "super",
+                "type",
+            }:
                 return "builtin:" + builtin
             if target in {"threading.RLock", "_thread.RLock"}:
                 return "builtin:" + target
@@ -2659,7 +2876,7 @@ class _Engine:
             return [(state, "unknown:exception")]
         if isinstance(node, ast.Name):
             value = self.symbol(node, state, info)
-            if value.startswith("comprehension-unbound:"):
+            if value.startswith(("comprehension-unbound:", "local-unbound:")):
                 state.exit, state.result = "raise", "constant:None"
             return [(state, value)]
         if isinstance(node, ast.Constant):
@@ -2700,6 +2917,18 @@ class _Engine:
         if isinstance(node, ast.Attribute):
             results = []
             for child, value in self.expr(node.value, state, info):
+                if value in child.native_dictionaries:
+                    if node.attr == "items":
+                        token = f"native-dict-method:{value}|items"
+                        child.contents[token] = (value,)
+                        results.append((child, token))
+                    else:
+                        self.issue(
+                            node,
+                            "native dictionary keys require validation before lookup or copying",
+                        )
+                        results.append((child, "unknown:dictionary-keys"))
+                    continue
                 if value in child.supers:
                     results.append(
                         (child, self.super_attribute(value, node.attr, child, node))
@@ -2721,6 +2950,18 @@ class _Engine:
                         )
                     if node.attr in child.fields[value]:
                         results.append((child, child.fields[value][node.attr]))
+                        continue
+                    if node.attr in child.open_slots.get(value, ()):
+                        # Exact type does not prove the constructor ran. A slot
+                        # may be unset, and handlers must cover that exit too.
+                        missing = child.clone()
+                        missing.open_slots[value].remove(node.attr)
+                        missing.exit, missing.result = "raise", "constant:None"
+                        results.append((missing, "unknown:attribute"))
+                        child.open_slots[value].remove(node.attr)
+                        token = value + "." + node.attr
+                        child.fields[value][node.attr] = token
+                        results.append((child, token))
                         continue
                     if child.objects[value] in self.program.named_tuples:
                         if node.attr in {"_replace", "_asdict"}:
@@ -2755,6 +2996,17 @@ class _Engine:
                                 ),
                             )
                         )
+                        continue
+                    if (
+                        record is not None
+                        and record.native_mapping
+                        and node.attr in {"get", "keys", "items", "values"}
+                    ):
+                        self.issue(
+                            node,
+                            "inherited native Mapping methods require a source protocol model",
+                        )
+                        results.append((child, "unknown:mapping-protocol"))
                         continue
                     if node.attr.startswith("__"):
                         # Builtin object metadata/descriptors exist even when
@@ -2940,6 +3192,33 @@ class _Engine:
                                     )
                                 results.append((projected, item))
                     continue
+                if value in current.objects and value not in current.tuples:
+                    owner = current.objects[value]
+                    method = self.program.methods(owner).get("__getitem__")
+                    if method is not None:
+                        if value in current.unknown_objects or isinstance(
+                            self.program.functions[method].node, ast.AsyncFunctionDef
+                        ):
+                            self.issue(
+                                node,
+                                "source subscription requires a stable synchronous receiver",
+                            )
+                            results.append((current, "unknown:subscript"))
+                            continue
+                        for child, key in self.expr(node.slice, current, info):
+                            if child.exit != "normal":
+                                results.append((child, "unknown:exception"))
+                                continue
+                            self.edges.add((self.stack[-1], method))
+                            results.extend(
+                                self.invoke(
+                                    method,
+                                    [*self.method_arguments(owner, method, value), key],
+                                    {},
+                                    child,
+                                )
+                            )
+                        continue
                 if value not in current.tuples:
                     self.issue(
                         node, "subscript requires a known tuple and constant index"
@@ -3108,6 +3387,21 @@ class _Engine:
                 result.append((current, "unknown:exception"))
                 continue
             kind, _, target = callee.partition(":")
+            if kind == "native-dict-method":
+                receiver, method = target.rsplit("|", 1)
+                if awaited or args or kwargs or method != "items":
+                    self.issue(
+                        node,
+                        "native dictionary items requires an ordinary zero-argument call",
+                    )
+                    result.append((current, "unknown:dictionary-items"))
+                else:
+                    self.serial += 1
+                    token = f"native-items:{self.serial}"
+                    current.native_item_views[token] = receiver
+                    current.contents[token] = (receiver,)
+                    result.append((current, token))
+                continue
             if kind == "bound":
                 receiver, target = target.split("|", 1)
                 args = ["instance:" + receiver, *args]
@@ -3209,6 +3503,16 @@ class _Engine:
                         result.extend(
                             self.instance_check(args[0], args[1], current, node)
                         )
+                elif target == "type":
+                    if len(args) != 1 or kwargs:
+                        self.issue(
+                            node, "only the one-argument native type query is modeled"
+                        )
+                        result.append((current, "unknown:type"))
+                    else:
+                        token = "runtime-type:" + args[0]
+                        current.contents[token] = (args[0],)
+                        result.append((current, token))
                 elif target in _CAST_NAMES:
                     cast_parameters = ("typ", "val")
                     if (
@@ -3268,6 +3572,13 @@ class _Engine:
                         result.append((current, token))
                     elif args[0] in current.tuples and args[0] not in current.objects:
                         result.append((current, args[0]))
+                    elif args[0] in current.native_item_views:
+                        self.serial += 1
+                        token = f"native-items-snapshot:{self.serial}"
+                        receiver = current.native_item_views[args[0]]
+                        current.native_item_snapshots[token] = receiver
+                        current.result_dependencies[token] = (receiver,)
+                        result.append((current, token))
                     else:
                         converted = self.sequence_values(args[0], current, node)
                         if converted is None:
@@ -3490,6 +3801,12 @@ class _Engine:
                     result.append((current, token))
                     continue
                 primitive = self.authorizers.get(target) or self.operations[target]
+                current.terminal_results[token] = target
+                # An opaque primitive result can share data with its inputs.
+                # A fresh symbolic name is not evidence of a detached copy.
+                # Track possible data aliases separately from capabilities:
+                # the explicit terminal contract still requires inert returns.
+                current.result_dependencies[token] = tuple(args)
                 binding = self.binding(
                     primitive.permission, primitive.bindings, args, token, node
                 )
@@ -3591,6 +3908,8 @@ class _Engine:
                             "call_path": list(self.stack),
                         }
                     )
+                    if all(fact in current.approved for fact in required):
+                        current.dispatched_results.add(token)
                     current.approved.difference_update(required)
                     current.pending = {
                         key: value
@@ -3751,7 +4070,22 @@ class _Engine:
             self.issue(node, "isinstance type has an unresolved metaclass or ancestry")
             return [(state, "unknown:isinstance")]
 
-        nominal = state.objects.get(value)
+        nominal = self.nominal_type(value, state)
+        if nominal is not None:
+            lineage = self.program.type_lineage(nominal)
+            if lineage is None:
+                self.issue(node, "isinstance value has an unresolved type ancestry")
+            else:
+                return [(state, "constant:" + repr(name in lineage))]
+        if name == "object":
+            return [(state, "constant:True")]
+        # A positive test does not imply an exact builtin receiver: subclasses
+        # may override methods. Preserve identity and leave those calls unknown.
+        return [(state, f"instance-test:{value}|{name}")]
+
+    def nominal_type(self, value: str, state: _State) -> str | None:
+        """An exact type already established by construction or an identity guard."""
+        nominal = state.objects.get(value) or state.exact_types.get(value)
         if value in state.tuples and nominal is None:
             nominal = "tuple"
         elif value in state.lists:
@@ -3771,17 +4105,36 @@ class _Engine:
                 nominal = (
                     "types.NoneType" if literal is None else type(literal).__name__
                 )
+        return nominal
+
+    def exact_type_branch(
+        self, query: str, candidate: str, state: _State, equal: bool
+    ) -> list[_State] | None:
+        """Bind source methods only when instance method shadowing is impossible."""
+        if not query.startswith("runtime-type:"):
+            return None
+        kind, _, owner = candidate.partition(":")
+        if kind not in {"class", "builtin", "mapping-constructor", "exception"}:
+            return None
+        if owner not in self.program.classes and owner not in _TYPE_BASES:
+            return None
+        receiver = query.removeprefix("runtime-type:")
+        nominal = self.nominal_type(receiver, state)
         if nominal is not None:
-            lineage = self.program.type_lineage(nominal)
-            if lineage is None:
-                self.issue(node, "isinstance value has an unresolved type ancestry")
-            else:
-                return [(state, "constant:" + repr(name in lineage))]
-        if name == "object":
-            return [(state, "constant:True")]
-        # A positive test does not imply an exact builtin receiver: subclasses
-        # may override methods. Preserve identity and leave those calls unknown.
-        return [(state, f"instance-test:{value}|{name}")]
+            return [state] if (nominal == owner) == equal else []
+        key = ("exact-type", receiver, owner)
+        if state.predicates.get(key, equal) != equal:
+            return []
+        state.predicates[key] = equal
+        if equal:
+            state.exact_types[receiver] = owner
+            if owner == "dict" and receiver not in state.mappings:
+                state.native_dictionaries.add(receiver)
+            if owner in self.program.slots:
+                state.objects[receiver] = owner
+                state.fields[receiver] = {}
+                state.open_slots[receiver] = set(self.program.slots[owner])
+        return [state]
 
     def named_tuple_default(self, default: ast.expr, key: str, state: _State) -> str:
         """Keep immutable constructor defaults shared across instances."""
@@ -3865,6 +4218,20 @@ class _Engine:
         node: ast.Call,
     ) -> list[tuple[_State, str]]:
         record = self.program.records[owner]
+        if not record.init:
+            initializer = self.program.methods(owner)["__init__"]
+            self.edges.add((self.stack[-1], initializer))
+            results = []
+            for child, value in self.invoke(
+                initializer,
+                [*self.method_arguments(owner, initializer, instance), *args],
+                kwargs,
+                state,
+            ):
+                if child.exit == "normal" and value != "constant:None":
+                    self.issue(node, "explicit dataclass initializer must return None")
+                results.append((child, instance))
+            return results
         names = [name for name, _ in record.fields]
         if len(args) > len(names) or any(
             key not in names or key in names[: len(args)] for key in kwargs
@@ -4145,6 +4512,15 @@ class _Engine:
                 equal = truth != isinstance(node.ops[0], ast.IsNot)
                 for current, a in self.expr(left, state, info):
                     for child, b in self.expr(right, current, info):
+                        if child.exit != "normal":
+                            results.append(child)
+                            continue
+                        exact = self.exact_type_branch(a, b, child, equal)
+                        if exact is None:
+                            exact = self.exact_type_branch(b, a, child, equal)
+                        if exact is not None:
+                            results.extend(exact)
+                            continue
                         # Distinct abstract inputs may alias; only identical
                         # identities or the singleton literals settle identity.
                         if a == b:
@@ -4269,6 +4645,13 @@ class _Engine:
             for alias, values in state.mappings.items():
                 if values is state.mappings[receiver]:
                     state.open_mappings.pop(alias, None)
+        if token in state.objects:
+            record = self.program.records.get(state.objects[token])
+            if record is not None and record.native_mapping:
+                self.issue(
+                    self.program.functions[self.stack[-1]].node,
+                    "native Mapping truth test requires source __len__ protocol analysis",
+                )
         key = ("truth", token)
         if state.predicates.get(key, truth) != truth:
             return []
@@ -4282,9 +4665,11 @@ class _Engine:
             return [state]
         if isinstance(target, ast.Name):
             if token is None:
-                if target.id not in state.env:
+                if target.id not in state.env or state.env[target.id].startswith(
+                    "local-unbound:"
+                ):
                     state.exit, state.result = "raise", "constant:None"
-                state.env.pop(target.id, None)
+                state.env[target.id] = "local-unbound:" + target.id
             else:
                 state.env[target.id] = token
         elif isinstance(target, (ast.Tuple, ast.List)):
@@ -4323,6 +4708,7 @@ class _Engine:
                             results.append(child)
                             continue
                         if receiver in child.unknown_lists:
+                            child.revoke()
                             self.issue(
                                 target, "exceptional list mutation is unresolved"
                             )
@@ -4353,11 +4739,13 @@ class _Engine:
                         continue
                     literal = self.string_key(key)
                     if receiver not in child.mappings or literal is None:
+                        child.revoke()
                         self.issue(
                             target,
                             "mapping mutation requires known receiver and string key",
                         )
                     elif receiver in child.unknown_mappings:
+                        child.revoke()
                         self.issue(target, "exceptional mapping mutation is unresolved")
                     elif receiver in child.mapping_origins:
                         child.exit, child.result = "raise", "constant:None"
@@ -4383,8 +4771,10 @@ class _Engine:
                     results.append(child)
                     continue
                 if receiver not in child.objects:
+                    child.revoke()
                     self.issue(target, "object mutation requires a known receiver")
                 elif receiver in child.unknown_objects:
+                    child.revoke()
                     self.issue(target, "exceptional object mutation is unresolved")
                 elif child.objects[receiver] in self.program.named_tuples:
                     child.exit, child.result = "raise", "constant:None"
@@ -4394,7 +4784,20 @@ class _Engine:
                 ):
                     child.exit, child.result = "raise", "constant:None"
                 elif target.attr.startswith("__"):
+                    child.revoke()
                     self.issue(target, "object protocol mutation requires a model")
+                elif (
+                    child.objects[receiver] in self.program.slots
+                    and target.attr not in self.program.slots[child.objects[receiver]]
+                ):
+                    child.exit, child.result = "raise", "constant:None"
+                elif (
+                    target.attr in child.open_slots.get(receiver, ()) and token is None
+                ):
+                    child.revoke()
+                    self.issue(
+                        target, "deleting an unknown slot requires a presence model"
+                    )
                 elif token is None:
                     if target.attr not in child.fields[receiver]:
                         child.exit, child.result = "raise", "constant:None"
@@ -4403,6 +4806,7 @@ class _Engine:
                         child.revoke(receiver)
                 else:
                     child.fields[receiver][target.attr] = token
+                    child.open_slots.get(receiver, set()).discard(target.attr)
                     child.revoke(receiver)
                 results.append(child)
             return results
@@ -4495,7 +4899,7 @@ class _Engine:
             handled = self.block(handler.body, entries, info)
             for child in handled:
                 if handler.name:
-                    child.env.pop(handler.name, None)
+                    child.env[handler.name] = "local-unbound:" + handler.name
             exits.extend(handled)
         exceptional.exit = "raise"
         exits.append(exceptional)
@@ -4564,6 +4968,120 @@ class _Engine:
         # remain unresolved regardless of the body result.
         return self.block(node.body, states, info)
 
+    def normalize_dictionary_loop(
+        self, node: ast.For, state: _State, snapshot: str, info: _Info
+    ) -> list[_State] | None:
+        """Derive a guarded native item-copy loop by induction over its pairs.
+
+        The admitted body has exactly a native string-type refusal followed by
+        copying that pair into a fresh empty dictionary. No helper exemption,
+        effect, mutation of the snapshot or other loop statement is admitted.
+        """
+        if (
+            node.orelse
+            or not isinstance(node.target, ast.Tuple)
+            or len(node.target.elts) != 2
+            or any(not isinstance(item, ast.Name) for item in node.target.elts)
+            or len(node.body) != 2
+        ):
+            return None
+        key_name, item_name = (item.id for item in node.target.elts)
+        guard, copy_item = node.body
+        if (
+            key_name == item_name
+            or not isinstance(guard, ast.If)
+            or guard.orelse
+            or len(guard.body) != 1
+            or not isinstance(guard.test, ast.Compare)
+            or len(guard.test.ops) != 1
+            or not isinstance(guard.test.ops[0], ast.IsNot)
+            or not isinstance(guard.test.left, ast.Call)
+            or len(guard.test.left.args) != 1
+            or guard.test.left.keywords
+            or not isinstance(guard.test.left.args[0], ast.Name)
+            or guard.test.left.args[0].id != key_name
+            or not isinstance(guard.body[0], ast.Raise)
+            or guard.body[0].cause is not None
+            or not isinstance(guard.body[0].exc, ast.Call)
+            or guard.body[0].exc.keywords
+            or any(not isinstance(arg, ast.Constant) for arg in guard.body[0].exc.args)
+            or not isinstance(copy_item, ast.Assign)
+            or len(copy_item.targets) != 1
+            or not isinstance(copy_item.targets[0], ast.Subscript)
+            or not isinstance(copy_item.targets[0].value, ast.Name)
+            or not isinstance(copy_item.targets[0].slice, ast.Name)
+            or copy_item.targets[0].slice.id != key_name
+            or not isinstance(copy_item.value, ast.Name)
+            or copy_item.value.id != item_name
+        ):
+            return None
+        target_name = copy_item.targets[0].value.id
+        if target_name in {key_name, item_name}:
+            return None
+        destination = state.env.get(target_name, "")
+        if (
+            destination not in state.mappings
+            or state.mappings[destination]
+            or destination in state.open_mappings
+            or destination in state.unknown_mappings
+            or destination in state.mapping_origins
+        ):
+            return None
+        # Resolve every callable/type through the source environment. A shadowed
+        # type/str/exception name must not gain the native induction rule.
+        expressions = (
+            (guard.test.left.func, {"builtin:type"}),
+            (guard.test.comparators[0], {"builtin:str"}),
+            (
+                guard.body[0].exc.func,
+                {
+                    "exception:TypeError",
+                    "exception:ValueError",
+                    "exception:PermissionError",
+                },
+            ),
+        )
+        for expression, allowed in expressions:
+            resolved = self.expr(expression, state.clone(), info)
+            if (
+                len(resolved) != 1
+                or resolved[0][0].exit != "normal"
+                or resolved[0][1] not in allowed
+            ):
+                return None
+        empty = state.clone()
+        symbolic = state.clone()
+        key = f"input-key:{snapshot}"
+        value = f"input-item:{snapshot}"
+        symbolic.env[key_name] = key
+        symbolic.env[item_name] = value
+        rejected = [
+            outcome
+            for child in self.branch(guard.test, symbolic.clone(), info, True)
+            for outcome in self.block(guard.body, [child], info)
+        ]
+        accepted = self.branch(guard.test, symbolic, info, False)
+        for child in accepted:
+            if child.exact_types.get(key) != "str":
+                self.issue(
+                    node, "dictionary induction did not establish native string keys"
+                )
+            child.revoke(destination)
+            child.open_mappings[destination] = _MappingTail(snapshot)
+        self.mapping_normalizations.append(
+            {
+                "function": self.stack[-1],
+                "line": node.lineno,
+                "rule": "native_item_snapshot_string_key_copy_induction",
+                "snapshot": snapshot,
+                "destination": destination,
+                "empty_case": True,
+                "step_key_type": "str",
+                "step_value": "unchanged",
+            }
+        )
+        return [empty, *rejected, *accepted]
+
     def for_block(self, node: ast.For, state: _State, info: _Info) -> list[_State]:
         """Expand known finite iterables without assuming an effect-free body."""
         results: list[_State] = []
@@ -4571,6 +5089,19 @@ class _Engine:
             if current.exit != "normal":
                 self.prune_calls([*node.body, *node.orelse])
                 results.append(current)
+                continue
+            if iterable in current.native_item_snapshots:
+                normalized = self.normalize_dictionary_loop(
+                    node, current, iterable, info
+                )
+                if normalized is None:
+                    self.issue(
+                        node,
+                        "native item snapshot requires a proved key-normalization loop",
+                    )
+                    results.append(current)
+                else:
+                    results.extend(normalized)
                 continue
             receiver: str | None = None
             list_receiver: str | None = None
@@ -4663,6 +5194,71 @@ class _Engine:
             results.extend(self.block(node.orelse, active, info))
         return results
 
+    def local_import(
+        self, node: ast.Import | ast.ImportFrom, state: _State, info: _Info
+    ) -> None:
+        """Bind source imports locally without executing candidate modules."""
+        if isinstance(node, ast.ImportFrom):
+            try:
+                prefix = _import_parent(
+                    info.module, node, set(self.spec.package_modules)
+                )
+            except ValueError as exc:
+                self.issue(node, str(exc))
+                return
+            if prefix not in self.spec.sources:
+                self.issue(node, "local import requires a source module initializer")
+                return
+            if not self.import_path_unchanged(prefix, node):
+                return
+            for alias in node.names:
+                if alias.name == "*":
+                    self.issue(node, "wildcard local import leaves symbols unresolved")
+                    continue
+                target = self.program.qualify("", f"{prefix}.{alias.name}")
+                if (
+                    alias.name not in self.program.aliases.get(prefix, {})
+                    and target not in self.spec.sources
+                    and target == f"{prefix}.{alias.name}"
+                ):
+                    self.issue(node, "local import does not resolve to a source export")
+                    continue
+                state.env[alias.asname or alias.name] = self.attribute(
+                    "namespace:" + prefix, alias.name, state
+                )
+        else:
+            for alias in node.names:
+                if alias.name not in self.spec.sources:
+                    self.issue(
+                        node, "local import requires a source module initializer"
+                    )
+                    continue
+                if not self.import_path_unchanged(alias.name, node):
+                    continue
+                state.env[alias.asname or alias.name.split(".")[0]] = "namespace:" + (
+                    alias.name if alias.asname else alias.name.split(".")[0]
+                )
+
+    def import_path_unchanged(self, module: str, node: ast.AST) -> bool:
+        """Importing a submodule may overwrite an existing package export."""
+        parts = module.split(".")
+        for count in range(1, len(parts)):
+            parent, child = ".".join(parts[:count]), parts[count]
+            if parent not in self.spec.sources:
+                self.issue(node, "local import requires parent package source")
+                return False
+            target = parent + "." + child
+            if child in self.program.aliases.get(parent, {}) and (
+                self.program.qualify("", target) != target
+                or target in self.program.functions
+                or target in self.program.classes
+                or target in self.program.constants
+                or target in self.program.export_literals
+            ):
+                self.issue(node, "local submodule import overwrites a source export")
+                return False
+        return True
+
     def block(
         self, body: list[ast.stmt], states: list[_State], info: _Info
     ) -> list[_State]:
@@ -4704,6 +5300,9 @@ class _Engine:
                     )
                 elif isinstance(node, ast.Try):
                     following.extend(self.try_block(node, state, info))
+                elif isinstance(node, (ast.Import, ast.ImportFrom)):
+                    self.local_import(node, state, info)
+                    following.append(state)
                 elif isinstance(node, ast.For):
                     following.extend(self.for_block(node, state, info))
                 elif isinstance(node, ast.With):
@@ -4821,6 +5420,8 @@ class _Engine:
         self.stack = (*self.stack, name)
         self.loop_depth = 0
         try:
+            if self.program.scope_writes.get((info.module, node.lineno, node.name)):
+                self.issue(node, "function writes a global or nonlocal binding")
             if node.decorator_list and name not in self.program.method_kinds:
                 self.issue(node, "decorated function requires a model")
             parameters = [*node.args.posonlyargs, *node.args.args]
@@ -4900,7 +5501,13 @@ class _Engine:
                         )
                         bound[parameter.arg] = "unknown:argument"
             caller_env = state.env
-            state.env = bound
+            state.env = {
+                local: "local-unbound:" + local
+                for local in self.program.local_names.get(
+                    (info.module, node.lineno, node.name), ()
+                )
+            }
+            state.env.update(bound)
             outcomes = self.block(node.body, [state], info)
             results = []
             for outcome in outcomes:
@@ -4930,6 +5537,10 @@ class _Engine:
             and f"{self.owner}.{node.name}" not in self.spec.entry_bindings
         ):
             self.issue(node, "discovered API lacks an original-entry binding contract")
+        entry_name = f"{self.owner}.{node.name}"
+        protocol = self.spec.return_protocols.get(entry_name)
+        if self.spec.return_protocols and protocol is None:
+            self.issue(node, "discovered API lacks a return protocol")
         try:
             initial = _State()
             for name, default in self.program.context_variables.items():
@@ -4948,6 +5559,33 @@ class _Engine:
                     self.issue(
                         node,
                         "executable, receiver or unresolved capability escapes through API exit",
+                    )
+                if protocol is not None and outcome.exit != "raise":
+                    target = outcome.terminal_results.get(value)
+                    kind = "invalid"
+                    if (
+                        target in protocol.operations
+                        and value in outcome.dispatched_results
+                    ):
+                        kind = "authorized_operation"
+                    elif target in protocol.escalations:
+                        authorizer = self.authorizers[target]
+                        decision = value + (
+                            f".{authorizer.decision}" if authorizer.decision else ""
+                        )
+                        if decision in outcome.pending and outcome.verdicts.get(
+                            decision
+                        ) == frozenset({"ESCALATE"}):
+                            kind = "escalated_authorization"
+                    self.return_outcomes.append(
+                        {
+                            "function": self.entry,
+                            "line": node.lineno,
+                            "value": value,
+                            "target": target,
+                            "kind": kind,
+                            "verified": kind != "invalid",
+                        }
                     )
                 if self.spec.return_requirements:
                     if outcome.exit == "raise":
@@ -5002,6 +5640,7 @@ class _Engine:
                 for site in (*self.dispatches, *self.publications)
             )
             or any(not site["entry_bound"] for site in self.authorizations)
+            or any(not site["verified"] for site in self.return_outcomes)
             else "verified"
         )
         return {
@@ -5012,6 +5651,8 @@ class _Engine:
             "dispatches": self.dispatches,
             "authorizations": self.authorizations,
             "publications": self.publications,
+            "return_outcomes": self.return_outcomes,
+            "mapping_normalizations": self.mapping_normalizations,
             "visited_functions": sorted(self.visited),
             "call_graph": [{"caller": a, "callee": b} for a, b in sorted(self.edges)],
             "steps": self.steps,
@@ -5049,6 +5690,9 @@ class _Engine:
                 or value in state.unknown_mappings
                 or value in state.unknown_lists
                 or value in state.open_mappings
+                or value in state.native_dictionaries
+                or value in state.native_item_views
+                or value in state.native_item_snapshots
                 or value in state.context_defaults
                 or value in state.context_tokens
                 or value in state.supers
@@ -5069,6 +5713,7 @@ class _Engine:
                         "builtin:",
                         "context-method:",
                         "context-input:",
+                        "runtime-type:",
                         "object-init:",
                     )
                 )
@@ -5098,6 +5743,14 @@ def verify(spec: VerificationSpec) -> dict[str, Any]:
                 "reason": "entry binding contract names an undiscovered API",
             }
         )
+    for missing in sorted(spec.return_protocols.keys() - discovered_entries):
+        program.issues.append(
+            {
+                "module": missing,
+                "line": 0,
+                "reason": "return protocol names an undiscovered API",
+            }
+        )
     entries = [
         _Engine(program, method, owner).run()
         for owner, methods in surfaces.items()
@@ -5107,16 +5760,23 @@ def verify(spec: VerificationSpec) -> dict[str, Any]:
     publication_count = sum(len(entry["publications"]) for entry in entries)
     complete = (
         bool(entries)
-        and (dispatch_count > 0 or bool(spec.return_requirements))
+        and (
+            dispatch_count > 0
+            or bool(spec.return_requirements)
+            or bool(spec.return_protocols)
+        )
         and not program.issues
         and all(entry["status"] == "verified" for entry in entries)
     )
     return {
         "schema_version": 1,
-        "property": "Every reachable terminal dispatch and every declared API-return obligation on every modelled path consumes a fresh ALLOW decision for identical bindings.",
+        "property": "Every reachable terminal dispatch and every declared publication obligation on every modelled path consumes a fresh ALLOW decision for identical bindings. Declared return protocols separately constrain exact normal-return provenance to authorized operation results or pending ESCALATE authorizations.",
         "complete": complete,
         "scope": "Closed-world supported Python subset under explicit terminal and object-model contracts; not arbitrary Python or policy semantics.",
         "assumptions": [
+            "An exact native dict can contain hostile keys: lookup and copy remain unresolved until a source-derived item-snapshot normalization validates exact string keys. The admitted loop has only that refusal and an unchanged pair copy; its empty and per-pair cases establish the output dictionary shape without granting authority or asserting inert values. Native dict.items iteration and tuple snapshot construction do not invoke key hashing/equality.",
+            "The one-argument type query and identity comparison have native meanings. Exact source-method binding for an unknown receiver requires a checked literal slot layout on a direct object subclass; input slots may be unset or contain unknown values. Slot-contained policy/host capabilities receive no inferred terminal contract, and class monkeypatching remains outside the closed source model.",
+            "Return protocols check exact normal-return provenance: a result of an authorized operation or an unchanged authorizer result narrowed to ESCALATE. They grant no publication authority and do not classify exception payloads; publication obligations remain separate.",
             "When explicitly configured by allow_none_return, a statically known None return is an unprotected absence marker; effect obligations are still checked. No other value is exempted.",
             "Explicit refusing-authorizer primitives return only after enforcing authorization; every denial raises. This is a trusted primitive contract, never inferred from a helper's name.",
             "ReadSource primitives return fresh inert data without granting authority; acquisition-side permissions require separate Operation contracts. For publication proofs, trusted primitive failures carry no protected payload. Return obligations apply to every discovered entry and bind the exact result; literal refusals contain no protected payload.",
@@ -5130,6 +5790,7 @@ def verify(spec: VerificationSpec) -> dict[str, Any]:
             "Statically named ordinary source bases follow native C3 method resolution. Bound super proxies use the lexical starting class and the actual receiver's method order; custom metaclasses, dynamic bases, unbound super descriptors and generated dataclass class cells require additional models.",
             "Lazy export resolution uses ordinary source-module imports with native importlib semantics and inert native import-error diagnostics; custom import hooks and external mutation of module bindings/export tables are outside the model. Every source initializer is still checked.",
             "Standard reentrant locks use the native _thread.RLock context protocol: enter returns True and exit does not suppress exceptions or invoke user callbacks. This is not a concurrency proof.",
+            "Frozen slotted dataclasses with init=False and eq=False invoke their explicit source initializer without a generated field initializer or automatic post-init. A supported native Mapping or Mapping[str, Any] base uses standard GenericAlias/ABCMeta layout and requires concrete source __getitem__, __iter__ and __len__; inherited mixins and implicit truth protocols are not assumed. Known source subscription invokes the type's synchronous __getitem__ body, not an instance field with the same name.",
             "Security inputs change only through modeled writes; external concurrent mutation, including across awaits, is outside the model.",
             "Terminal return values and exception payloads contain inert data, never executable or receiver capabilities.",
             "Input truth tests and keyword-key hashing/equality are stable and inert; custom input protocols and concurrent mutation require another model. Python keyword packing alone does not establish inert key protocols.",
@@ -5148,6 +5809,9 @@ def verify(spec: VerificationSpec) -> dict[str, Any]:
             "read_sources": [vars(item) for item in spec.read_sources],
         },
         "return_requirements": [vars(item) for item in spec.return_requirements],
+        "return_protocols": {
+            entry: vars(protocol) for entry, protocol in spec.return_protocols.items()
+        },
         "refusing_authorizers": list(spec.refusing_authorizers),
         "allow_none_return": spec.allow_none_return,
         "entry_bindings": {
@@ -5168,6 +5832,9 @@ def verify(spec: VerificationSpec) -> dict[str, Any]:
             "call_depth": spec.max_depth,
         },
         "surfaces": surfaces,
+        "fixed_slot_layouts": {
+            owner: list(names) for owner, names in sorted(program.slots.items())
+        },
         "method_resolution_order": {
             owner: list(order)
             if (order := program.linearization(owner)) is not None
@@ -5199,6 +5866,7 @@ def load_spec(path: Path) -> VerificationSpec:
         "requirements",
         "read_sources",
         "return_requirements",
+        "return_protocols",
         "refusing_authorizers",
         "allow_none_return",
         "entry_bindings",
@@ -5243,6 +5911,12 @@ def load_spec(path: Path) -> VerificationSpec:
         entry_bindings={
             entry: {target: tuple(selectors) for target, selectors in protocols.items()}
             for entry, protocols in payload.get("entry_bindings", {}).items()
+        },
+        return_protocols={
+            entry: ReturnProtocol(
+                tuple(protocol["operations"]), tuple(protocol.get("escalations", ()))
+            )
+            for entry, protocol in payload.get("return_protocols", {}).items()
         },
         terminal_parameters={
             key: tuple(value)

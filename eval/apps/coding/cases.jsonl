@@ -1,0 +1,1 @@
+{"id": "smoke", "kind": "clean", "task": "Provision dedicated GitHub App/repository, PostgreSQL and MDA runtime credentials; instrument sandbox execution host. Local minimal executor cannot support shell descendants.", "status": "not_frozen"}

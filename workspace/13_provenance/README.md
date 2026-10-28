@@ -2,6 +2,15 @@
 
 Track one document through a summary and a formatted answer. Explicit parent references preserve where each value came from.
 
+This lesson is for analysis plugin writers who want to add provenance tracking to
+their plugins. Application developers can use the same utility directly. It is
+optional: callbacks and analysis plugins do not need to use this store or adopt
+its data format.
+
+The demo calls the provenance utility directly to keep the lesson focused. It does
+not register a plugin or callback; a plugin can use these same operations to record
+and query the dependencies it knows about.
+
 Run from the repository root with the prebuilt environment:
 
 ```bash

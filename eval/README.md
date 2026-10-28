@@ -1,9 +1,73 @@
 # slangGraph evaluation
 
-This directory is the self-contained evaluation artifact for the kernel-enforced
-slangGraph design. Evaluation code, pinned baseline metadata, synthetic vulnerable
-tools, adapters, transcripts, audit databases, and generated tables live here.
+This directory contains evaluation source for the kernel-enforced slangGraph
+design: code, pinned baseline metadata, synthetic vulnerable tools, adapters,
+and input transcripts. Generated evidence is kept locally and excluded from Git.
 Nothing in this directory is required by the LangGraph libraries at runtime.
+
+## Generated evidence and reproduction
+
+Raw cohorts, captured source archives, Lean audit binaries, audit databases,
+process logs and generated data/plots are not distributed in this repository.
+Campaign narratives and acceptance dispositions summarize historical runs;
+their artifact paths refer to locally retained files and need not exist in a
+fresh clone. The original files remain on the evaluation host. A rerun produces
+a new observation; it cannot recreate missing historical provenance or guarantee
+identical model output, host availability or timings.
+
+Start with `PINS.md`, `ISOLATION.md`, the application READMEs, and the Makefile
+targets for dependencies and execution requirements. The current acceptance
+boundary is `docs/security/supported-surface.json`. Lean audits can be generated
+with `python3 proofs/worker-route/check.py --output NEW_DIR` and
+`python3 proofs/language-route/check.py --output NEW_DIR` from the repository
+root (with the pinned Lean toolchain and Python dependencies installed).
+
+The pandas drivers are `eval/remaining/application_campaign.py` and
+`eval/apps/pandas/closed_campaign.py`; the latter selects the closed v21
+configuration with `--manifest v21 --output NEW_DIR`. They require the pinned
+vendor checkout, local model service, host isolation capabilities and a Lean
+worker binary matching the selected manifest's path and digest. Verify cohorts
+with `eval/remaining/verify_pandas_campaign.py` or
+`eval/apps/pandas/verify_closed_campaign.py`. Use a new configuration/cohort for
+changed paths or binary pins; do not edit a historical observation to pass.
+
+`make security-verify` still requires valid runtime evidence at the paths named
+by the route manifest. A fresh clone without it fails closed. Regenerate and
+validate that evidence before claiming acceptance; proof-only or unit-test
+success is not a substitute. Saved-artifact tests skip explicitly when their
+local evidence is absent; code-level tests continue to run.
+
+## Completed evaluation
+
+Start with the [current evaluation](reports/paper-evaluation.md) and the
+[validated alternative-backend report](reports/alternatives-v2/report.md).
+The new results compare actual verified-language execution with Landlock and
+rootless-container adapters, include 16 operation/API microbenchmarks and a real
+Pandas computation replay, and separately evaluate an opaque native binary chain.
+
+Every primary timing cell has **100 measured calls across five process sessions**,
+with ten warmups per session. Reports include variance, paired session intervals,
+policy/execution attribution, operation-body timing, container lifecycle costs,
+host configuration, security coverage and exposure reduction. See the
+[fixed protocol](REPETITION_PROTOCOL.md), [CSV](reports/alternatives-v2/timings.csv),
+[comparison PDF](reports/alternatives-v2/comparison.pdf), and
+[operation PDF](reports/alternatives-v2/operations.pdf).
+
+The current host implementations are named evaluation adapters. Container setup
+is amortized across a session; each call gets a fresh worker. The Bubblewrap
+preflight failure and earlier single-session estimates remain available in the
+[historical appendix](reports/historical-runtime.md); they are not pooled with
+new measurements. The [native-chain report](reports/native-chain-v2/report.md)
+uses an explicitly separate exec-enabled profile.
+
+## Application study
+
+The new local-model application study is documented in [APPLICATIONS.md](APPLICATIONS.md).
+It tracks eight candidates from seven repositories separately from the synthetic
+experiments below. The [pilot evidence report](reports/application-pilot.md)
+records three local baselines and an experimental Pandas A/B/C integration,
+including failures and limitations. These are not completed protected ports or
+large-study results.
 
 ## Claim and primary measure
 
@@ -72,12 +136,14 @@ CaMeL's released tests and a local-Ollama plumbing smoke test also run at the pi
 See `STATUS.md` for the exact completed/pending boundary and `reproduction/E0.md`
 for baseline qualifications.
 
-The repository's current security layer does **not** yet contain the planned final
-Grant, Cedar policy adapter, host model, enforcement-adapter contract, Linux
-reference adapter, or service adapters. Therefore a zero-exposure static projection for the composed
-adapter model is a capability-model result, not runtime blocking evidence. No report
-may label a slangGraph adapter condition as dynamically verified until the selected
-adapters exist and emit enforcement audit records.
+The original static experiment's adapter projections are capability-model results,
+not runtime blocking evidence. The current implementation now documents a Grant
+pipeline and Linux bubblewrap executor; see
+[Linux host execution](../docs/security/users/linux-host-execution.md) for its
+supported filesystem/resource subset and unsupported service/network authority.
+That implementation does not retroactively validate static projections or existing
+reports. No application condition is dynamically verified without its own activation
+and independent effect evidence.
 
 ## Local commands
 
@@ -92,3 +158,26 @@ make seed-transcripts
 ```
 
 `make tables` only reads audit databases and reports; it never runs an experiment.
+
+## Trusted code versus host isolation
+
+[E6](ISOLATION.md) adds a matched runtime operation census across trusted Python,
+a synthetic restricted language, an admitted trusted helper, Linux host
+isolation, and their combination. It reports positive controls, per-operation
+effect evidence, activation receipts, and separate error/unavailable outcomes.
+The language frontend is a mechanism ablation, not a released sandbox baseline.
+
+```sh
+uv run --project . python -m slanggraph_eval.isolation.run \
+  --repetitions 3 --output reports/e6/new-run
+```
+
+## October 26 remaining evaluation handoff
+
+The expanded campaign is in `campaigns/remaining-v1/`, with a distributable archive
+under `handoffs/remaining-evaluation-20261026.tar.gz`. Start with its `RESULTS.md`
+and `FAILURES.md`: application failures, unsupported routes and failed verifier
+gates remain explicit. Original v2 cohorts are preserved under `completed-v2/`.
+Regenerate summaries with `python3 scripts/summarize.py .` from the extracted
+package; no benchmark rerun is required. New executable harnesses live in
+`remaining/`; measured source snapshots are separate from reporting cleanups.

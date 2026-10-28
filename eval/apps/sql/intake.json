@@ -1,0 +1,380 @@
+{
+  "id": "sql",
+  "repository": "business-science/ai-data-science-team",
+  "subdirectory": "apps/sql-database-agent-app",
+  "entrypoint": "app.py: handle_question -> SQLDatabaseAgent.ainvoke_agent",
+  "graph_files": [
+    "ai_data_science_team/agents/sql_database_agent.py",
+    "ai_data_science_team/templates/agent_templates.py",
+    "ai_data_science_team/tools/sql.py"
+  ],
+  "effects": "SQLAlchemy connection opened by UI; schema sampling and model calls in graph; generated Python exec in node_func_execute_agent_from_sql_connection. Preserve safe_mode query validation. Metadata sampling may read restricted tables before query dispatch.",
+  "next_action": "Run bundled backend on a recreated synthetic SQLite database; audit metadata reads as well as generated SQL.",
+  "sha": "4ffeb7f38178aa250917f29b01355f8b89ba809e",
+  "license": "MIT (see captured LICENSE text)",
+  "retrieved_at": "2026-10-26T00:31:38.372515+00:00",
+  "checkout": "/data/slanggraph-eval-upstreams/ai-data-science-team",
+  "archive": {},
+  "source_evidence": [
+    {
+      "path": "ai_data_science_team/agents/sql_database_agent.py",
+      "sha256": "03c086f72a076a39d0db29909d8fdc990a0125265c2977de491be383b9c30614",
+      "url": "https://github.com/business-science/ai-data-science-team/blob/4ffeb7f38178aa250917f29b01355f8b89ba809e/ai_data_science_team/agents/sql_database_agent.py",
+      "matches": [
+        {
+          "line": 160,
+          "text": "SQLDatabaseAgent : langchain.graphs.CompiledStateGraph"
+        },
+        {
+          "line": 164,
+          "text": "def __init__("
+        },
+        {
+          "line": 202,
+          "text": "def _make_compiled_graph(self):"
+        },
+        {
+          "line": 210,
+          "text": "def update_params(self, **kwargs):"
+        },
+        {
+          "line": 219,
+          "text": "async def ainvoke_agent("
+        },
+        {
+          "line": 234,
+          "text": "Additional keyword arguments to pass to ainvoke()."
+        },
+        {
+          "line": 243,
+          "text": "response = await self._compiled_graph.ainvoke("
+        },
+        {
+          "line": 255,
+          "text": "def invoke_agent("
+        },
+        {
+          "line": 270,
+          "text": "Additional keyword arguments to pass to invoke()."
+        },
+        {
+          "line": 279,
+          "text": "response = self._compiled_graph.invoke("
+        },
+        {
+          "line": 291,
+          "text": "def invoke_messages(self, messages: Sequence[BaseMessage], **kwargs):"
+        },
+        {
+          "line": 298,
+          "text": "response = self._compiled_graph.invoke("
+        },
+        {
+          "line": 310,
+          "text": "async def ainvoke_messages(self, messages: Sequence[BaseMessage], **kwargs):"
+        },
+        {
+          "line": 317,
+          "text": "response = await self._compiled_graph.ainvoke("
+        },
+        {
+          "line": 329,
+          "text": "def get_workflow_summary(self, markdown=False):"
+        },
+        {
+          "line": 342,
+          "text": "def get_log_summary(self, markdown=False):"
+        },
+        {
+          "line": 360,
+          "text": "def get_data_sql(self):"
+        },
+        {
+          "line": 374,
+          "text": "def get_sql_query_code(self, markdown=False):"
+        },
+        {
+          "line": 394,
+          "text": "def get_sql_database_function(self, markdown=False):"
+        },
+        {
+          "line": 415,
+          "text": "def get_recommended_sql_steps(self, markdown=False):"
+        },
+        {
+          "line": 439,
+          "text": "def make_sql_database_agent("
+        },
+        {
+          "line": 491,
+          "text": "app : langchain.graphs.CompiledStateGraph"
+        },
+        {
+          "line": 514,
+          "text": "response = sql_agent.invoke({"
+        },
+        {
+          "line": 565,
+          "text": "def recommend_sql_steps(state: GraphState):"
+        },
+        {
+          "line": 631,
+          "text": "recommended_steps = steps_agent.invoke("
+        },
+        {
+          "line": 647,
+          "text": "def create_sql_query_code(state: GraphState):"
+        },
+        {
+          "line": 709,
+          "text": "sql_query_code = sql_query_code_agent.invoke("
+        },
+        {
+          "line": 729,
+          "text": "def {function_name}(connection):"
+        },
+        {
+          "line": 771,
+          "text": "def human_review("
+        },
+        {
+          "line": 785,
+          "text": "def human_review("
+        },
+        {
+          "line": 798,
+          "text": "def execute_sql_database_code(state: GraphState):"
+        },
+        {
+          "line": 851,
+          "text": "def fix_sql_database_code(state: GraphState):"
+        },
+        {
+          "line": 879,
+          "text": "def report_agent_outputs(state: GraphState):"
+        },
+        {
+          "line": 926,
+          "text": "def smart_schema_filter("
+        },
+        {
+          "line": 961,
+          "text": "response = filter_schema_agent.invoke("
+        },
+        {
+          "line": 974,
+          "text": "def _truncate_metadata(metadata: str) -> str:"
+        },
+        {
+          "line": 983,
+          "text": "def _validate_sql(sql_text: str, safe_mode: bool = True):"
+        }
+      ]
+    },
+    {
+      "path": "ai_data_science_team/templates/agent_templates.py",
+      "sha256": "2d72b789825ff9e2933053aa8159d7aff05e5cfa3e5cf07e6f9d27fb1f4a4fc7",
+      "url": "https://github.com/business-science/ai-data-science-team/blob/4ffeb7f38178aa250917f29b01355f8b89ba809e/ai_data_science_team/templates/agent_templates.py",
+      "matches": [
+        {
+          "line": 2,
+          "text": "from langgraph.graph import StateGraph, END"
+        },
+        {
+          "line": 4,
+          "text": "from langgraph.graph.state import CompiledStateGraph"
+        },
+        {
+          "line": 26,
+          "text": "class BaseAgent(CompiledStateGraph):"
+        },
+        {
+          "line": 34,
+          "text": "def __init__(self, **params):"
+        },
+        {
+          "line": 60,
+          "text": "def _make_compiled_graph(self):"
+        },
+        {
+          "line": 68,
+          "text": "def update_params(self, **kwargs):"
+        },
+        {
+          "line": 78,
+          "text": "def __getattr__(self, name: str):"
+        },
+        {
+          "line": 90,
+          "text": "def invoke("
+        },
+        {
+          "line": 97,
+          "text": "Wrapper for self._compiled_graph.invoke()"
+        },
+        {
+          "line": 102,
+          "text": "**kwarg: Arguments to pass to self._compiled_graph.invoke()"
+        },
+        {
+          "line": 107,
+          "text": "self.response = self._compiled_graph.invoke("
+        },
+        {
+          "line": 118,
+          "text": "async def ainvoke("
+        },
+        {
+          "line": 125,
+          "text": "Wrapper for self._compiled_graph.ainvoke()"
+        },
+        {
+          "line": 130,
+          "text": "**kwarg: Arguments to pass to self._compiled_graph.ainvoke()"
+        },
+        {
+          "line": 135,
+          "text": "self.response = await self._compiled_graph.ainvoke("
+        },
+        {
+          "line": 146,
+          "text": "def stream("
+        },
+        {
+          "line": 181,
+          "text": "async def astream("
+        },
+        {
+          "line": 216,
+          "text": "def get_state_keys(self):"
+        },
+        {
+          "line": 225,
+          "text": "def get_state_properties(self):"
+        },
+        {
+          "line": 234,
+          "text": "def get_state(self, config, *, subgraphs=False):"
+        },
+        {
+          "line": 240,
+          "text": "def get_state_history(self, config, *, filter=None, before=None, limit=None):"
+        },
+        {
+          "line": 248,
+          "text": "def update_state(self, config, values, as_node=None):"
+        },
+        {
+          "line": 254,
+          "text": "def get_response(self):"
+        },
+        {
+          "line": 268,
+          "text": "def show(self, xray: int = 0):"
+        },
+        {
+          "line": 278,
+          "text": "def create_coding_agent_graph("
+        },
+        {
+          "line": 344,
+          "text": "app : langchain.graphs.StateGraph"
+        },
+        {
+          "line": 348,
+          "text": "workflow = StateGraph(GraphState)"
+        },
+        {
+          "line": 393,
+          "text": "def error_and_can_retry(state):"
+        },
+        {
+          "line": 436,
+          "text": "app = workflow.compile("
+        },
+        {
+          "line": 444,
+          "text": "def node_func_human_review("
+        },
+        {
+          "line": 518,
+          "text": "def node_func_execute_agent_code_on_data("
+        },
+        {
+          "line": 591,
+          "text": "exec(agent_code, global_vars, local_vars)"
+        },
+        {
+          "line": 631,
+          "text": "def node_func_execute_agent_from_sql_connection("
+        },
+        {
+          "line": 685,
+          "text": "exec(agent_code, global_vars, local_vars)"
+        },
+        {
+          "line": 712,
+          "text": "def node_func_fix_agent_code("
+        },
+        {
+          "line": 737,
+          "text": "It should support a call like `(llm | PythonOutputParser()).invoke(prompt)`."
+        },
+        {
+          "line": 774,
+          "text": "response = (llm | PythonOutputParser()).invoke(prompt)"
+        },
+        {
+          "line": 793,
+          "text": "def node_func_explain_agent_code("
+        },
+        {
+          "line": 818,
+          "text": "The language model used to explain the code. Should support `.invoke(prompt)`."
+        },
+        {
+          "line": 850,
+          "text": "response = llm.invoke(prompt)"
+        },
+        {
+          "line": 861,
+          "text": "def node_func_report_agent_outputs("
+        }
+      ]
+    },
+    {
+      "path": "ai_data_science_team/tools/sql.py",
+      "sha256": "260e36c778d0e7697d3b27139ebed665d5509ed29d6d2755f7130d82af83eafc",
+      "url": "https://github.com/business-science/ai-data-science-team/blob/4ffeb7f38178aa250917f29b01355f8b89ba809e/ai_data_science_team/tools/sql.py",
+      "matches": [
+        {
+          "line": 6,
+          "text": "def get_database_metadata(connection, n_samples=10) -> dict:"
+        },
+        {
+          "line": 118,
+          "text": "def build_query("
+        }
+      ]
+    }
+  ],
+  "dependency_inputs": {
+    "requirements.txt": "c85151b8c0e3c83d28c857891b0f2f68596e61eddbffe7fb9fef588499b28b75",
+    "setup.py": "68316c9656e50a70afcfce316556c21be83b3d4b28a73fe50e554769ce49cccb"
+  },
+  "python": {
+    "argv": [
+      "/data/slanggraph-eval-upstreams/ai-data-science-team/.venv/bin/python",
+      "--version"
+    ],
+    "returncode": 0,
+    "stdout": "Python 3.13.11\n",
+    "stderr": ""
+  },
+  "license_sha256": "5e27f42112dd7761c62c04f1576115a7dd5a498e8a3ae69c46bffa068aca1b30",
+  "license_text": "MIT License\n\nCopyright (c) 2024 ai-data-science-team authors\n\nPermission is hereby granted, free of charge, to any person obtaining a copy\nof this software and associated documentation files (the \"Software\"), to deal\nin the Software without restriction, including without limitation the rights\nto use, copy, modify, merge, publish, distribute, sublicense, and/or sell\ncopies of the Software, and to permit persons to whom the Software is\nfurnished to do so, subject to the following conditions:\n\nThe above copyright notice and this permission notice shall be included in all\ncopies or substantial portions of the Software.\n\nTHE SOFTWARE IS PROVIDED \"AS IS\", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR\nIMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,\nFITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE\nAUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER\nLIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,\nOUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE\nSOFTWARE.",
+  "intake_status": "reproducible with documented fixes (local-model backend only)",
+  "baseline_run": "results/sql-A-region-totals-r1-4410e692af5b48a2b5d86dd8482ad0a1/result.json",
+  "effect_inventory_kind": "source inspection; not a runtime trace",
+  "environment_freeze_returncode": 0
+}

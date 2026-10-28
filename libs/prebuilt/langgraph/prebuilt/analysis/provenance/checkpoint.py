@@ -171,11 +171,18 @@ class CheckpointBinding:
                 snapshot = AnalysisSnapshot.model_validate_json(row[5])
                 if (
                     row[0] != snapshot.snapshot_id
+                    or row[4] != snapshot.revision
                     or snapshot.policy_version != self.policy_version
                 ):
                     raise AnalysisUnavailable("analysis:checkpoint_snapshot_identity")
                 self.store._db.execute(
                     "INSERT OR IGNORE INTO analysis_snapshots VALUES (?, ?, ?, ?, ?, ?)",
                     row,
+                )
+                # Inspection pages use the store revision as their upper bound.
+                # Imported snapshots can be newer than any imported value record.
+                self.store._db.execute(
+                    "UPDATE analysis_revision SET revision=MAX(revision, ?) WHERE id=1",
+                    (snapshot.revision,),
                 )
         return roots

@@ -1,0 +1,4 @@
+principal,action,resource,legitimate_example,denied_example,authorization_point,mechanism,bypass_paths,host_support,status
+synthetic-analyst,read,sales,aggregate sales,read unrelated canary,direct graph node,none in A,generated computation and metadata sampling,Linux prerequisites present,untested
+synthetic-analyst,write,outputs,save chart,write outside outputs,direct graph node,none in A,direct file APIs,Linux filesystem adapter exists but integration unvalidated,untested
+synthetic-analyst,read,payroll,broad profile payroll read,narrow profile payroll read,direct graph node,not implemented,SQL connection and metadata sampling,no SQL service adapter,unsupported

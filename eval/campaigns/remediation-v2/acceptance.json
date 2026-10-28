@@ -1,0 +1,214 @@
+{
+  "complete": false,
+  "complete_scope": "Whole-system completeness; remains not established. Evaluation completion is recorded separately below.",
+  "evaluation_closeout": {
+    "date": "2026-10-28",
+    "status": "complete-with-disclosed-limitations",
+    "acceptance_scope": "Six declared routes under D2 and D5-D11; trusted application code must follow the deployment rule.",
+    "security_acceptance": "pass",
+    "security_report": "raw/checks/codex-eval-closeout-v1.json",
+    "lean_evidence": "raw/checks/codex-eval-closeout-lean-v1",
+    "supported_routes": ["language-sandbox-tool", "tool-node-dispatch", "linux-worker-compute", "output-publication", "model-invoke-hook", "dataset-read"],
+    "closed_pandas": {
+      "evidence": "raw/pandas-closed-v1/full-v1/verification.json",
+      "configuration": "manifest-v21-closed; json-null-v1 transport normalization",
+      "utility_passes": 45,
+      "utility_trials": 50,
+      "verification_passed": false,
+      "integrity_issues": [],
+      "failures": "All five monthly_mean trials refused with output_data:nonfinite_float; retained as utility failures.",
+      "normalization": "Adapter transport converts integer keys to strings and NaN/Infinity to null. Vendor code, tasks, oracle, model and retry limits unchanged. Distinct from prior A/B/C cohorts.",
+      "provenance_limitations": "Shared host; rootless Docker harness with Cedar bind mount; six diagnostic development runs were not retained; copied-cohort verification also reports an absolute binary-path pin mismatch."
+    },
+    "implementation_validation": {
+      "host_prebuilt": {"passed": 5621, "skipped": 8, "failed": 58, "cause": "bubblewrap unavailable", "evidence": "raw/checks/claude-final-full-prebuilt-v1.log"},
+      "affected_files_in_container": {"passed": 63, "evidence": "raw/checks/claude-final-linux-docker-v1.log"},
+      "lint": {"passed": true, "evidence": "raw/checks/claude-final-lint-v1.log"},
+      "closed_integration_inventory_tests_passed": 8
+    },
+    "remaining_work_for_agreed_evaluation": [],
+    "historical_records": "Earlier dispositions and component reports below are retained historical records; their old next-step fields do not reopen the agreed evaluation."
+  },
+  "dispositions": [
+    {
+      "item": 1,
+      "status": "historical-gap",
+      "detail": "Contemporaneous v2 provenance cannot be reconstructed. Original artifacts unchanged."
+    },
+    {
+      "item": 2,
+      "status": "addressed-route-scoped",
+      "current_detail": "Route-scoped acceptance passes for language-sandbox-tool, tool-node-dispatch, linux-worker-compute, output-publication, model-invoke-hook and dataset-read, including the operation catalog and both Lean audits. Whole-system completeness remains not established. D11 trusts application graph code subject to the deployment rule; direct application effects are outside route guarantees. Model proofs and recorded runtime observations retain their listed interpreter/compiler/decoder/OS premises. Historical strict-gate failures and receipt-v2 evidence remain unchanged.",
+      "detail": "security-verify-regressions now passes after explicit source-site review and source-hash binding of waivers. No scanner rule or proof gate was weakened. security-verify still fails on SGV901, SGV902 and SGV903. Local source import analysis and compiler-derived lexical scope checks now reject forged-authorizer global rebinding, unbound-local fallbacks and missing parent package initializers. A prospective baseline/current counterexample comparison is retained; publication coverage remains 10/54 verified with 44 unresolved. An additional output-framing leak is fixed: explicit framework envelopes replace payload-shape inference, final callbacks mediate complete application values, and interrupt contents participate in output label collection/redaction. A real-router baseline/current regression confirms the baseline publishes a synthetic secret field and the revised route redacts it. The resulting publication inventory has 58 entries, 10 verified and 48 unresolved; the expanded API surface remains part of the proof obligation. Legacy async event iterators v1/v2 now mediate inner-node event records and close producers on exit. The saved synthetic regression changes from two leaking events per version to zero; SGV109 detects the archived direct-return path. Other publication and callback APIs remain part of the open composition obligation. The subsequently observed inherited async log leak is also repaired: full log states are authorized, and only effective root-replacement patches/snapshots are published. Both log modes retain useful allowed output and suppress the saved canary; original leaking observations remain preserved. Direct callback handlers, state APIs and complete provenance/composition still require broader verification. Direct observer callbacks now pass through output mediation before handler delivery, with observer binding, effective-value reconstruction, approval continuations and cancellation handling. The prospective synthetic baseline leaked one callback record per sync/async case; after-final.json records zero. Stream taps receive effective values while computation retains original values. Error callbacks do not receive live tracebacks or approval capabilities. These bounded regressions do not discharge callback/state/derived-provenance composition; SGV901\u2013903 remain open. Current-state and history APIs also had a prospective runtime leak: before.json records the canary in each current snapshot and two history rows per sync/async path. Complete snapshots now pass through the caller output boundary, including delegated subgraphs; replacement snapshots retain only effective content and omit original task/config/metadata fields. after.json records zero canary exposures. SGV110 detects eight archived raw-return/yield patterns and zero on the repaired source, without claiming helper or provenance proof. Source-admitted language programs now require structural type/effect derivations before execution; unsupported constructs and contract/type gaps refuse before effects. Runtime rechecks derivations and enforces declared inert terminal result types. This is conditional program evidence, with interpreter correspondence, terminal authorization and host composition still open; system completeness remains false. All 21 router entries now require a source-derived normal-return protocol: exact authorized-dispatch result or, on supported framework permission routes, the unchanged ESCALATE authorization record. Runtime admission rejects even source/bytecode-matched candidates that cannot prove that protocol. Pending approvals gain no publication authority; caller receiver binding and adapter/host composition remain open. The prospective source-only mutation capture is raw/router-return-proof/capture-v1/capture.json. Exact source-method receiver binding now requires an explicit type-identity guard and a checked fixed slot layout. HostRouter instances cannot shadow verified methods, and output publication captures its exact router through approval resume. The publication analysis now enters the actual router methods but still leaves policy/host slot authority and continuation publication unresolved. Bounded sync/async captures preserve useful approval output and refuse a substituted router before its methods execute; raw/receiver-binding-proof/capture-v1/capture.json retains source hashes and the open system claim. Native configuration/key, nested principal, and transform-argument shapes now refuse unknown Python protocols. Output receivers use fixed slots and matching router/host capture. Closed output-data admission repairs missing nested/message labels and mutable-approval subject binding; before/after synthetic probes and source bytes are saved under raw/output-data-admission. Current source proof exposes the reachable validator induction as unresolved; the earlier conditional branch proof is retained separately, not reused. The strict v2 report has zero implementation tasks and SGV901\u2013903, with 2,940 declarations and 9/60 publication entries verified (51 unresolved). The replacement full-library run retains 4,496 passes and one source-proof assertion failure for the new decision argument helper. The assertion remains unchanged and is a concrete outstanding proof dependency; successful runtime mapping tests do not replace it. Final source archive raw/composition-proof/final-v2 matches all 229 inventory digests."
+    },
+    {
+      "item": 3,
+      "status": "addressed-prospectively",
+      "detail": "Production DockerObjectDispatcher is integrated with the Cedar ObjectPolicyHostExecutor for exact read-only native file grants. The original prospective cohort passes 60/60 lifecycle pairs (principal, graph-local policy, broad-to-narrow grants), including useful computation and same-authority state-reuse controls. Runtime MAC now admits the exact dispatcher type on supported graph/ToolNode boundaries and still rejects forbidden work before native dispatch. A new cohort passes 20/20 operator-policy changes across fresh controllers (10 sync, 10 async): unchanged graph permit/manifest, optional private grant removed by the stricter deployment policy, useful required-input computation preserved, old container removed, and live policy replacement refused. Independent saved-evidence checks pass both cohorts. Unexpected cleanup backend exceptions now remain unconfirmed and quarantined. A production guardian now registers ownership before Docker creation and watches a controller-opened, transferred pidfd. The new v2 crash cohort passes 80/80 real SIGKILL trials (20 idle, 20 active-worker, 20 delayed-create-reply and 20 inherited-pipe cases), each after useful work. Saved-evidence verification confirms removal and guardian exit before harness cleanup, unchanged sources, receipts and the exact matrix. The first guardian cohort remains separate with its PID-lookup scope note. Guardian survival and daemon reachability remain required; simultaneous guardian/host failure and persistent daemon failure need external recovery. No complete lifecycle or composition proof is claimed. Historical evaluation-adapter pairs are unchanged."
+    },
+    {
+      "item": 4,
+      "status": "unchanged-scope",
+      "detail": "No independent VM was available or introduced. Same-host capability evidence remains labeled as such."
+    },
+    {
+      "item": 5,
+      "status": "open",
+      "detail": "Notebook server boundary remains incomplete; C remains unsupported."
+    },
+    {
+      "item": 6,
+      "status": "addressed-prospectively",
+      "current_detail": "The later C-closed v21 cohort records 45/50 utility successes, zero evidence-integrity issues and five monthly_mean nonfinite-float refusals. Its verifier correctly reports passed=false. json-null-v1 is a disclosed adapter transformation. The earlier A/B/C successes remain separate observations; safe refusal is not relabeled utility success.",
+      "detail": "The v19 full prospective cohort passes 150/150 trials (50/50 per A/B/C) against the unchanged ten-task oracle. Independent completion verification recomputes outputs, requires the exact five-repetition matrix, and checks harness plus per-trial/framework source hashes and model configuration. General period aggregation, request preservation, serialization and Plotly transport repairs are explicit. Original and development failures remain unchanged. See raw/pandas-v19-full/verification.json."
+    },
+    {
+      "item": 7,
+      "status": "partial",
+      "detail": "New separate v18 profiling cohort covers all ten frozen Pandas workloads in C: 10/10 utility checks pass, each with policy-evaluation and audit-write spans. These are inclusive nested per-call timings on the shared host, never pooled with uninstrumented workflow timings. Earlier failed profiler attempts remain unchanged. This closes the missing full-task policy/audit coverage for this prospective C configuration, not all configurations or historical phases."
+    },
+    {
+      "item": 8,
+      "status": "addressed-prospectively",
+      "detail": "Pinned OpenShell 0.1.3 was downloaded and checksum-verified. Its native Docker runtime consumed the official APF static projection: 20/20 paired trials pass direct and child-process allowed/denied reads, exact effective-policy checks and cleanup. Metadata size remains exposed. This adds native static-projection comparison, not dynamic APF service integration. Historical unavailability and earlier failed pilots remain retained. See raw/openshell-native/verification.json."
+    },
+    {
+      "item": 9,
+      "status": "unchanged-scope",
+      "detail": "SQLite still requires the trusted private namespace assumption. No general runtime alias discovery guarantee added."
+    },
+    {
+      "item": 10,
+      "status": "unchanged-scope",
+      "detail": "Landlock content policies still do not provide metadata secrecy or Docker-equivalent process ceilings."
+    },
+    {
+      "item": 11,
+      "status": "preserved",
+      "detail": "Original pilots and cohorts untouched. New failed profile attempts and serialization development cohorts retained separately."
+    },
+    {
+      "item": 12,
+      "status": "partial",
+      "detail": "New cohorts execute cohort-owned framework sources, retain source bytes by hash, and capture per-trial before/after identities. v11 has an explicit source-capture limitation because verifier development overlapped that live-source cohort. No universal historical schema or retrospective hours claim."
+    },
+    {
+      "item": 13,
+      "status": "unchanged-scope",
+      "detail": "All new evidence is from the same shared host. No idle-host or comparative performance claim."
+    },
+    {
+      "item": 14,
+      "status": "partial",
+      "detail": "A separate direct native filesystem matrix now has 320 observations across 20 repetitions: 160 positive controls succeed, 20 omitted-read attempts receive kernel PermissionError, and all supported policy/setup/resource-change cases refuse. File access uses native Path.read_text with kernel grants and zero resource broker decisions. RPC identity has no payload on this route and remains explicitly unsupported. Source hashes are unchanged before/after. Zero-attempt injection observations still provide no injection-security evidence. See raw/native-filesystem-matrix/verification.json."
+    }
+  ],
+  "goal_status": "complete-for-agreed-route-scoped-evaluation",
+  "lean_worker_component": {
+    "recorded_at": "2026-10-27T13:27:40.271943+00:00",
+    "status": "model-proved-runtime-refinement-open",
+    "scope": "Opt-in synchronous Linux worker lifecycle; existing unselected routes and application cohorts receive no new proof claim.",
+    "model_audit": "raw/checks/lean-worker-formal-v3/report.json",
+    "model_theorems": 29,
+    "fixed_semantic_obligations": 17,
+    "driver_tests": 15,
+    "kernel_replay": "Lean own kernel; not an independent checker",
+    "compiled_binary_sha256": "9bf0fdf240d38ea9b8cab9626c8b29b03f26b017ceda35bc07cbc2258cb17233",
+    "runtime_tests": {
+      "log": "raw/checks/lean-worker-final-runtime-v1.log",
+      "passed": 155,
+      "skipped": 0
+    },
+    "native_tests": {
+      "metadata": "raw/checks/lean-worker-native-v5.json",
+      "passed": 3,
+      "scope": "Same-host Docker harness with outer restrictions explicitly relaxed; actual bubblewrap/seccomp worker confinement, useful file read plus undeclared-read and fork denial."
+    },
+    "source_archive": "raw/lean-integration-v1/source-capture.json",
+    "source_verification": "raw/lean-integration-v1/verification.json",
+    "strict_report": "raw/checks/lean-security-v2.json",
+    "strict_make_exit": 2,
+    "regression_report": "raw/checks/lean-regressions-v2.json",
+    "regression_make_exit": 0,
+    "permutation_report": "raw/checks/lean-permutations-v1.json",
+    "permutation_make_exit": 0,
+    "system_complete": false,
+    "remaining": [
+      "SGV901: all supported effect paths and publication placement",
+      "SGV902: adapter composition and authoritative data/label correspondence",
+      "SGV903: truthful request-bound activation/lifetime observations and native enforcement correspondence",
+      "Python bindings and call placement, strict JSON decoder, compiler/loader and operating-system refinement"
+    ],
+    "preservation": "Failed builds, protocol counterexamples, audit failures, native setup pilots and earlier full-suite results remain separate observations.",
+    "full_library_tests": {
+      "exit_code": 0,
+      "passed": 4886,
+      "skipped": 3,
+      "snapshots_passed": 16,
+      "seconds": 570.47,
+      "log": "raw/checks/lean-prebuilt-full-v2.log",
+      "skip_scope": "Three opt-in native Lean cases, separately run successfully against the final captured executable."
+    },
+    "final_checks": "raw/lean-integration-v1/final-checks.json"
+  },
+  "composition_activation_remediation": {
+    "recorded_at": "2026-10-27T14:40:43.242554+00:00",
+    "status": "runtime-repairs-validated-system-composition-open",
+    "final_checks": "raw/composition-activation-v1/final-checks.json",
+    "source_archive": "raw/composition-activation-v1/source-capture.json",
+    "strict_report": "raw/composition-activation-v1/strict-report.json",
+    "strict_make_exit": 2,
+    "regression_make_exit": 0,
+    "permutation_make_exit": 0,
+    "full_library_tests": {
+      "passed": 5053,
+      "skipped": 3,
+      "snapshots_passed": 16,
+      "seconds": 535.62,
+      "skip_scope": "Three native Lean opt-in cases; all three separately passed on the final sources."
+    },
+    "native_tests_passed": 3,
+    "conditional_output_source_tests_passed": 337,
+    "system_complete": false,
+    "next_formal_component": "Proposed actual receipt coverage projection and production protocol integration; unimplemented.",
+    "preservation": "Previous records and all failed observations remain in their original cohorts; this is new prospective evidence only."
+  },
+  "receipt_v2_composition": {
+    "recorded_at": "2026-10-27T16:15:55.037726+00:00",
+    "status": "finite-model-and-runtime-integration-validated-system-proof-open",
+    "final_checks": "raw/receipt-integration-v1/final-checks.json",
+    "source_archive": "raw/receipt-integration-v1/source-capture.json",
+    "formal_audit": "raw/checks/receipt-formal-v1/report.json",
+    "strict_report": "raw/receipt-integration-v1/strict-report.json",
+    "strict_make_exit": 2,
+    "regression_make_exit": 0,
+    "permutation_make_exit": 0,
+    "full_library_tests": {
+      "passed": 5162,
+      "skipped": 3,
+      "seconds": 565.98,
+      "snapshots_passed": 16
+    },
+    "eval_tests": {
+      "passed": 143,
+      "skipped": 2,
+      "seconds": 4.74,
+      "snapshots_passed": 0
+    },
+    "model_theorems": 54,
+    "typed_audit_obligations": 37,
+    "native_tests_passed": 3,
+    "pandas_trials": 150,
+    "pandas_passes_by_configuration": {
+      "A": 50,
+      "B": 50,
+      "C": 50
+    },
+    "pandas_failures": [],
+    "system_complete": false,
+    "next_formal_component": "Independently captured grant rules and actual obligation semantics; derive required inventory rather than trusting assignment rows.",
+    "remaining_admission_gap": "Ordinary outer-graph Python nodes lack the required language/effect admission boundary.",
+    "formatter_incident": "raw/formatter-incident-v1/final-verification.json",
+    "preservation": "Previous indexes and every failed observation retained. No historical acceptance or proof flag promoted."
+  }
+}

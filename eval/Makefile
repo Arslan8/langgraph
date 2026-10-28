@@ -46,3 +46,19 @@ test:
 
 tables:
 	uv run --project . python -m slanggraph_eval.tables --audit-dir audits --output-dir reports/generated
+
+.PHONY: isolation
+isolation:
+	uv run --project . python -m slanggraph_eval.isolation.run --repetitions 3 --output reports/e6/run-$$(date -u +%Y%m%dT%H%M%SZ)
+
+.PHONY: operation-microbench
+operation-microbench:
+	uv run --project . python -m slanggraph_eval.isolation.operations --samples 100 --warmup 10 --output reports/e6/operations-$$(date -u +%Y%m%dT%H%M%SZ)
+
+.PHONY: verified-microbench
+verified-microbench:
+	uv run --project . python -m slanggraph_eval.isolation.verified --samples 100 --warmup 10 --output reports/e6/verified-$$(date -u +%Y%m%dT%H%M%SZ)
+
+.PHONY: repeated-evaluation
+repeated-evaluation:
+	uv run --project . python scripts/repeat_protocol.py --output reports/repeated-$$(date -u +%Y%m%dT%H%M%SZ)

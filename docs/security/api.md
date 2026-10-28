@@ -64,14 +64,14 @@ confine the implementation.
 | `CedarPolicySet` | Separates tool-owner, principal, and share permits from additional graph-local forbids and rejects mixed effects. Operator MAC is installed independently. |
 | `install_mac_policy` | Installs immutable runtime-wide operator forbids before execution. Deployment policy from `LANGGRAPH_MAC_DIR/mac.cedar` (default `/etc/langgraph`) loads automatically and cannot be replaced by this API. |
 | `CedarObjectAuthorizer` | Intersects owner and principal/share DAC, applies MAC, preserves `need`/`want`, and returns a finite grant. Explicit class enforcement waivers require reasons and are bound into the grant. `artifact_root` and `authorization_artifacts()` expose retained private Cedar bundles for review and experimentation. |
-| `CedarCallPolicy` | Low-level Cedar call authorization only; does not certify source or provide verified admission. Use `cedar_security` for in-process tool admission. |
-| `cedar_security` | Binds an unnamed SLP manifest and caller-facing Cedar policy to a tool. In-process mode uses the trusted-tool contract; `dispatcher=ObjectBrokerDispatcher(...)` with `runs linux` or `runs broker` uses an isolated worker with kernel and broker enforcement. Derives identity and owner ceilings and constructs inspectable grants. |
+| `CedarCallPolicy` | Low-level Cedar call authorization only; does not certify source or provide verified admission. Use `cedar_security` for language-sandbox admission. |
+| `cedar_security` | Binds an unnamed SLP manifest and caller-facing Cedar policy to a tool. In-process mode interprets a source-admitted language program with mediated terminals; `dispatcher=ObjectBrokerDispatcher(...)` with `runs linux` or `runs broker` uses an isolated worker with kernel and broker enforcement. Derives identity and owner ceilings and constructs inspectable grants. |
 | `ObjectSandboxDispatcher` | Protocol combining isolated dispatch, exact-line support checks, and pinned-tool configuration validation. |
 | `ObjectBrokerDispatcher` | Linux Landlock/seccomp dispatcher negotiating host and semantic obligations for custom broker classes and exact-file kernel grants; records optional reductions and refuses missing required authority. |
 | `ResourceMediatorAdapter` | Operator-supplied exact resource assessment and invocation, with optional activation/release hooks. Semantic implementation is trusted. |
 | `ResourceSupport` | Exact/stricter/unsupported assessment, reviewed contract reference, protected paths, and required host capabilities. |
 | `sqlite_record_mediator` | Concrete parent-owned SQLite adapter for exact `db_record` read/write/delete grants with `lowering sqlite.record.v1`; fixed parameterized SQL and protected database directory. Requires Python 3.11+. |
-| `ResourceContract` (`security.mediators.contracts`) | Typed resource definition. Bind `implementation` and `mediator` (with `assess` and `validate` methods) during construction or with `.bind(...)`; omit `resource_parameter` for an object-bound API. Register `resources=(resource,)` on the broker dispatcher or on `cedar_security` for admitted in-process tools. `.permission(operation)` declares the exact object without application-managed IDs. Generates client methods, checker effects, declarations, and validated dispatch. |
+| `ResourceContract` (`security.mediators.contracts`) | Typed resource definition. Bind `implementation` and `mediator` (with `assess` and `validate` methods) during construction or with `.bind(...)`; omit `resource_parameter` for an object-bound API. Register `resources=(resource,)` on the broker dispatcher or on `cedar_security` for admitted language-sandbox tools. `.permission(operation)` declares the exact object without application-managed IDs. Generates client methods, checker effects, declarations, and validated dispatch. |
 | `ResourceReference` (`security.mediators`) | Opaque `.service` address for OS broker clients. Available as `resource.reference`; possession never substitutes for an invocation grant. |
 | `ResourceMediator` (`security.mediators.contracts`) | Owns `assess(line, host)` for lowering support and synchronous `validate(operation, arguments, context)` for request checks. Binding wires both methods; authorization and typed checks remain mandatory. |
 | `records` (`security.mediators.records`) | Registered typed record client with `read`, `write`, and `delete`; execution still requires an authenticated worker channel and a matching grant. |
@@ -100,13 +100,55 @@ syntax and [open object classes](object-classes.md) for the wiring model.
 | `Blobs` | Thread-safe mapping from module name to independent `Slot` values. |
 | `allocate_blobs` | Allocates one empty slot for each unique module name. |
 | `copy_blobs` | Copies all or selected slots without sharing their mutable mappings. |
-| `with_principal` | Copies a runnable config, prepares module credential slots, and binds the authenticated principal outside graph state. |
-| `principal_from` | Reads the bound principal from runnable config or runtime context and returns `None` when absent. Invalid reserved values fail closed. |
+| `with_principal` | Admits native config dictionaries, prepares module credential slots, and binds an exact `Principal` outside graph state. Supported runtime/context mirrors are copied before binding. |
+| `principal_from` | Reads an exact `Principal` from the authoritative configurable dictionary, or from an exact `Runtime` with a supported dictionary context when the direct binding is absent. Returns `None` when absent; unsupported identity-source shapes fail closed. |
 | `SecurityBindingError` | Raised when a module fails while preparing a principal binding. |
 | `SecurityConfigurationError` | Raised when secured execution would lose its explicit or inherited configuration. |
 
+Principal binding accepts `None` or an exact native `dict` for the config, and
+`None` or an exact native `dict` for `configurable`. Every key at these levels
+must be an exact `str`. Native item snapshots are checked before constructing a
+fresh dictionary or looking up reserved keys, so custom key equality, mapping
+methods and truth tests are not part of identity extraction. `Principal`
+subclasses, custom `Mapping` implementations and dictionary subclasses are not
+accepted as replacements for these admitted shapes.
+
+The direct `configurable.__principal__` value is authoritative. When it is
+absent, `principal_from` accepts only an exact `langgraph.runtime.Runtime` whose
+context is `None` or an exact dictionary with exact string keys. Arbitrary
+attribute-based contexts, including dataclass contexts carrying a principal
+attribute, cannot establish identity. An unrelated runtime or opaque context is
+not inspected when the direct principal is present. These checks validate the
+binding shape; authentication and ownership of the reserved principal slot remain
+the caller's control-plane responsibilities.
+
+`principal_from(config, include_runtime_context=False)` reads only the direct
+binding and returns `None` when it is absent, without inspecting a runtime or its
+context. The switch must be an exact boolean. Unsecured `ToolNode` request hooks
+use this mode to retain an explicit bound principal without treating arbitrary
+application contexts as identity sources; secured routes retain strict runtime
+context admission.
+
+Accepted principals have exact native strings for user and session IDs, an exact
+native string or `None` for the delegator, and exact frozensets of exact strings
+for roles and scopes. Their credential storage must
+use exact `Blobs` and `Slot` objects, native dictionaries with exact string keys,
+and native reentrant locks. Admission rejects substituted allocation, mapping or
+lock protocols before credential preparation or identity extraction. Policy-owned
+slot payload values remain opaque and mutable; validation does not inspect or
+copy them, authenticate their meaning, or seal credentials against later changes.
+Policy code and the control plane must preserve these native container shapes
+and stable bindings while using them.
+
+When `with_principal` mirrors identity into a supported runtime context, it
+returns a new `Runtime` and a shallow copy of the context dictionary. The
+original runtime/context and a parent binding retain their previous principal,
+including when child bindings are prepared concurrently. Other context values
+remain shared references. Opaque runtimes and unsupported context shapes are
+left untouched and do not become additional identity sources.
+
 `Principal`, `Tool`, and `ToolCall` are frozen records. Their nested `Blobs`
-remain mutable only through module-owned slots.
+remain mutable, and policy modules own the slot contents.
 
 ## Decisions, modules, and mediation
 
@@ -114,7 +156,7 @@ remain mutable only through module-owned slots.
 | --- | --- |
 | `Verdict` | Enum containing `ALLOW`, `DENY`, `TRANSFORM`, and `ESCALATE`. |
 | `ExecutionOutcome` | Durable execution state: denied before dispatch, succeeded, failed, or indeterminate. It is separate from an authorization verdict. |
-| `Decision` | Immutable verdict plus a reason. `TRANSFORM` requires `new_args`; `ESCALATE` requires an `EscalationRequest`; allow and deny carry neither. |
+| `Decision` | Immutable verdict plus a reason. `TRANSFORM` and `REDACT` require `new_args`; `ESCALATE` requires an `EscalationRequest`; allow and deny carry neither. Transform arguments require exact native dictionaries with exact string keys or the internal admitted argument record. They are stored in a tuple-backed read-only mapping and revalidated before narrowing. Custom mappings and mapping proxies are unsupported; values require separate admission. |
 | `EscalationRequest` | Redacted request ID, reason, tool and call IDs, and safe metadata. `to_payload()` never includes tool arguments. |
 | `Approval` | Human response containing request ID, boolean decision, approver, and optional reason. |
 | `SecurityModule` | Base class exposing the seven hooks: allocation, credential preparation and transfer, call preparation, call permission, post-call observation, and resume permission. |
@@ -186,7 +228,8 @@ TCB component and must pass its platform contract suite.
 | `HostExecutionError` | Post-activation failure carrying the verified receipt, outcome, termination status, and an operator recovery identity when termination is uncertain. |
 | `HostExecutionResult` | Successful host result paired with the verified receipt that must enter durable audit before its value is accepted. |
 | `HostToolExecutor` | Portable execution bridge used by `ToolNode` and `guarded_tool` after authorization. |
-| `LinuxSandboxExecutor` | Linux implementation that lowers supported filesystem and resource grants into a fresh bubblewrap worker. Before releasing the startup barrier, it verifies the payload process's namespace, capability, seccomp, no-new-privileges, thread, mount-table, credential, and process state. Frames are capped at 1 MiB, response structure is bounded, and termination is confirmed by boot ID, PID, and start time. The defaults name `RLIMIT_AS` as `address_space_bytes` and per-file `RLIMIT_FSIZE` as `file_size_bytes`; profile `memory_bytes` is unsupported. `activation_receipts()` exposes a bounded operational snapshot. |
+| `LinuxSandboxExecutor` | Linux implementation that lowers supported filesystem and resource grants into a fresh bubblewrap worker. Before releasing the startup barrier, it verifies the payload process's namespace, capability, seccomp, no-new-privileges, thread, mount-table, credential, and process state. Frames are capped at 1 MiB, response structure is bounded, and termination is confirmed by boot ID, PID, and start time. The defaults name `RLIMIT_AS` as `address_space_bytes` and per-file `RLIMIT_FSIZE` as `file_size_bytes`; profile `memory_bytes` is unsupported. `activation_receipts()` exposes a bounded operational snapshot. An optional `lifecycle_checker` selects the synchronous Lean decision route described below. |
+| `LeanLifecycleChecker` | Captures an operator-selected, SHA-256-pinned executable and runs its worker lifecycle decisions from sealed Linux storage before `GO` and after cleanup. Missing execution, unsupported traces and selected async calls refuse. The Lean model proof does not establish Python placement, observation truth, compiler/decoder correspondence or OS enforcement. See the [worker lifecycle guide](lean-worker-route.md). |
 | `LinuxToolSpec` | Trusted manifest binding a tool name to an importable entry point and operator-verified primary-source digest. `from_deployment` and `from_selection` additionally bind validated OSTree content before authorization. Legacy dependencies and runtime roots are not covered by the primary digest; they enter `sys.path` only after confinement. |
 | `BundleManifest` | Closed versioned `bundle.json` schema naming the tool, entry point, primary file, import roots, and optional dependency lock. |
 | `CleanupReport` | Reference-aware cleanup result listing retained commits and removed materialized checkouts. |
@@ -316,7 +359,7 @@ it into `compile()` with audited exceptions is planned, not shipped.
 | --- | --- |
 | `MediatedCheckpointer` | Principal-bound checkpoint adapter that mediates reads and writes, authenticates contents and pending writes, and refuses administrative calls without principal authority. |
 | `NodeKind` | Framework role used to choose the mandatory placement route for a node. |
-| `NodeTrust` | Explicit trusted or untrusted execution classification resolved at graph compilation. |
+| `NodeTrust` | Legacy operator-hosted versus isolated node classification; this is separate from language-sandbox tool admission. |
 | `PlacementSpec` | Resolved node name, trust, kind, and audited promotion evidence. |
 | `UntrustedNodeHost` | Protocol for a separate-process untrusted-node host with no coordinator capabilities. |
 | `OutputApprovalRequired` | Withheld output carrying a redacted approval payload and single-use resume functions. |

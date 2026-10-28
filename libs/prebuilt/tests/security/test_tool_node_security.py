@@ -8,6 +8,7 @@ from unittest.mock import Mock
 import pytest
 from langchain_core.messages import AIMessage
 from langchain_core.tools import tool
+from langgraph.runtime import Runtime
 from langgraph.store.memory import InMemoryStore
 
 from langgraph.prebuilt import InjectedState, ToolNode, ToolRuntime
@@ -511,7 +512,7 @@ def test_missing_principal_fails_closed() -> None:
         """Read a path."""
         return path
 
-    runtime = Mock(store=None, context=None, stream_writer=lambda _: None)
+    runtime = Runtime(context=None)
     node = ToolNode([read_file])
     stack = SecurityStack()
     node._configure_security(stack)

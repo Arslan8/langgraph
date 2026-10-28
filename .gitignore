@@ -110,3 +110,20 @@ node_modules/
 # Local security acceptance report (CI uploads it separately).
 /libs/prebuilt/security-verification-report.json
 /libs/prebuilt/security-permutation-report.json
+/libs/prebuilt/lean-worker-route-report/
+
+# Generated evaluation evidence stays local. Keep source/configuration elsewhere
+# under eval/, and retain campaign narratives and acceptance dispositions.
+/eval/audits/
+/eval/intake/
+/eval/results/
+/eval/handoffs/
+/eval/campaigns/**
+!/eval/campaigns/*/
+!/eval/campaigns/*/*.md
+!/eval/campaigns/*/acceptance.json
+!/eval/campaigns/remaining-v1/tasks.json
+/eval/reports/**
+!/eval/reports/**/
+!/eval/reports/**/*.md
+/libs/prebuilt/security-route-evidence/

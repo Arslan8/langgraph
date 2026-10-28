@@ -50,8 +50,9 @@ def publication_spec(sources: dict[str, str]) -> VerificationSpec:
         sources=sources,
         surfaces=SURFACES,
         # Do not pretend HostRouter.state/output_emit are refusing-return
-        # authorizers: they can return an ESCALATE ObjectAuthorization. Until
-        # receiver binding and that result protocol are modeled, calls remain
+        # authorizers: they can return an ESCALATE ObjectAuthorization. The
+        # router's separate source proof now checks return provenance, but
+        # caller receiver binding and handling of those alternatives remain
         # unresolved. Merely spelling a call "router" cannot grant evidence.
         authorizers=(),
         operations=(),

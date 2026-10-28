@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import asyncio
-from concurrent.futures import ThreadPoolExecutor
 from contextlib import contextmanager
 from contextvars import ContextVar
 from threading import Event
@@ -19,6 +18,7 @@ from langgraph.prebuilt.analysis.contracts import (
     AnalysisSnapshot,
 )
 from langgraph.prebuilt.analysis.errors import AnalysisUnavailable, ConfigurationError
+from langgraph.prebuilt.analysis.execution import CallbackExecutor
 from langgraph.prebuilt.analysis.journal import AnalysisJournal
 from langgraph.prebuilt.analysis.provenance.sqlite import SqliteProvenanceStore
 from langgraph.prebuilt.analysis.registry import AnalyzerRegistration, Registry
@@ -27,7 +27,11 @@ from langgraph.prebuilt.analysis.serialization import digest
 
 
 class AnalysisRuntime:
-    """One authenticated run. The root supplies identity and fixed configuration."""
+    """Structured consumer for an authenticated run, with validated persistence.
+
+    Opting into this integration requires the Analyzer result contract. Plain
+    event callbacks use Analysis and have no result schema requirement.
+    """
 
     def __init__(
         self,
@@ -53,9 +57,7 @@ class AnalysisRuntime:
         self.journal = AnalysisJournal(store)
         self.notifications = notifications
         self._influence = ContextVar(f"analysis-influence-{id(self)}", default=None)
-        self._executor = ThreadPoolExecutor(
-            max_workers=4, thread_name_prefix="analysis"
-        )
+        self._executor = CallbackExecutor()
 
     def _validate(self, event: AnalysisEvent) -> AnalysisEvent:
         if (event.tenant_id, event.session_id, event.run_id) != (
@@ -94,6 +96,9 @@ class AnalysisRuntime:
             self.journal.relevant_findings(event),
             monotonic() + registration.timeout,
             Event(),
+            analyzer_id=registration.analyzer_id,
+            analyzer_version=registration.version,
+            configuration_digest=self.config.policy_version,
         )
 
     def _commit(
@@ -177,17 +182,18 @@ class AnalysisRuntime:
         failed: list[str] = []
         required: list[str] = []
         for registration in self.registry.analyzers:
-            if event.event_name not in registration.events:
+            if event.event_name not in registration.event_names:
                 continue
             context = self._context(event, registration)
-            future = None
             try:
                 if set(registration.dependencies).intersection(failed):
                     raise AnalysisUnavailable("analysis:dependency_unavailable")
-                future = self._executor.submit(
-                    registration.analyzer.analyze, event, context
+                result = self._executor.call(
+                    registration.analyzer.analyze,
+                    event,
+                    context,
+                    timeout=registration.timeout,
                 )
-                result = future.result(timeout=registration.timeout)
                 self._commit(result, event, registration, context)
             except Exception:
                 failed.append(registration.analyzer_id)
@@ -195,8 +201,6 @@ class AnalysisRuntime:
                     required.append(registration.analyzer_id)
             finally:
                 context.cancellation.set()
-                if future is not None:
-                    future.cancel()
         return self._snapshot(
             event,
             "unavailable" if required else "failed" if failed else "complete",
@@ -209,14 +213,17 @@ class AnalysisRuntime:
         failed: list[str] = []
         required: list[str] = []
         for registration in self.registry.analyzers:
-            if event.event_name not in registration.events:
+            if event.event_name not in registration.event_names:
                 continue
             context = self._context(event, registration)
             try:
                 if set(registration.dependencies).intersection(failed):
                     raise AnalysisUnavailable("analysis:dependency_unavailable")
-                result = await asyncio.wait_for(
-                    registration.analyzer.aanalyze(event, context), registration.timeout
+                result = await self._executor.acall(
+                    registration.analyzer.aanalyze,
+                    event,
+                    context,
+                    timeout=registration.timeout,
                 )
                 self._commit(result, event, registration, context)
             except asyncio.CancelledError:
@@ -235,7 +242,7 @@ class AnalysisRuntime:
         )
 
     def close(self) -> None:
-        self._executor.shutdown(wait=False, cancel_futures=True)
+        self._executor.close()
 
     @contextmanager
     def influence_scope(self, refs):

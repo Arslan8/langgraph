@@ -9,6 +9,7 @@ from langgraph.prebuilt.analysis import (
     AnalysisResult,
     AnalyzerRegistration,
     AnnotationProposal,
+    BuiltinEvent,
 )
 from langgraph.prebuilt.analysis.serialization import canonical
 from langgraph.prebuilt.analysis_plugins.repeat_after_me.classifier import (
@@ -17,11 +18,13 @@ from langgraph.prebuilt.analysis_plugins.repeat_after_me.classifier import (
 )
 from langgraph.prebuilt.analysis_plugins.repeat_after_me.schema import Classification
 
-CLASSIFICATION_EVENTS = (
-    "input.admit",
-    "retrieval.result",
-    "tool.result",
-    "model.request",
+CLASSIFICATION_EVENTS = frozenset(
+    {
+        BuiltinEvent.INPUT_ADMIT,
+        BuiltinEvent.RETRIEVAL_RESULT,
+        BuiltinEvent.TOOL_RESULT,
+        BuiltinEvent.MODEL_REQUEST,
+    }
 )
 
 
@@ -36,10 +39,10 @@ class RepeatAfterMeAnalyzer:
 
     def registration(self) -> AnalyzerRegistration:
         return AnalyzerRegistration(
-            self.analyzer_id,
-            self.version,
-            self,
-            CLASSIFICATION_EVENTS,
+            analyzer_id=self.analyzer_id,
+            version=self.version,
+            analyzer=self,
+            events=CLASSIFICATION_EVENTS,
             timeout=30,
             content_access=True,
         )

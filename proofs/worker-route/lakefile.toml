@@ -1,0 +1,16 @@
+name = "worker-route"
+version = "0.1.0"
+defaultTargets = ["WorkerRoute", "ReceiptCoverage", "GrantCoverage", "workerRoute"]
+
+[[lean_lib]]
+name = "WorkerRoute"
+
+[[lean_lib]]
+name = "ReceiptCoverage"
+
+[[lean_lib]]
+name = "GrantCoverage"
+
+[[lean_exe]]
+name = "workerRoute"
+root = "Main"

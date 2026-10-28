@@ -8,7 +8,7 @@ from langchain_core.runnables import Runnable, RunnableConfig
 from langchain_core.tools import tool
 from langgraph.checkpoint.memory import InMemorySaver
 from langgraph.graph import END, START, StateGraph
-from langgraph.types import Send
+from langgraph.types import Send, interrupt
 from typing_extensions import NotRequired, TypedDict
 
 from langgraph.prebuilt import create_react_agent
@@ -481,3 +481,176 @@ async def test_subgraph_dispatch_denial_executes_zero_child_nodes(
 
     assert executed == []
     assert module.transfers == 1
+
+
+class EnvelopeShapedState(TypedDict):
+    type: str
+    data: str
+    secret: Any
+
+
+def produce_envelope_shaped_secret(state: EnvelopeShapedState) -> EnvelopeShapedState:
+    return {
+        "type": "values",
+        "data": "public",
+        "secret": LabeledValue(
+            "secret",
+            "envelope-canary",
+            SecurityLabels(confidentiality=frozenset({"secret"})),
+        ),
+    }
+
+
+@pytest.mark.parametrize("asynchronous", [False, True])
+@pytest.mark.parametrize("version", ["v1", "v2"])
+@pytest.mark.parametrize("multiple", [False, True])
+@pytest.mark.parametrize("subgraphs", [False, True])
+async def test_application_envelope_shape_cannot_bypass_output_redaction(
+    asynchronous, version, multiple, subgraphs
+):
+    handler = CaptureChainEnd()
+    builder = StateGraph(EnvelopeShapedState)
+    builder.add_node("produce", produce_envelope_shaped_secret)
+    builder.add_edge(START, "produce")
+    builder.add_edge("produce", END)
+    graph = builder.compile(security=SecurityConfig(modules=(RedactSecretOutput(),)))
+    config = with_principal({"callbacks": [handler]}, _principal())
+    kwargs = dict(
+        stream_mode=["values"] if multiple else "values",
+        version=version,
+        subgraphs=subgraphs,
+    )
+    chunks = (
+        [chunk async for chunk in graph.astream({}, config, **kwargs)]
+        if asynchronous
+        else list(graph.stream({}, config, **kwargs))
+    )
+    assert "envelope-canary" not in repr(chunks)
+    last = chunks[-1]
+    if version == "v2":
+        assert last["data"] == "[redacted]"
+    elif multiple or subgraphs:
+        assert last[-1] == "[redacted]"
+    else:
+        assert last == "[redacted]"
+    assert handler.outputs[-1] == "[redacted]"
+
+
+def interrupt_with_secret(state: PlacementState) -> PlacementState:
+    interrupt(
+        LabeledValue(
+            "secret",
+            "interrupt-canary",
+            SecurityLabels(confidentiality=frozenset({"secret"})),
+        )
+    )
+    return state
+
+
+@pytest.mark.parametrize("asynchronous", [False, True])
+@pytest.mark.parametrize("version", ["v1", "v2"])
+async def test_interrupt_values_are_included_in_output_redaction(asynchronous, version):
+    builder = StateGraph(PlacementState)
+    builder.add_node("pause", interrupt_with_secret)
+    builder.add_edge(START, "pause")
+    builder.add_edge("pause", END)
+    graph = builder.compile(
+        checkpointer=InMemorySaver(),
+        security=SecurityConfig(modules=(RedactSecretOutput(),)),
+    )
+    chunks = (
+        [
+            chunk
+            async for chunk in graph.astream(
+                {}, _config(), stream_mode="values", version=version
+            )
+        ]
+        if asynchronous
+        else list(graph.stream({}, _config(), stream_mode="values", version=version))
+    )
+    assert "interrupt-canary" not in repr(chunks)
+    assert "[redacted]" in repr(chunks)
+    if version == "v2":
+        assert chunks[-1]["interrupts"] == ()
+
+
+class RedactCanaryOutput(SecurityModule):
+    name = "redact_canary_output"
+
+    def output_emit(self, principal, request):
+        if "tuple-canary" in repr(request.content):
+            return Decision(
+                Verdict.REDACT,
+                "test:canary",
+                new_args={"content": "[redacted]", "labels": SecurityLabels()},
+            )
+        return Decision(Verdict.ALLOW, "test:public")
+
+
+@pytest.mark.parametrize("asynchronous", [False, True])
+@pytest.mark.parametrize(
+    "value", [("tuple-canary", "public"), (("tuple-canary",), "values", "public")]
+)
+async def test_plain_tuple_content_is_not_treated_as_stream_framing(
+    asynchronous, value
+):
+    builder = StateGraph(PlacementState)
+    builder.add_node("update", update_value)
+    builder.add_edge(START, "update")
+    builder.add_edge("update", END)
+    builder.compile(security=SecurityConfig(modules=(RedactCanaryOutput(),)))
+    mediator = builder._security_output_mediator
+    result = (
+        await mediator.acall(value, _config())
+        if asynchronous
+        else mediator(value, _config())
+    )
+    assert result == "[redacted]"
+
+
+class RedactDirectField(SecurityModule):
+    name = "redact_direct_field"
+
+    def output_emit(self, principal, request):
+        if (
+            isinstance(request.content, dict)
+            and request.content.get("value") == "application-value"
+        ):
+            return Decision(
+                Verdict.REDACT,
+                "test:direct_field",
+                new_args={"content": "[redacted]", "labels": SecurityLabels()},
+            )
+        return Decision(Verdict.ALLOW, "test:public")
+
+
+@pytest.mark.parametrize("asynchronous", [False, True])
+@pytest.mark.parametrize("version", ["v1", "v2"])
+async def test_ordinary_stream_hook_receives_application_fields(asynchronous, version):
+    builder = StateGraph(PlacementState)
+    builder.add_node("update", update_value)
+    builder.add_edge(START, "update")
+    builder.add_edge("update", END)
+    graph = builder.compile(security=SecurityConfig(modules=(RedactDirectField(),)))
+    chunks = (
+        [
+            chunk
+            async for chunk in graph.astream(
+                {"value": "application-value"},
+                _config(),
+                stream_mode="values",
+                version=version,
+            )
+        ]
+        if asynchronous
+        else list(
+            graph.stream(
+                {"value": "application-value"},
+                _config(),
+                stream_mode="values",
+                version=version,
+            )
+        )
+    )
+    first = chunks[0]["data"] if version == "v2" else chunks[0]
+    assert first == "[redacted]"

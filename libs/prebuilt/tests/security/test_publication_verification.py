@@ -1,5 +1,6 @@
 """Analyze inert adapter source fixtures; no fixture is imported or executed."""
 
+from pathlib import Path
 from textwrap import dedent
 
 import pytest
@@ -73,3 +74,44 @@ def test_missing_surface_and_dynamic_behavior_remain_unresolved():
 
 def test_empty_source_snapshot_cannot_pass():
     assert not verify_publications({})["complete"]
+
+
+def test_actual_output_guard_resolves_host_source_without_assuming_payload_admission():
+    repo = Path(__file__).resolve().parents[4]
+    snapshot = {
+        path.relative_to(repo).as_posix(): path.read_text()
+        for library in ("prebuilt", "langgraph", "checkpoint")
+        for path in (repo / "libs" / library / "langgraph").rglob("*.py")
+    }
+    report = verify_publications(snapshot)
+    collector = (
+        "langgraph.prebuilt.security.object_manager.ObjectManagerHost.labels_for_output"
+    )
+    for suffix in ("OutputMediator._emit", "OutputMediator._aemit"):
+        entry = next(
+            item for item in report["entries"] if item["entry"].endswith(suffix)
+        )
+        assert (
+            "langgraph.prebuilt.security.placement._require_output_host"
+            in entry["visited_functions"]
+        )
+        assert collector in entry["visited_functions"]
+        # Exact host binding now exposes the real collector's unresolved input,
+        # recursive traversal and lock premises before later routing calls.
+        assert any(issue["function"] == collector for issue in entry["issues"])
+        assert entry["status"] == "unresolved"
+    assert not report["complete"]
+    assert not report["proof"]["terminals"]["authorizers"]
+
+    path = "libs/prebuilt/langgraph/prebuilt/security/placement.py"
+    snapshot[path] = snapshot[path].replace(
+        "type(host) is not ObjectManagerHost", "not isinstance(host, ObjectManagerHost)"
+    )
+    weaker = verify_publications(snapshot)
+    entry = next(
+        item
+        for item in weaker["entries"]
+        if item["entry"].endswith("OutputMediator._emit")
+    )
+    assert collector not in entry["visited_functions"]
+    assert not weaker["complete"]

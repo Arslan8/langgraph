@@ -156,7 +156,7 @@ def test_optional_mediator_preserves_typed_checks(constructor):
         {"operation": "delete"},
         {"lowering": "other.v1"},
         {"attributes": {"extra": "value"}},
-        {"enforcer": EnforcementKind.TRUSTED_TOOL},
+        {"enforcer": EnforcementKind.LANGUAGE_SANDBOX},
     ],
 )
 def test_binding_cannot_assess_or_execute_another_contract(change):
@@ -283,6 +283,32 @@ def test_validation_never_observes_malformed_payloads():
     resource = CONTRACT.bind(implementation=backend, mediator=Validator(backend))
     with pytest.raises(ValueError):
         resource.adapter.invoke(LINE, {"amount": "2"}, CONTEXT)
+    assert backend.events == []
+
+
+@pytest.mark.parametrize("foreign", ["mapping", "key"])
+def test_resource_payload_refuses_foreign_protocols_before_backend(foreign):
+    calls = []
+
+    class ForeignMapping(dict):
+        def __contains__(self, key):
+            calls.append("contains")
+            raise AssertionError("payload membership protocol executed")
+
+    class ForeignKey:
+        def __hash__(self):
+            return hash("amount")
+
+        def __eq__(self, other):
+            calls.append("equality")
+            raise AssertionError("payload key protocol executed")
+
+    payload = ForeignMapping(amount=2) if foreign == "mapping" else {ForeignKey(): 2}
+    backend = Backend()
+    resource = CONTRACT.bind(implementation=backend, mediator=Validator(backend))
+    with pytest.raises(ValueError, match="payload"):
+        resource.adapter.invoke(LINE, payload, CONTEXT)
+    assert calls == []
     assert backend.events == []
 
 

@@ -23,6 +23,12 @@ fixed `TypedDict` results. Interfaces directly extend `ABC`, have empty slots,
 and contain only abstract methods. Defaults, variadic arguments, arbitrary
 objects, reflection, and dynamic method selection are unsupported.
 
+Typed payloads require native string keys before copying or lookup. Broker
+handoffs use a validated immutable argument record; an arbitrary mapping proxy
+does not establish that its backing mapping is safe. Fixed `TypedDict` results
+are checked through a native item snapshot before key equality or field lookup.
+Backend registration and its annotations remain operator-controlled setup.
+
 ```python
 class CounterAPI(ABC):
     __slots__ = ()
@@ -101,7 +107,7 @@ imports recreate their API definitions, but the broker resolves their registered
 export aliases to the parent's identity before checking the grant. An export
 alias is a locator, not authority.
 
-For a language-verified in-process tool:
+For a source-admitted language-sandbox tool:
 
 ```python
 security = cedar_security(
@@ -122,7 +128,7 @@ removing an optional permission does not leave a usable client capability.
 In-process bindings require `EXACT` support with no OS capability or protected-path
 requirements. Unsupported retained permissions fail closed, including `want`
 permissions; this path does not perform the OS negotiator's optional-authority
-pruning. Its host description explicitly represents trusted in-process execution,
+pruning. Its host description explicitly represents language-sandbox execution in the coordinator,
 not OS isolation. The counter demo requires broker/seccomp protection and therefore
 uses the OS path. Do not claim those protections for an in-process backend.
 

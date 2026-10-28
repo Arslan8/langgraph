@@ -321,6 +321,23 @@ def test_immutable_record_cannot_forge_an_authorization_decision():
     assert proof["entries"][0]["status"] == "violated", proof
 
 
+@pytest.mark.parametrize("default", ["", " = None"])
+def test_parenthesized_annotation_cannot_create_a_phantom_tuple_field(default):
+    proof = check(
+        """
+        record = Request(principal, resource)
+        d = permission(principal, resource)
+        if d.verdict is Verdict.ALLOW:
+            return dispatch(principal, record.resource)
+        """,
+        "class Request(NamedTuple):\n    principal: object\n"
+        + "    (resource): object"
+        + default
+        + "\n",
+    )
+    assert not proof["complete"], proof
+
+
 @pytest.mark.parametrize(
     "import_statement, base",
     [

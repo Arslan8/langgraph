@@ -1,0 +1,799 @@
+{
+  "id": "coding",
+  "repository": "langchain-ai/open-swe",
+  "subdirectory": ".",
+  "entrypoint": "openswe/threads/router.py -> Managed Deep Agents project mda/agent.py",
+  "graph_files": [
+    "langgraph.json",
+    "openswe/threads/router.py",
+    "mda/agent.py",
+    "mda/rt/file_tools.py",
+    "mda/rt/managed_sandbox.py",
+    "openswe/agent_api/graph.py"
+  ],
+  "effects": "Managed Deep Agents owns model loop, tools, checkpoints and sandbox. Backend uses PostgreSQL and GitHub credentials; remote sandbox shell/files and publication need execution-host instrumentation. Preserve upstream middleware and sandbox.",
+  "next_action": "Provision dedicated GitHub App/repository, PostgreSQL and MDA runtime credentials; instrument sandbox execution host. Local minimal executor cannot support shell descendants.",
+  "sha": "ff4e713c094c0abb8c76b3193de464d9b4f1e570",
+  "license": "MIT (see captured LICENSE text)",
+  "retrieved_at": "2026-10-26T00:31:38.372515+00:00",
+  "checkout": "/data/slanggraph-eval-upstreams/open-swe",
+  "archive": {},
+  "source_evidence": [
+    {
+      "path": "langgraph.json",
+      "sha256": "0031c0d6b752b036027ee94b93313ece1b105ae8caf78c7eddd4c444586e1d8a",
+      "url": "https://github.com/langchain-ai/open-swe/blob/ff4e713c094c0abb8c76b3193de464d9b4f1e570/langgraph.json",
+      "matches": []
+    },
+    {
+      "path": "openswe/threads/router.py",
+      "sha256": "88223b0c274565927c49739dadb300f7919526918ec1f7f5ac1c7f365e14a423",
+      "url": "https://github.com/langchain-ai/open-swe/blob/ff4e713c094c0abb8c76b3193de464d9b4f1e570/openswe/threads/router.py",
+      "matches": [
+        {
+          "line": 55,
+          "text": "_THREADS: Final = re.compile(r\"^(?:/noauth)?/threads/?$\")"
+        },
+        {
+          "line": 56,
+          "text": "_SEARCH: Final = re.compile(r\"^(?:/noauth)?/threads/search$\")"
+        },
+        {
+          "line": 57,
+          "text": "_COUNT: Final = re.compile(r\"^(?:/noauth)?/threads/count$\")"
+        },
+        {
+          "line": 58,
+          "text": "_THREAD: Final = re.compile(r\"^(?:/noauth)?/threads/(?P<thread_id>[0-9a-fA-F-]{36})(?P<rest>/.*)?$\")"
+        },
+        {
+          "line": 59,
+          "text": "_CANCEL_MANY: Final = re.compile(r\"^(?:/noauth)?/runs/cancel$\")"
+        },
+        {
+          "line": 60,
+          "text": "_CREATE_RUN: Final = re.compile(r\"^/runs(?:/stream|/wait)?$\")"
+        },
+        {
+          "line": 64,
+          "text": "def _routed(scope: Scope) -> bool:"
+        },
+        {
+          "line": 78,
+          "text": "def _started(thread_id: str, starting_ms: int) -> Callable[[Headers], Awaitable[None]]:"
+        },
+        {
+          "line": 81,
+          "text": "async def started(headers: Headers) -> None:"
+        },
+        {
+          "line": 92,
+          "text": "def _warn_local(scope: Scope, thread: IndexedThread) -> None:"
+        },
+        {
+          "line": 112,
+          "text": "async def _refuse_local(scope: Scope, send: Send, thread: IndexedThread) -> None:"
+        },
+        {
+          "line": 118,
+          "text": "async def _not_found(send: Send, thread_id: str) -> None:"
+        },
+        {
+          "line": 125,
+          "text": "def __init__(self, app: ASGIApp) -> None:"
+        },
+        {
+          "line": 135,
+          "text": "async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:"
+        },
+        {
+          "line": 141,
+          "text": "async def _route(self, scope: Scope, receive: Receive, send: Send) -> None:"
+        },
+        {
+          "line": 173,
+          "text": "async def _create(self, send: Send, body: bytes) -> None:"
+        },
+        {
+          "line": 192,
+          "text": "async def _index_new("
+        },
+        {
+          "line": 211,
+          "text": "async def _thread_itself("
+        },
+        {
+          "line": 234,
+          "text": "await send({\"type\": \"http.response.start\", \"status\": 204, \"headers\": []})"
+        },
+        {
+          "line": 235,
+          "text": "await send({\"type\": \"http.response.body\", \"body\": b\"\"})"
+        },
+        {
+          "line": 239,
+          "text": "async def _search(self, scope: Scope, send: Send, body: bytes, *, count: bool) -> None:"
+        },
+        {
+          "line": 254,
+          "text": "async def _create_run("
+        },
+        {
+          "line": 293,
+          "text": "async def _command(self, send: Send, body: bytes, thread_id: str) -> None:"
+        },
+        {
+          "line": 296,
+          "text": "await send({\"type\": \"http.response.start\", \"status\": reply.status, \"headers\": headers})"
+        },
+        {
+          "line": 297,
+          "text": "await send({\"type\": \"http.response.body\", \"body\": reply.content})"
+        },
+        {
+          "line": 299,
+          "text": "async def _copy(self, scope: Scope, send: Send, thread_id: str) -> None:"
+        },
+        {
+          "line": 324,
+          "text": "async def _to_runtime("
+        },
+        {
+          "line": 337,
+          "text": "async def _cancel_many(self, scope: Scope, receive: Receive, send: Send, body: bytes) -> None:"
+        }
+      ]
+    },
+    {
+      "path": "mda/agent.py",
+      "sha256": "4665b3b511dc00b05debcbbda980eb4e81253effd6f13313eab10e42b1b093b9",
+      "url": "https://github.com/langchain-ai/open-swe/blob/ff4e713c094c0abb8c76b3193de464d9b4f1e570/mda/agent.py",
+      "matches": [
+        {
+          "line": 35,
+          "text": "define_deep_agent,"
+        },
+        {
+          "line": 68,
+          "text": "from managed_deepagents.define_deep_agent import ManagedAsyncSubAgent"
+        },
+        {
+          "line": 115,
+          "text": "async def _catalog(context: OpenSweRunContext, backend: OpenSweBackend) -> Catalog:"
+        },
+        {
+          "line": 123,
+          "text": "def _backend_reports(backend: OpenSweBackend, catalog: Catalog) -> list[AgentMiddleware]:"
+        },
+        {
+          "line": 132,
+          "text": "def _code_mode("
+        },
+        {
+          "line": 155,
+          "text": "def _browser(graph: Graph, backend: OpenSweBackend) -> list[AgentMiddleware]:"
+        },
+        {
+          "line": 164,
+          "text": "# stays assignments and one `return define_deep_agent(...)`."
+        },
+        {
+          "line": 165,
+          "text": "async def agent(runtime: ManagedServerRuntime) -> DeepAgentDefinition:"
+        },
+        {
+          "line": 319,
+          "text": "return define_deep_agent("
+        }
+      ]
+    },
+    {
+      "path": "mda/rt/file_tools.py",
+      "sha256": "a59c1b074a7798c396d413d35787e7289ae0ac65d1e374bfe10394a6c876a0cc",
+      "url": "https://github.com/langchain-ai/open-swe/blob/ff4e713c094c0abb8c76b3193de464d9b4f1e570/mda/rt/file_tools.py",
+      "matches": [
+        {
+          "line": 64,
+          "text": "_GUARDED_WORDS: Final = re.compile(r\"\\b(?:push|gh|pulls)\\b\")"
+        },
+        {
+          "line": 65,
+          "text": "_SHELL: Final = re.compile(r\"\\b(?:ba|da|z)?sh\\b\")"
+        },
+        {
+          "line": 69,
+          "text": "_QUOTING: Final = re.compile(r\"\\\\\\n|[\\\"'\\\\]\")"
+        },
+        {
+          "line": 82,
+          "text": "def __init__("
+        },
+        {
+          "line": 113,
+          "text": "def code_tools(self, names: Iterable[str]) -> list[StructuredTool]:"
+        },
+        {
+          "line": 117,
+          "text": "def _code_tool(self, template: BaseTool) -> StructuredTool:"
+        },
+        {
+          "line": 120,
+          "text": "async def run(runtime: ToolRuntime, **arguments: JsonValue) -> ToolMessage | Command:"
+        },
+        {
+          "line": 134,
+          "text": "async def awrap_model_call("
+        },
+        {
+          "line": 147,
+          "text": "async def awrap_tool_call("
+        },
+        {
+          "line": 166,
+          "text": "async def _screened_run("
+        },
+        {
+          "line": 174,
+          "text": "async def _screened(self, request: ToolCallRequest) -> ToolCallRequest | ToolMessage:"
+        },
+        {
+          "line": 199,
+          "text": "async def _run_remote(self, request: ToolCallRequest) -> ToolMessage | Command:"
+        },
+        {
+          "line": 203,
+          "text": "async def _run_skill(self, request: ToolCallRequest) -> ToolMessage | Command:"
+        },
+        {
+          "line": 215,
+          "text": "async def _run_own(self, request: ToolCallRequest) -> ToolMessage | Command:"
+        },
+        {
+          "line": 220,
+          "text": "async def _checked(self, request: ToolCallRequest, handler: Handler) -> ToolMessage | Command:"
+        },
+        {
+          "line": 228,
+          "text": "async def _within_deadline("
+        },
+        {
+          "line": 249,
+          "text": "async def _invoked(tool: BaseTool, request: ToolCallRequest) -> ToolMessage | Command:"
+        },
+        {
+          "line": 251,
+          "text": "result = await tool.ainvoke("
+        },
+        {
+          "line": 264,
+          "text": "def _under(prefixes: Iterable[str], name: str, arguments: Mapping[str, object]) -> bool:"
+        },
+        {
+          "line": 272,
+          "text": "def _guarded(command: str) -> bool:"
+        },
+        {
+          "line": 277,
+          "text": "def _absolute(path: object) -> str | None:"
+        },
+        {
+          "line": 284,
+          "text": "async def _retried(request: ToolCallRequest, handler: Handler) -> ToolMessage | Command:"
+        }
+      ]
+    },
+    {
+      "path": "mda/rt/managed_sandbox.py",
+      "sha256": "aeb0cf7dd460d1d5aa711e3ef3ee411de69425b9c3c7ee938b00c36709fd2b4a",
+      "url": "https://github.com/langchain-ai/open-swe/blob/ff4e713c094c0abb8c76b3193de464d9b4f1e570/mda/rt/managed_sandbox.py",
+      "matches": [
+        {
+          "line": 39,
+          "text": "def definition(create: SandboxCreate, thread_id: str | None) -> SandboxDefinition:"
+        },
+        {
+          "line": 56,
+          "text": "async def opened_sandbox(runtime: Runtime) -> str | None:"
+        },
+        {
+          "line": 71,
+          "text": "def __init__(self, backend: OpenSweBackend, spec: SandboxSpec) -> None:"
+        },
+        {
+          "line": 75,
+          "text": "async def awrap_tool_call("
+        }
+      ]
+    },
+    {
+      "path": "openswe/agent_api/graph.py",
+      "sha256": "69cf992b3d5cdddac24ea5d697399e0532ea7a6c57923665f512fa7d763619a6",
+      "url": "https://github.com/langchain-ai/open-swe/blob/ff4e713c094c0abb8c76b3193de464d9b4f1e570/openswe/agent_api/graph.py",
+      "matches": [
+        {
+          "line": 253,
+          "text": "def _model_spec(choice: ModelChoice) -> ModelSpec:"
+        },
+        {
+          "line": 263,
+          "text": "def _carried_events(config: RunnableConfig) -> list[UUID]:"
+        },
+        {
+          "line": 280,
+          "text": "async def aresume_run(self, state: AgentState, runtime: Runtime) -> None: ..."
+        },
+        {
+          "line": 282,
+          "text": "async def aflush_run(self, runtime: Runtime) -> None: ..."
+        },
+        {
+          "line": 289,
+          "text": "async def atool_started(self, tool_call: ToolCall, message_id: str | None) -> None: ..."
+        },
+        {
+          "line": 291,
+          "text": "async def atool_finished(self, result: ToolMessage) -> None: ..."
+        },
+        {
+          "line": 297,
+          "text": "def __init__("
+        },
+        {
+          "line": 318,
+          "text": "def _carried(self) -> list[CarriedAcrossProcesses]:"
+        },
+        {
+          "line": 321,
+          "text": "async def join(self, state: Mapping[str, object], runtime: Runtime) -> None:"
+        },
+        {
+          "line": 329,
+          "text": "async def rejoin_preparation(self, runtime: Runtime) -> None:"
+        },
+        {
+          "line": 342,
+          "text": "async def flush(self, runtime: Runtime) -> None:"
+        },
+        {
+          "line": 347,
+          "text": "def models(self) -> SurfaceModels:"
+        },
+        {
+          "line": 352,
+          "text": "def state(self, call: RunCall) -> dict[str, object]:"
+        },
+        {
+          "line": 355,
+          "text": "def catalog(self) -> Catalog:"
+        },
+        {
+          "line": 431,
+          "text": "async def plan(self, run: RemoteRun | None = None) -> Catalog:"
+        },
+        {
+          "line": 452,
+          "text": "def settings(self) -> RunSettings:"
+        },
+        {
+          "line": 462,
+          "text": "async def sandbox(self) -> ManagedSandbox | None:"
+        },
+        {
+          "line": 469,
+          "text": "async def bind_sandbox(self, sandbox_id: str | None) -> None:"
+        },
+        {
+          "line": 475,
+          "text": "async def sandbox_replaced(self, _request: RunRequest) -> Done:"
+        },
+        {
+          "line": 481,
+          "text": "def _delegates(self) -> bool:"
+        },
+        {
+          "line": 487,
+          "text": "def _unoffered_delegation_tools(self) -> frozenset[str]:"
+        },
+        {
+          "line": 494,
+          "text": "def start_models(self) -> RunModels:"
+        },
+        {
+          "line": 495,
+          "text": "def spec(choice: ModelChoice) -> ModelSpec:"
+        },
+        {
+          "line": 507,
+          "text": "def loop(self) -> RunLoop:"
+        },
+        {
+          "line": 516,
+          "text": "def _incident(self) -> IncidentMiddleware | None:"
+        },
+        {
+          "line": 520,
+          "text": "def _client_tools(self) -> ClientToolsMiddleware | None:"
+        },
+        {
+          "line": 525,
+          "text": "async def in_run[T](self, name: str, work: Callable[[], Awaitable[T]]) -> T:"
+        },
+        {
+          "line": 529,
+          "text": "async def run(runtime: Runtime) -> T:"
+        },
+        {
+          "line": 535,
+          "text": "async def operation(self, request: RunOperation) -> OperationResult:"
+        },
+        {
+          "line": 547,
+          "text": "async def check_shell(self, request: ShellCheck) -> ShellVerdict:"
+        },
+        {
+          "line": 551,
+          "text": "async def record_evidence(self, request: ToolEvidence) -> EvidenceReply:"
+        },
+        {
+          "line": 566,
+          "text": "async def thread_files(self) -> BackendProtocol:"
+        },
+        {
+          "line": 571,
+          "text": "async def _answer_phase[R: PhaseResult]("
+        },
+        {
+          "line": 577,
+          "text": "async def run(runtime: Runtime) -> R:"
+        },
+        {
+          "line": 587,
+          "text": "async def prepare(self, request: Prepare) -> PhaseResult:"
+        },
+        {
+          "line": 595,
+          "text": "async def begun(state: dict[str, object], runtime: Runtime) -> PhaseResult:"
+        },
+        {
+          "line": 602,
+          "text": "async def before_model(self, request: RunCall) -> BeforeModel:"
+        },
+        {
+          "line": 605,
+          "text": "async def after_model(self, request: RunCall) -> PhaseResult:"
+        },
+        {
+          "line": 608,
+          "text": "async def after_agent(self, request: RunCall) -> AfterAgent:"
+        },
+        {
+          "line": 609,
+          "text": "async def reconciled(state: dict[str, object], runtime: Runtime) -> AfterAgent:"
+        },
+        {
+          "line": 620,
+          "text": "async def sandbox_unreachable(self, request: SandboxGone) -> Done:"
+        },
+        {
+          "line": 625,
+          "text": "def _offered(self) -> list[BaseTool]:"
+        },
+        {
+          "line": 629,
+          "text": "def _observed_request(state: Mapping[str, object], runtime: Runtime) -> ModelRequest:"
+        },
+        {
+          "line": 641,
+          "text": "def _chain("
+        },
+        {
+          "line": 652,
+          "text": "async def _wrap("
+        },
+        {
+          "line": 669,
+          "text": "def operation_state(request: RunOperation, restore: StateRestorer | None) -> dict[str, object]:"
+        },
+        {
+          "line": 679,
+          "text": "async def run_operation("
+        },
+        {
+          "line": 704,
+          "text": "async def run(runtime: Runtime) -> OperationResult:"
+        },
+        {
+          "line": 712,
+          "text": "outcome = await invoke(tool, decision.arguments, state, request.request_id)"
+        },
+        {
+          "line": 733,
+          "text": "async def check_shell(guards: ShellGuards, request: ShellCheck) -> ShellVerdict:"
+        },
+        {
+          "line": 745,
+          "text": "async def reconnect_sandbox(config: RunnableConfig, assistant_id: str | None) -> None:"
+        },
+        {
+          "line": 748,
+          "text": "async def reconnect(_runtime: Runtime) -> None:"
+        },
+        {
+          "line": 779,
+          "text": "def __init__(self, graph: RemoteGraph, run: RemoteRun, run_id: str | None) -> None:"
+        },
+        {
+          "line": 788,
+          "text": "def legacy(self) -> bool:"
+        },
+        {
+          "line": 792,
+          "text": "async def _ready(self, _runtime: Runtime) -> None:"
+        },
+        {
+          "line": 795,
+          "text": "async def in_run[T](self, name: str, work: Callable[[], Awaitable[T]]) -> T:"
+        },
+        {
+          "line": 798,
+          "text": "async def run(runtime: Runtime) -> T:"
+        },
+        {
+          "line": 804,
+          "text": "async def thread_files(self) -> BackendProtocol:"
+        },
+        {
+          "line": 812,
+          "text": "async def _session(self) -> RunSession:"
+        },
+        {
+          "line": 815,
+          "text": "async def skills(self, _request: RunRequest) -> RunSkills:"
+        },
+        {
+          "line": 818,
+          "text": "async def listed() -> RunSkills:"
+        },
+        {
+          "line": 826,
+          "text": "async def inbox(self, request: InboxRead) -> Inbox:"
+        },
+        {
+          "line": 838,
+          "text": "async def inbox_received(self, request: InboxReceipt) -> Done:"
+        },
+        {
+          "line": 842,
+          "text": "async def _reporting[T]("
+        },
+        {
+          "line": 861,
+          "text": "async def reported(runtime: Runtime) -> T:"
+        },
+        {
+          "line": 872,
+          "text": "async def model_result(self, request: ModelResult) -> Done:"
+        },
+        {
+          "line": 877,
+          "text": "async def respond(_request: ModelRequest) -> ModelResponse:"
+        },
+        {
+          "line": 880,
+          "text": "async def observe(state: dict[str, object], runtime: Runtime) -> list[BaseMessage]:"
+        },
+        {
+          "line": 894,
+          "text": "def _tool_recorders(self) -> list[RecordsRemoteTools]:"
+        },
+        {
+          "line": 897,
+          "text": "async def tool_started(self, request: ToolCallReport) -> Done:"
+        },
+        {
+          "line": 902,
+          "text": "async def record(_state: dict[str, object], _runtime: Runtime) -> None:"
+        },
+        {
+          "line": 909,
+          "text": "async def tool_result(self, request: ToolResultReport) -> ToolResultReply:"
+        },
+        {
+          "line": 914,
+          "text": "async def record(state: dict[str, object], _runtime: Runtime) -> dict[str, JsonValue]:"
+        },
+        {
+          "line": 926,
+          "text": "async def operation(self, request: RunOperation) -> OperationResult:"
+        },
+        {
+          "line": 947,
+          "text": "async def check_shell(self, request: ShellCheck) -> ShellVerdict:"
+        },
+        {
+          "line": 952,
+          "text": "async def sandbox_replaced(self, _request: RunRequest) -> Done:"
+        },
+        {
+          "line": 956,
+          "text": "async def sandbox_unreachable(self, request: SandboxGone) -> Done:"
+        },
+        {
+          "line": 961,
+          "text": "async def route_model(self, request: Routed) -> Route:"
+        },
+        {
+          "line": 965,
+          "text": "async def model_choice(self, request: ChosenModel) -> ModelSpec:"
+        },
+        {
+          "line": 968,
+          "text": "async def task_context(self, _request: RunRequest) -> TaskContext:"
+        },
+        {
+          "line": 971,
+          "text": "async def read() -> TaskContext:"
+        },
+        {
+          "line": 982,
+          "text": "async def refresh_github_proxy(self, _request: RunRequest) -> Done:"
+        },
+        {
+          "line": 994,
+          "text": "async def reply_on_behalf(self, request: ReplyOnBehalf) -> Done:"
+        },
+        {
+          "line": 998,
+          "text": "async def post() -> None:"
+        },
+        {
+          "line": 1008,
+          "text": "async def run_ended(self, request: RunEnded) -> AfterAgent:"
+        },
+        {
+          "line": 1012,
+          "text": "async def ended(state: dict[str, object], runtime: Runtime) -> AfterAgent:"
+        },
+        {
+          "line": 1028,
+          "text": "async def step_limit_reached(self, _request: RunRequest) -> Done:"
+        },
+        {
+          "line": 1032,
+          "text": "async def settle_review_check(self, _request: RunRequest) -> Done:"
+        },
+        {
+          "line": 1036,
+          "text": "async def finish_scout_plan(self, request: ScoutPlanEnd) -> Done:"
+        },
+        {
+          "line": 1037,
+          "text": "async def finish() -> None:"
+        },
+        {
+          "line": 1043,
+          "text": "async def browser(self, request: BrowserReport) -> Done:"
+        },
+        {
+          "line": 1053,
+          "text": "def __init__(self, assistant_id: str, plan: RunPlanner, parts: RunParts | None = None) -> None:"
+        },
+        {
+          "line": 1059,
+          "text": "def config_for("
+        },
+        {
+          "line": 1069,
+          "text": "async def _planned(self, run: RemoteRun, run_id: str | None, *, fresh: bool) -> RunSession:"
+        },
+        {
+          "line": 1084,
+          "text": "async def start_run(self, run: RemoteRun) -> RunStart:"
+        },
+        {
+          "line": 1089,
+          "text": "async def session("
+        },
+        {
+          "line": 1103,
+          "text": "def end(self, run: RemoteRun, run_id: str | None) -> None:"
+        },
+        {
+          "line": 1106,
+          "text": "async def api(self, run: RemoteRun, endpoint: str, raw: JsonValue) -> JsonValue:"
+        },
+        {
+          "line": 1127,
+          "text": "def _json_or_text(value: object) -> JsonValue:"
+        },
+        {
+          "line": 1134,
+          "text": "def _properties(tool: BaseTool) -> Mapping[str, object]:"
+        },
+        {
+          "line": 1139,
+          "text": "def _operation_result(outcome: ToolMessage | Command, request_id: str) -> OperationResult:"
+        },
+        {
+          "line": 1166,
+          "text": "def _message_content(content: str | list[JsonValue]) -> str | list[str | dict]:"
+        },
+        {
+          "line": 1172,
+          "text": "async def _catalog(session: RunSession, _request: RunRequest) -> Catalog:"
+        },
+        {
+          "line": 1183,
+          "text": "def _b64(data: bytes | None) -> str | None:"
+        },
+        {
+          "line": 1190,
+          "text": "async def thread_files(self) -> BackendProtocol: ..."
+        },
+        {
+          "line": 1192,
+          "text": "async def in_run[T](self, name: str, work: Callable[[], Awaitable[T]]) -> T: ..."
+        },
+        {
+          "line": 1195,
+          "text": "async def _ls(run: ReachesFiles, request: PathRequest) -> LsReply:"
+        },
+        {
+          "line": 1201,
+          "text": "async def _read(run: ReachesFiles, request: ReadRequest) -> ReadReply:"
+        },
+        {
+          "line": 1209,
+          "text": "async def _write(run: ReachesFiles, request: WriteRequest) -> FileReply:"
+        },
+        {
+          "line": 1217,
+          "text": "async def _edit(run: ReachesFiles, request: EditRequest) -> FileReply:"
+        },
+        {
+          "line": 1228,
+          "text": "async def _delete(run: ReachesFiles, request: DeleteRequest) -> FileReply:"
+        },
+        {
+          "line": 1234,
+          "text": "async def _glob(run: ReachesFiles, request: GlobRequest) -> GlobReply:"
+        },
+        {
+          "line": 1240,
+          "text": "async def _grep(run: ReachesFiles, request: GrepRequest) -> GrepReply:"
+        },
+        {
+          "line": 1251,
+          "text": "async def _execute(run: ReachesFiles, request: ExecuteRequest) -> ExecuteReply:"
+        },
+        {
+          "line": 1263,
+          "text": "async def _upload(run: ReachesFiles, request: UploadRequest) -> TransferReplies:"
+        },
+        {
+          "line": 1272,
+          "text": "async def _download(run: ReachesFiles, request: DownloadRequest) -> TransferReplies:"
+        }
+      ]
+    }
+  ],
+  "dependency_inputs": {
+    "uv.lock": "1de56e3211d365a961f82989ec7e3b19d3063fd4c29c9cb7dade47089fc705ef",
+    "pyproject.toml": "d71acdda2b153cb0187ee3840e261af31bb7df7477a1786a8b8a55f392f5e5ba"
+  },
+  "python": {
+    "argv": [
+      "/data/slanggraph-eval-upstreams/open-swe/.venv/bin/python",
+      "--version"
+    ],
+    "returncode": 0,
+    "stdout": "Python 3.14.2\n",
+    "stderr": ""
+  },
+  "license_sha256": "61e5e8faf0b76db76793ecd8aa0edca36a82bd8dba279d2a31972f026c132423",
+  "license_text": "The MIT License\n\nCopyright (c) LangChain, Inc.\n\nPermission is hereby granted, free of charge, to any person obtaining a copy\nof this software and associated documentation files (the \"Software\"), to deal\nin the Software without restriction, including without limitation the rights\nto use, copy, modify, merge, publish, distribute, sublicense, and/or sell\ncopies of the Software, and to permit persons to whom the Software is\nfurnished to do so, subject to the following conditions:\n\nThe above copyright notice and this permission notice shall be included in\nall copies or substantial portions of the Software.\n\nTHE SOFTWARE IS PROVIDED \"AS IS\", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR\nIMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,\nFITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE\nAUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER\nLIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,\nOUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN\nTHE SOFTWARE.",
+  "intake_status": "blocked",
+  "baseline_run": null,
+  "effect_inventory_kind": "source inspection; not a runtime trace",
+  "environment_freeze_returncode": 0
+}

@@ -1,77 +1,61 @@
-"""Demo 12: execution boundaries."""
+"""Demo 12: extend demo 11 to observe the tool lifecycle."""
 
-from langgraph.prebuilt.analysis import (
-    BUILTIN_EVENTS,
-    AnalysisConfig,
-    AnalysisResult,
-    AnalysisRuntime,
-    AnalyzerRegistration,
-    Registry,
-)
-from langgraph.prebuilt.analysis.adapters.boundary import BoundaryAdapter
-from langgraph.prebuilt.analysis.provenance.store import MemoryProvenanceStore
+from langchain_core.tools import tool
+from langgraph.prebuilt import ToolNode
+from langgraph.prebuilt.analysis import Analysis, BuiltinEvent
+from langgraph.runtime import Runtime
 
 
-class EventRecorder:
-    def __init__(self, steps):
-        self.steps = steps
+@tool
+def add(a: int, b: int) -> int:
+    """Add two numbers, rejecting negative inputs for the error example."""
+    print("  add executes")
+    if a < 0 or b < 0:
+        raise ValueError("Use non-negative numbers")
+    return a + b
 
-    def analyze(self, event, context):
-        self.steps.append(event.event_name)
-        return AnalysisResult()
 
-    async def aanalyze(self, event, context):
-        return self.analyze(event, context)
+def on_proposal(call):
+    print(f"  tool.propose: {call['name']}")
+
+
+def on_prepare(call):
+    print(f"  tool.prepare: {call['name']}")
+
+
+def on_dispatch(call):
+    print(f"  tool.dispatch: {call['name']}")
+
+
+def on_result(message):
+    print(f"  tool.result: {message.content}")
+
+
+def on_error(message):
+    print(f"  tool.error: {message.content.splitlines()[0]}")
 
 
 def main():
-    steps = []
-    registrations = (
-        AnalyzerRegistration(
-            "recorder",
-            "1",
-            EventRecorder(steps),
-            ("model.request", "model.response"),
-        ),
-    )
-    store = MemoryProvenanceStore()
-    registry = Registry(
-        BUILTIN_EVENTS,
-        registrations,
-        producers=frozenset(spec.producer for spec in BUILTIN_EVENTS),
-    )
-    runtime = AnalysisRuntime(
-        AnalysisConfig("{}", ()),
-        registry,
-        store,
-        tenant_id="demo",
-        session_id="session",
-        run_id="lesson",
-        principal_id="owner",
-    )
-    boundary = BoundaryAdapter(runtime)
-    try:
-        prompt = boundary.value("Say hello")
-
-        def local_model():
-            steps.append("model executes")
-            return "Hello"
-
-        result, response = boundary.call(
-            "model.request",
-            "model.response",
-            (prompt,),
-            local_model,
-            lambda text: text,
-        )
-        assert steps == ["model.request", "model executes", "model.response"]
-        assert result == "Hello"
-        assert prompt in store.ancestors(response)
-        print(" -> ".join(steps))
-        print("Response: Hello")
-    finally:
-        runtime.close()
-        store.close()
+    with Analysis() as analysis:
+        analysis.on(BuiltinEvent.TOOL_PROPOSE, on_proposal)
+        analysis.on(BuiltinEvent.TOOL_PREPARE, on_prepare)
+        analysis.on(BuiltinEvent.TOOL_DISPATCH, on_dispatch)
+        analysis.on(BuiltinEvent.TOOL_RESULT, on_result)
+        analysis.on(BuiltinEvent.TOOL_ERROR, on_error)
+        tools = ToolNode([add], analysis=analysis, handle_tool_errors=True)
+        for label, a in (("Success", 2), ("Failure", -1)):
+            print(label)
+            tools.invoke(
+                [
+                    {
+                        "name": "add",
+                        "args": {"a": a, "b": 3},
+                        "id": label,
+                        "type": "tool_call",
+                    }
+                ],
+                runtime=Runtime(),
+            )
 
 
 if __name__ == "__main__":

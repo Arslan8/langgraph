@@ -5,6 +5,38 @@ slangGraph provides extensible instrumentation, provenance tracking and enforcem
 The implementation starts at `Arslan8/slanggraph` `wip`, base
 `5bebea0ffbce3a68895deb266838291165719e1f`. Analysis is disabled by default.
 
+## Observation versus enforcement
+
+Plain analysis callbacks observe execution; they do not implement runtime argument-
+based detection gates. Existing runtime security mechanisms own access decisions.
+Observer failures are logged without changing the operation, and framework event
+payloads are detached so callback mutations cannot rewrite arguments or results.
+Caller cancellation and actual runtime/tool failures retain their existing behavior.
+This is a separation of responsibilities for trusted plugins, not callback sandboxing.
+Static manifest admission is a distinct pre-execution control. Existing structured
+security-policy integrations remain explicit policies rather than callback authority.
+
+## Optional result contracts
+
+The core `Analysis` event dispatcher accepts ordinary callbacks and developer-owned
+payloads. It returns callback outputs unchanged, including `None`. It does not
+require tracked values, findings, identities, a database or a result schema.
+Logging and private result ecosystems remain the developer's choice.
+`ToolNode(..., analysis=analysis)` connects this dispatcher to real proposal,
+preparation, dispatch, result and error boundaries. Tool events are not synthesized
+by demo code. Other event families need their corresponding instrumentation.
+
+`CallbackExecutor` handles execution for both plain callbacks and the structured
+integration. `StructuredAnalysis` is the explicit local opt-in to that integration;
+`AnalysisRuntime` supports its authenticated/persistent application use. Structured
+validation, provenance and persistence are consumers of callback results, not
+requirements imposed by the callback executor. Shared policy and inspection tools
+require standardized findings at their integration boundary. Their validation and
+fail-closed behavior remain in place; an arbitrary callback result grants no authority.
+
+See [callback examples and migration](plugin-api.md). The rest of this document
+describes the optional structured integration and its security guarantees.
+
 ## Ownership and dependency direction
 
 `langgraph.prebuilt.analysis` owns versioned records, scheduling, canonical storage,
@@ -59,3 +91,11 @@ not silently discarded.
 See [coverage](coverage.md), [information flow](information-flow.md),
 [plugins](plugin-api.md), [developer access](developer-api.md) and
 [extension contracts](extension-contracts.md).
+
+## Optional static information-flow control
+
+[Static IFC](static-flow.md) checks manifest-bounded read/input authority against
+write and return clearances during source-bound tool admission. It rejects unknown
+or incompatible bounds before execution and leaves the existing runtime grant and
+body-identity checks intact. This is a conservative tool-local control for the
+supported in-process subset, separate from callback delivery and runtime provenance.

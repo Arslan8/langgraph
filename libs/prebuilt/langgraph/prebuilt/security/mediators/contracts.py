@@ -35,6 +35,7 @@ from langgraph.prebuilt.security.resource_mediator import (
     ResourceMediatorAdapter,
     ResourceSupport,
 )
+from langgraph.prebuilt.security.types import _decision_arguments
 
 T = TypeVar("T")
 _SCALARS = {str, int, bool, float}
@@ -78,6 +79,19 @@ def current_invocation() -> ResourceInvocation:
     return context
 
 
+def _native_dictionary(value: Any) -> dict[str, Any]:
+    """Snapshot native transport keys before copying, hashing or lookup."""
+    if type(value) is not dict:
+        raise TypeError("typed data requires a plain dictionary")
+    pairs = tuple(value.items())
+    result = {}
+    for key, item in pairs:
+        if type(key) is not str:
+            raise TypeError("typed data keys must be plain strings")
+        result[key] = item
+    return result
+
+
 def _check_value(value: Any, annotation: Any) -> bool:
     if annotation in _SCALARS:
         return type(value) is annotation
@@ -87,10 +101,12 @@ def _check_value(value: Any, annotation: Any) -> bool:
         return any(_check_value(value, item) for item in get_args(annotation))
     if is_typeddict(annotation):
         fields = get_type_hints(annotation)
-        return (
-            type(value) is dict
-            and set(value) == set(fields)
-            and all(_check_value(value[name], kind) for name, kind in fields.items())
+        try:
+            snapshot = _native_dictionary(value)
+        except TypeError:
+            return False
+        return set(snapshot) == set(fields) and all(
+            _check_value(snapshot[name], kind) for name, kind in fields.items()
         )
     return False
 
@@ -357,7 +373,7 @@ class ResourceContract(Generic[T]):
             and line.lowering == self.lowering
             and line.enforcer
             in (
-                {EnforcementKind.BROKER, EnforcementKind.TRUSTED_TOOL}
+                {EnforcementKind.BROKER, EnforcementKind.LANGUAGE_SANDBOX}
                 if self._object_id
                 else {EnforcementKind.BROKER}
             )
@@ -547,6 +563,10 @@ class ResourceContract(Generic[T]):
             if not self._matches(line):
                 raise PermissionError("resource line does not match typed contract")
             method = self.methods[line.operation]
+            try:
+                payload = _decision_arguments(payload)
+            except TypeError as exc:
+                raise ValueError("invalid typed resource payload") from exc
             if self.resource_parameter in payload:
                 raise ValueError("payload cannot replace the authorized resource")
             try:

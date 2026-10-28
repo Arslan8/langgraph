@@ -17,6 +17,7 @@ import shutil
 import subprocess
 import tempfile
 import time
+import warnings
 from collections import deque
 from collections.abc import Callable, Iterable, Mapping, Sequence
 from dataclasses import dataclass, field
@@ -24,9 +25,12 @@ from enum import Enum
 from pathlib import Path
 from threading import RLock
 from types import MappingProxyType
-from typing import Any, Protocol, runtime_checkable
+from typing import TYPE_CHECKING, Any, Protocol, runtime_checkable
 
 from langchain_core.tools import BaseTool
+
+if TYPE_CHECKING:
+    from langgraph.prebuilt.analysis.static_flow import StaticFlowPolicy
 
 from langgraph.prebuilt.security.config import SecurityConfig
 from langgraph.prebuilt.security.descriptor import (
@@ -74,7 +78,20 @@ class EnforcementKind(str, Enum):
     BROKER = "broker"
     RESOURCE_SIDE = "resource_side"
     FRAMEWORK = "framework"
-    TRUSTED_TOOL = "trusted_tool"
+    LANGUAGE_SANDBOX = "language_sandbox"
+    # Source compatibility only; emitted manifests and receipts use the new name.
+    TRUSTED_TOOL = "language_sandbox"
+
+    @classmethod
+    def _missing_(cls, value):
+        if value == "trusted_tool":
+            warnings.warn(
+                "enforced_by trusted_tool is deprecated; use language_sandbox",
+                DeprecationWarning,
+                stacklevel=2,
+            )
+            return cls.LANGUAGE_SANDBOX
+        return None
 
 
 @dataclass(frozen=True, slots=True)
@@ -136,13 +153,13 @@ class ObjectClass:
         )
 
 
-_TRUSTED_TOOL_CORE_CLASSES = (
+_LANGUAGE_SANDBOX_CORE_CLASSES = (
     ObjectClass(
         name="fs",
         operations=frozenset({"read"}),
         object_kind="path",
         normalizer="fs.realpath",
-        enforced_by=EnforcementKind.TRUSTED_TOOL,
+        enforced_by=EnforcementKind.LANGUAGE_SANDBOX,
     ),
 )
 
@@ -1046,27 +1063,32 @@ class CedarCallPolicy(SecurityModule):
         return Decision(Verdict.ALLOW, "cedar_call:allow")
 
 
-class _TrustedInProcessEnforcer:
-    """Acknowledge the explicit TCB contract for trusted in-process tools."""
+class _LanguageSandboxEnforcer:
+    """Declare resource enforcement through the admitted language sandbox."""
 
-    enforcer_id = "trusted-tool-host-intersection"
+    enforcer_id = "language-sandbox-host-intersection"
 
     def supports(self, object_class: ObjectClass, line: ObjectGrantLine) -> bool:
-        return object_class.enforced_by is EnforcementKind.TRUSTED_TOOL
+        return object_class.enforced_by is EnforcementKind.LANGUAGE_SANDBOX
 
 
-class _TrustedInProcessDispatcher:
-    """Execute one trusted tool after its complete object grant is authorized."""
+class _LanguageSandboxDispatcher:
+    """Execute one admitted language program after authorizing its object grant."""
 
-    enforcer_id = "trusted-tool-host-intersection"
+    enforcer_id = "language-sandbox-host-intersection"
 
     def __init__(
-        self, tool: BaseTool, manifest: SecurityManifest, resources=()
+        self,
+        tool: BaseTool,
+        manifest: SecurityManifest,
+        resources=(),
+        *,
+        static_flow: StaticFlowPolicy | None = None,
     ) -> None:
         from langgraph.prebuilt.security.inprocess import ManifestAdmission
 
         self.tool = tool
-        self.admission = ManifestAdmission(tool, manifest)
+        self.admission = ManifestAdmission(tool, manifest, static_flow=static_flow)
         self.resources = resources
 
     def invoke(
@@ -1127,7 +1149,7 @@ class _TrustedInProcessDispatcher:
     @staticmethod
     def _arguments(call: ToolCall) -> Mapping[str, object]:
         # Descriptor-normalized resource arguments replace their raw forms so
-        # the trusted tool acts on the same canonical identity policy observed.
+        # the language-sandbox tool acts on the same canonical identity policy observed.
         arguments = {
             name: call.normalized.get(name, value) for name, value in call.args.items()
         }
@@ -1185,13 +1207,14 @@ def cedar_security(
     normalizers: Mapping[str, ObjectNormalizer] | None = None,
     dispatcher: ObjectSandboxDispatcher | None = None,
     resources: Sequence[Any] = (),
+    static_flow: StaticFlowPolicy | None = None,
     labels: Callable[
         [Principal, ToolCall],
         Mapping[tuple[str, str], Mapping[str, str]],
     ]
     | None = None,
 ) -> SecurityConfig:
-    """Bind Cedar DAC to a trusted tool or an explicitly isolated dispatcher.
+    """Bind Cedar DAC to a language-sandbox tool or an isolated dispatcher.
 
     `manifest` is an unnamed SLP tool body. The tool's internal name is derived
     from `tool`, and exact owner permits are generated automatically. `classes`
@@ -1199,7 +1222,7 @@ def cedar_security(
     caller-facing Cedar permit policy. For resource-bearing manifests, access
     to the derived operations also determines caller eligibility; resource-free
     manifests require an explicit caller-side `call` permit. Resource grants
-    use the trusted-tool/host-permission intersection contract in process.
+    use language-sandbox mediation intersected with host permissions.
     `mac_forbids` adds graph-local restrictions (legacy parameter name); it
     cannot replace or disable operator policy from `install_mac_policy`.
     `resources` registers object-bound implementations for admitted in-process
@@ -1209,13 +1232,16 @@ def cedar_security(
     For `runs linux` or `runs broker`, supply an isolated `dispatcher`; the
     registered schema tool is never executed in the coordinator. Kernel and
     broker classes must be supported by that dispatcher before execution.
-    In-process bodies must pass source-only manifest consistency checking;
+    Language-sandbox bodies must pass source-only manifest consistency checking;
     unavailable source, unmodeled calls, and unsupported syntax deny admission.
     Resource access must use approved `security.inprocess` APIs or registered
-    typed resource clients.
+    typed resource clients. Optional `static_flow` rejects incompatible or unknown
+    confidentiality bounds during in-process admission, before execution.
     """
     if not isinstance(tool, BaseTool):
         raise TypeError("cedar_security requires a @tool-decorated BaseTool")
+    if static_flow is not None and dispatcher is not None:
+        raise ValueError("static_flow requires in-process manifest admission")
     tool_name = tool.name
     if not _NAME.fullmatch(tool_name):
         raise ValueError("tool name must be an identifier")
@@ -1234,14 +1260,14 @@ def cedar_security(
     for resource in resources:
         resource.adapter  # Require an implementation at registration.
         declaration = resource.class_declaration(
-            enforced_by="trusted_tool" if dispatcher is None else "broker"
+            enforced_by="language_sandbox" if dispatcher is None else "broker"
         )
         previous = declarations.setdefault(resource.class_name, declaration)
         if previous != declaration:
             raise ValueError("conflicting resource class definitions")
     classes = classes + "\n" + "\n".join(declarations.values())
     core_classes = (
-        _TRUSTED_TOOL_CORE_CLASSES
+        _LANGUAGE_SANDBOX_CORE_CLASSES
         if dispatcher is None
         else (
             ObjectClass(
@@ -1258,7 +1284,7 @@ def cedar_security(
         source=f"<{tool_name} manifest>",
         normalizers=normalizers,
         enforcers={
-            EnforcementKind.TRUSTED_TOOL: _TrustedInProcessEnforcer(),
+            EnforcementKind.LANGUAGE_SANDBOX: _LanguageSandboxEnforcer(),
         }
         if dispatcher is None
         else {
@@ -1277,16 +1303,16 @@ def cedar_security(
             rule.class_name
             for rule in tool_manifest.rules
             if parsed.registry.classes[rule.class_name].enforced_by
-            is not EnforcementKind.TRUSTED_TOOL
+            is not EnforcementKind.LANGUAGE_SANDBOX
         }
     )
     if dispatcher is None and invalid_enforcers:
         raise ValueError(
-            "cedar_security resource classes must use enforced_by trusted_tool: "
+            "cedar_security resource classes must use enforced_by language_sandbox: "
             + ", ".join(invalid_enforcers)
         )
     policies = CedarPolicySet(
-        {tool_name: _trusted_tool_owner_policy(tool_manifest)},
+        {tool_name: _language_sandbox_owner_policy(tool_manifest)},
         policy,
         "",
         mac_forbids,
@@ -1303,7 +1329,9 @@ def cedar_security(
         authorizer,
         dispatcher
         if dispatcher is not None
-        else _TrustedInProcessDispatcher(tool, parsed, resources),
+        else _LanguageSandboxDispatcher(
+            tool, parsed, resources, static_flow=static_flow
+        ),
         tool_owners={tool_name: owner},
         labels=labels,
     )
@@ -1617,8 +1645,8 @@ def _tool_call_permit(tool_name: str) -> str:
     )
 
 
-def _trusted_tool_owner_policy(tool: ToolManifest) -> str:
-    """Generate the exact owner ceiling for a directly bound trusted tool."""
+def _language_sandbox_owner_policy(tool: ToolManifest) -> str:
+    """Generate the exact owner ceiling for a directly bound language-sandbox tool."""
     policies = [_tool_call_permit(tool.name)]
     operations = sorted({(rule.class_name, rule.operation) for rule in tool.rules})
     for class_name, operation in operations:

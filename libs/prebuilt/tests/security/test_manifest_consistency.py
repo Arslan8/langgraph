@@ -21,7 +21,7 @@ class fs {
   object path
   normalizer identity
   attrs
-  enforced_by trusted_tool
+  enforced_by language_sandbox
 }
 """
 MODELS = (

@@ -1,0 +1,9 @@
+name = "language-route"
+version = "0.1.0"
+defaultTargets = ["LanguageRoute", "Controls"]
+
+[[lean_lib]]
+name = "LanguageRoute"
+
+[[lean_lib]]
+name = "Controls"

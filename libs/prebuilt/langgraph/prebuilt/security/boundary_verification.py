@@ -19,6 +19,7 @@ from langgraph.prebuilt.security.mediation import Authorizer, Operation
 from langgraph.prebuilt.security.types import Verdict
 from langgraph.prebuilt.security.verification import (
     Requirement,
+    ReturnProtocol,
     VerificationSpec,
     verify,
 )
@@ -187,6 +188,25 @@ def router_spec(source: str) -> VerificationSpec:
                 else {"principal": 1, "call": 2, "request": 2, "approval": 3}
             ]
         },
+        return_protocols={
+            f"{_CLASS}.{name}": ReturnProtocol(
+                operations=(
+                    f"{_CLASS}.host.{prefix}"
+                    + (
+                        "dispatch"
+                        if kind == "framework"
+                        else "invoke_from"
+                        if kind == "cross_tool"
+                        else "invoke"
+                    ),
+                ),
+                escalations=(f"{_CLASS}.policy.{prefix}object_permission",)
+                if kind == "framework" and name not in {"resume", "aresume"}
+                else (),
+            )
+            for name, kind in _ENTRY_KINDS.items()
+            for prefix in ("a" if name.startswith("a") else "",)
+        },
     )
 
 
@@ -258,12 +278,13 @@ def verify_router_source(source: str) -> dict[str, Any]:
                 "entry_protocol_verified": protocol_verified,
                 "required_authorizers": protocol,
                 "dispatch_obligations": len(entry["dispatches"]),
+                "return_outcomes": entry["return_outcomes"],
             }
         )
     return {
         "schema_version": 2,
         "complete": proof["complete"] and not issues,
-        "claim": "Every admitted HostRouter entry authorizes the identical effective request before atomic dispatch; tool calls preserve constraints, and cross-tool entries additionally require fresh authenticated-origin, delegation and tool-transition decisions.",
+        "claim": "Every admitted HostRouter entry authorizes the identical effective request before atomic dispatch; tool calls preserve constraints, and cross-tool entries additionally require fresh authenticated-origin, delegation and tool-transition decisions. Each normal return is the exact authorized-dispatch result, or (only on framework permission routes) an unchanged authorization record whose verdict is ESCALATE. Pending approval is not publication authority.",
         "scope": "HostRouter's entire discovered method surface, including the generic framework-object route. Host-confined ToolNode and guarded_tool calls enter the tool-call surface through a separately tested exact-decision bridge.",
         "trusted_boundary": [
             "Host MAC/LSM correctly enforces installed policy for every resource access.",
@@ -351,12 +372,23 @@ def verify_host_router() -> dict[str, Any]:
         mismatches.append("unexpected runtime metaclass")
     if host_router.HostRouter.__bases__ != (object,):
         mismatches.append("unexpected runtime inheritance")
+    if namespace.get("__slots__") != ("policy", "host"):
+        mismatches.append("router instance layout permits unclassified bindings")
+    for name in ("policy", "host"):
+        descriptor = namespace.get(name)
+        if (
+            type(descriptor) is not types.MemberDescriptorType
+            or descriptor.__objclass__ is not host_router.HostRouter
+            or descriptor.__name__ != name
+        ):
+            mismatches.append(f"router slot descriptor changed: {name}")
     allowed = {
         *_ENTRY_KINDS,
+        "__slots__",
+        "policy",
+        "host",
         "__module__",
         "__annotations__",
-        "__dict__",
-        "__weakref__",
         "__doc__",
         "__firstlineno__",
         "__static_attributes__",

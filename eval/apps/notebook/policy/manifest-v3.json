@@ -1,0 +1,30 @@
+{
+  "version": 3,
+  "status": "pilot-baseline-only",
+  "fixture_version": "notebook-text-v1",
+  "model": {
+    "name": "llama3:latest",
+    "digest": "365c0bd3c000a25d28ddbf732fe1c6add414de7275464c4e4d1c3b5fcb5d8ad1",
+    "provider": "ollama",
+    "base_url": "http://localhost:11434",
+    "sampling": {
+      "temperature": 1.0,
+      "top_p": 0.9,
+      "max_tokens": 8192,
+      "seed": null
+    },
+    "seed": null
+  },
+  "api": "http://127.0.0.1:15055",
+  "database_image_id": "sha256:4b76d06f7bcdd0b11a8aec07f315554b59553d531a963e5daf26f17d4e670b15",
+  "service_mode": "dedicated local SurrealDB and original API; local Ollama",
+  "scope": "Original text-ingestion API plus required background worker and source_chat graph; frontend and vector search excluded. Client syscall trace does not cover API/worker processes.",
+  "configurations": {
+    "A": "Unmodified upstream API and source/source_chat graphs with explicit local model selection",
+    "B": "No dispatch boundary added to source_chat direct model/database nodes",
+    "C": "No source/storage integration validated; no service adapter guarantee"
+  },
+  "analysis": null,
+  "database_image_digest": "surrealdb/surrealdb@sha256:e5d7387e3727bbe2f7cd6d869e48cd34777272258572ead37c9656b25f745723",
+  "amendment": "Correct v2 scope metadata after discovering that synchronous API submission still uses the background worker; no policy change."
+}

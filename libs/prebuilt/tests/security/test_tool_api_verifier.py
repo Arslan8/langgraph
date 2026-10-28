@@ -53,7 +53,15 @@ def test_full_inventory_gate_includes_every_reported_failure() -> None:
     report = asyncio.run(verifier.verify_tool_apis())
     assert len(report["surfaces"]) >= 68
     assert len(report["cases"]) >= 4752
-    assert report["complete"], report["summary"]
+    assert report["inventory_complete"], report["summary"]
+    assert report["conformance_passed"], report["summary"]
+    assert report["summary"]["failed"] == 0
+    assert report["summary"]["passed"] == len(report["cases"])
+    assert report["source_claims_passed"], report["source_checks"]
+    assert not report["source_evidence_ready"]
+    assert not report["background_errors"]
+    assert not report["complete"]
+    assert not report["whole_framework_mac_complete"]
     assert report["complete"] == all(
         [
             report["inventory_complete"],
@@ -83,6 +91,56 @@ def test_full_inventory_gate_includes_every_reported_failure() -> None:
                 and case["api"] == api
             }
             assert backends == set(verifier._BACKENDS)
+
+
+@pytest.mark.parametrize(
+    "evidence_status,case_status,complete",
+    [
+        ("source_bound", "passed", True),
+        ("unresolved", "passed", False),
+        ("source_bound", "failed", False),
+    ],
+)
+def test_bounded_aggregation_requires_source_evidence_and_runtime_conformance(
+    monkeypatch, evidence_status, case_status, complete
+) -> None:
+    """Exercise aggregation independently of the real full conformance matrix."""
+    fixture = Mock(base=object())
+    monkeypatch.setattr(verifier, "_FAMILIES", ("fixture",))
+    monkeypatch.setattr(verifier, "_MODES", ("allow",))
+    monkeypatch.setattr(verifier, "_BACKENDS", ("host",))
+    monkeypatch.setattr(verifier, "_Fixture", Mock(return_value=fixture))
+    monkeypatch.setattr(verifier, "_adapt", lambda sample, factory: (sample.base, {}))
+    monkeypatch.setattr(
+        verifier,
+        "inventory",
+        lambda target: [{"name": "invoke", "classification": "execution"}],
+    )
+    monkeypatch.setattr(
+        verifier,
+        "framework_report",
+        lambda root: {
+            "claims_passed": True,
+            "complete": False,
+            "source_evidence": [
+                {"id": "linux-grant-activation", "status": evidence_status}
+            ],
+            "checks": [],
+        },
+    )
+
+    async def case(*args):
+        return {"status": case_status}
+
+    monkeypatch.setattr(verifier, "_case", case)
+    report = asyncio.run(verifier.verify_tool_apis())
+    assert len(report["surfaces"]) == len(report["cases"]) == 1
+    assert report["inventory_complete"]
+    assert report["source_claims_passed"]
+    assert report["source_evidence_ready"] == (evidence_status == "source_bound")
+    assert report["conformance_passed"] == (case_status == "passed")
+    assert report["complete"] is complete
+    assert not report["whole_framework_mac_complete"]
 
 
 @pytest.mark.parametrize("family", verifier._FAMILIES)

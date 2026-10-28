@@ -16,6 +16,7 @@ from langgraph.prebuilt.analysis import (
     AnalysisRuntime,
     AnalyzerRegistration,
     AnnotationProposal,
+    BuiltinEvent,
     Coverage,
     EventSpec,
     NotificationHub,
@@ -71,10 +72,10 @@ def setup_runtime(analyzer=None, mode="required", timeout=1):
         BUILTIN_EVENTS,
         (
             AnalyzerRegistration(
-                "marker",
-                "1",
-                analyzer,
-                ("input.admit",),
+                analyzer_id="marker",
+                version="1",
+                analyzer=analyzer,
+                events={BuiltinEvent.INPUT_ADMIT},
                 mode=mode,
                 timeout=timeout,
                 content_access=True,
@@ -204,7 +205,10 @@ async def test_model_and_output_barriers_precede_effects():
         BUILTIN_EVENTS,
         (
             AnalyzerRegistration(
-                "marker", "1", Broken(), ("model.request", "output.emit")
+                analyzer_id="marker",
+                version="1",
+                analyzer=Broken(),
+                events={BuiltinEvent.MODEL_REQUEST, BuiltinEvent.OUTPUT_EMIT},
             ),
         ),
         producers=frozenset(spec.producer for spec in BUILTIN_EVENTS),
@@ -261,7 +265,11 @@ def test_custom_event_plugin_executes_without_runtime_changes():
         (*BUILTIN_EVENTS, custom),
         (
             AnalyzerRegistration(
-                "marker", "1", marker, (custom.name,), content_access=True
+                analyzer_id="marker",
+                version="1",
+                analyzer=marker,
+                events={custom},
+                content_access=True,
             ),
         ),
         producers=frozenset(
@@ -296,3 +304,41 @@ def test_sync_timeout_never_commits_late_clean_result():
         for f in client.get_findings(AnalysisQuery()).records
     )
     runtime.close()
+
+
+def test_context_supplies_finding_metadata_without_developer_ids():
+    class Listener:
+        def analyze(self, event, context):
+            return AnalysisResult(findings=(context.finding(code="example.seen"),))
+
+        async def aanalyze(self, event, context):
+            return self.analyze(event, context)
+
+    runtime, adapter, _, _ = setup_runtime()
+    registration = AnalyzerRegistration(
+        analyzer=Listener(), events={BuiltinEvent.INPUT_ADMIT}
+    )
+    runtime.registry = Registry(
+        BUILTIN_EVENTS,
+        (registration,),
+        producers=frozenset(spec.producer for spec in BUILTIN_EVENTS),
+    )
+    try:
+        ref = adapter.value("document")
+        for snapshot in (
+            adapter.before(BuiltinEvent.INPUT_ADMIT, (ref,)),
+            asyncio.run(adapter.abefore(BuiltinEvent.INPUT_ADMIT, (ref,))),
+        ):
+            finding = next(
+                item
+                for item in snapshot.findings
+                if item.event_id == snapshot.event.event_id
+            )
+            assert finding.analyzer_id == registration.analyzer_id
+            assert finding.analyzer_version == "unversioned"
+            assert finding.subject_refs == (ref,)
+            assert finding.event_id == snapshot.event.event_id
+            assert finding.configuration_digest == runtime.config.policy_version
+    finally:
+        runtime.close()
+        runtime.store.close()

@@ -5,6 +5,7 @@ from __future__ import annotations
 from collections.abc import Mapping
 from dataclasses import dataclass
 from typing import Any, Literal, Protocol
+from uuid import uuid4
 
 from pydantic import BaseModel, ConfigDict, Field, field_serializer, field_validator
 
@@ -141,6 +142,43 @@ class AnalysisContext:
     prior_findings: tuple[AnalysisFinding, ...]
     deadline: float
     cancellation: CancellationSignal
+    analyzer_id: str = ""
+    analyzer_version: str = "unversioned"
+    configuration_digest: str = "0" * 64
+
+    def finding(
+        self,
+        *,
+        code: str,
+        subject_refs: tuple[ValueRef, ...] | None = None,
+        evidence_refs: tuple[ValueRef, ...] = (),
+        status: Status = "complete",
+        score: float | None = None,
+        reason: str = "",
+        configuration_digest: str | None = None,
+    ) -> AnalysisFinding:
+        """Create a finding with runtime-owned identity and event metadata.
+
+        The default configuration digest identifies the fixed run policy. An
+        analyzer with its own configuration can supply its digest explicitly.
+        Runtime scope and identity validation still applies at commit.
+        """
+        return AnalysisFinding(
+            finding_id=str(uuid4()),
+            analyzer_id=self.analyzer_id,
+            analyzer_version=self.analyzer_version,
+            event_id=self.event.event_id,
+            event_name=self.event.event_name,
+            code=code,
+            subject_refs=subject_refs
+            if subject_refs is not None
+            else (*self.event.input_refs, *self.event.output_refs),
+            evidence_refs=evidence_refs,
+            status=status,
+            score=score,
+            reason=reason,
+            configuration_digest=configuration_digest or self.configuration_digest,
+        )
 
 
 class Analyzer(Protocol):

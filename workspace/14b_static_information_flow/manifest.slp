@@ -1,0 +1,3 @@
+runs inprocess
+fs read /private/report.txt need
+returns sensitive

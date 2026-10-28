@@ -1,4 +1,4 @@
-.PHONY: all format lint type test test-fast test_watch integration_tests spell_check spell_fix benchmark profile security-verify security-verify-complete security-verify-regressions security-verify-permutations
+.PHONY: all format lint type test test-fast test_watch integration_tests spell_check spell_fix benchmark profile security-verify security-verify-fast security-verify-complete security-verify-regressions security-verify-permutations security-verify-lean
 
 # Default target executed when no arguments are given to make.
 all: help
@@ -6,8 +6,15 @@ all: help
 # Source-only verification and repair queue. Missing proof evidence fails the
 # default command; the older complete target remains an equivalent alias.
 SECURITY_REPORT ?= security-verification-report.json
+# Route-scoped acceptance recomputes every manifest check, including a fresh
+# Lean audit written under SECURITY_EVIDENCE_DIR (a new directory per run).
+SECURITY_EVIDENCE_DIR ?= security-route-evidence
 security-verify:
-	uv run python -m langgraph.prebuilt.security.developer_verification --output "$(SECURITY_REPORT)"
+	uv run python -m langgraph.prebuilt.security.developer_verification --output "$(SECURITY_REPORT)" --evidence-dir "$(SECURITY_EVIDENCE_DIR)"
+
+# Same gate without the Lean audit; the lean-audit check then fails closed.
+security-verify-fast:
+	uv run python -m langgraph.prebuilt.security.developer_verification --output "$(SECURITY_REPORT)" --no-lean-audit
 
 security-verify-complete:
 	uv run python -m langgraph.prebuilt.security.developer_verification --require-complete --output "$(SECURITY_REPORT)"
@@ -21,6 +28,12 @@ security-verify-regressions:
 SECURITY_PERMUTATION_REPORT ?= security-permutation-report.json
 security-verify-permutations:
 	uv run python -m langgraph.prebuilt.security.permutation_verification --output "$(SECURITY_PERMUTATION_REPORT)"
+
+# Kernel-checked lifecycle component; does not discharge SGV901–903.
+# The driver refuses an existing directory to preserve every observation.
+LEAN_REPORT ?= lean-worker-route-report
+security-verify-lean:
+	uv run python ../../proofs/worker-route/check.py --output "$(LEAN_REPORT)"
 
 ######################
 # TESTING AND COVERAGE

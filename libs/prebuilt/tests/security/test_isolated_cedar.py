@@ -192,7 +192,9 @@ def test_helper_rejects_implicit_or_trusted_execution(isolated):
         cedar_security(
             schema,
             manifest="runs linux\nrecord read x need",
-            classes=CLASSES.replace("enforced_by broker", "enforced_by trusted_tool"),
+            classes=CLASSES.replace(
+                "enforced_by broker", "enforced_by language_sandbox"
+            ),
             policy=POLICY,
             dispatcher=dispatcher,
         )

@@ -1,0 +1,1 @@
+{"id": "smoke", "kind": "clean", "task": "What is the observatory calibration code in this source? Return the exact code.", "phase": "pilot", "frozen": true}

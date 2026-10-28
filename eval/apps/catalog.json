@@ -1,0 +1,128 @@
+[
+  {
+    "id": "pandas",
+    "repository": "business-science/ai-data-science-team",
+    "subdirectory": "apps/pandas-data-analyst-app",
+    "entrypoint": "app.py: pandas_data_analyst.invoke_agent",
+    "graph_files": [
+      "ai_data_science_team/multiagents/pandas_data_analyst.py",
+      "ai_data_science_team/agents/data_wrangling_agent.py",
+      "ai_data_science_team/agents/data_visualization_agent.py",
+      "ai_data_science_team/templates/agent_templates.py",
+      "ai_data_science_team/utils/sandbox.py"
+    ],
+    "effects": "Model calls in graph nodes; generated computation in utils/sandbox.py:run_code_sandboxed_subprocess; Streamlit upload and session storage outside graph. Preserve import/builtin restrictions, network patch, timeout and resource caps.",
+    "next_action": "Run headless bundled backend with the recorded IPython compatibility dependency and local-model adaptation; verify table and chart values."
+  },
+  {
+    "id": "sql",
+    "repository": "business-science/ai-data-science-team",
+    "subdirectory": "apps/sql-database-agent-app",
+    "entrypoint": "app.py: handle_question -> SQLDatabaseAgent.ainvoke_agent",
+    "graph_files": [
+      "ai_data_science_team/agents/sql_database_agent.py",
+      "ai_data_science_team/templates/agent_templates.py",
+      "ai_data_science_team/tools/sql.py"
+    ],
+    "effects": "SQLAlchemy connection opened by UI; schema sampling and model calls in graph; generated Python exec in node_func_execute_agent_from_sql_connection. Preserve safe_mode query validation. Metadata sampling may read restricted tables before query dispatch.",
+    "next_action": "Run bundled backend on a recreated synthetic SQLite database; audit metadata reads as well as generated SQL."
+  },
+  {
+    "id": "email",
+    "repository": "langchain-ai/executive-ai-assistant",
+    "subdirectory": ".",
+    "entrypoint": "langgraph.json -> eaia/main/graph.py: graph",
+    "graph_files": [
+      "langgraph.json",
+      "eaia/main/graph.py",
+      "eaia/gmail.py",
+      "eaia/cron_graph.py",
+      "scripts/run_ingest.py"
+    ],
+    "effects": "Gmail read/send/mark-as-read and Calendar SDK effects in eaia/gmail.py; send_email_node calls SDK helper directly; preserve human_node approval workflow. OAuth and ingestion outside graph; hosted inbox and LangGraph persistence require separate trace.",
+    "next_action": "Resolve documented install failure with a separately reviewed dependency patch; provision dedicated Gmail OAuth test account and controlled recipients. No personal mailbox use."
+  },
+  {
+    "id": "research",
+    "repository": "langchain-ai/open_deep_research",
+    "subdirectory": ".",
+    "entrypoint": "langgraph.json -> src/open_deep_research/deep_researcher.py: deep_researcher",
+    "graph_files": [
+      "langgraph.json",
+      "src/open_deep_research/deep_researcher.py",
+      "src/open_deep_research/utils.py",
+      "src/open_deep_research/configuration.py",
+      "tests/run_evaluate.py"
+    ],
+    "effects": "Supervisor/researcher StateGraphs; tool.ainvoke in researcher_tools; search provider and remote MCP effects in utils.py; model calls and report synthesis. Local request mediation does not confine remote services.",
+    "next_action": "Configure dedicated search service or frozen contract-preserving corpus double and supported local structured-output model. Existing benchmark requires LangSmith; label any subset."
+  },
+  {
+    "id": "notebook",
+    "repository": "lfnovo/open-notebook",
+    "subdirectory": ".",
+    "entrypoint": "api/routers/sources.py:create_source_json -> process_source_command -> source_graph; api/routers/source_chat.py:send_message_to_source_chat -> source_chat_graph",
+    "graph_files": [
+      "api/routers/sources.py",
+      "api/routers/search.py",
+      "commands/source_commands.py",
+      "open_notebook/graphs/source.py",
+      "open_notebook/graphs/ask.py",
+      "open_notebook/graphs/chat.py",
+      "open_notebook/database/repository.py",
+      "api/routers/source_chat.py",
+      "open_notebook/graphs/source_chat.py"
+    ],
+    "effects": "Source retrieval/extraction in content_process; save_source persists through SurrealDB; worker queues embeddings; ask graph searches sources; chat uses SQLite checkpoints. API file upload and async workers are outside graph. Notebook association alone is not isolation.",
+    "next_action": "Baseline source-chat smoke passes locally. Add complete execution-host tracing, reset/oracle calibration and supported source/storage mediation before any protected-port claim."
+  },
+  {
+    "id": "coding",
+    "repository": "langchain-ai/open-swe",
+    "subdirectory": ".",
+    "entrypoint": "openswe/threads/router.py -> Managed Deep Agents project mda/agent.py",
+    "graph_files": [
+      "langgraph.json",
+      "openswe/threads/router.py",
+      "mda/agent.py",
+      "mda/rt/file_tools.py",
+      "mda/rt/managed_sandbox.py",
+      "openswe/agent_api/graph.py"
+    ],
+    "effects": "Managed Deep Agents owns model loop, tools, checkpoints and sandbox. Backend uses PostgreSQL and GitHub credentials; remote sandbox shell/files and publication need execution-host instrumentation. Preserve upstream middleware and sandbox.",
+    "next_action": "Provision dedicated GitHub App/repository, PostgreSQL and MDA runtime credentials; instrument sandbox execution host. Local minimal executor cannot support shell descendants."
+  },
+  {
+    "id": "newspaper",
+    "repository": "rotemweiss57/gpt-newspaper",
+    "subdirectory": ".",
+    "entrypoint": "app.py -> backend/graph.py:stream_newspaper / graph",
+    "graph_files": [
+      "app.py",
+      "backend/graph.py",
+      "backend/config.py",
+      "backend/agents/search.py",
+      "backend/agents/publisher.py",
+      "backend/agents/common.py",
+      "backend/agents/illustrator.py"
+    ],
+    "effects": "StateGraph Send fans out article subgraphs; search and model SDK calls in nodes; publisher writes outputs; source photos or optional provider illustrations. Preserve source-as-untrusted prompts and retries.",
+    "next_action": "Configure local model and dedicated Tavily access or labeled contract-preserving search double; reproduce edition and verify citations/output files."
+  },
+  {
+    "id": "finance",
+    "repository": "virattt/ai-hedge-fund",
+    "subdirectory": ".",
+    "entrypoint": "src/main.py:run_hedge_fund -> create_workflow -> compile -> invoke",
+    "graph_files": [
+      "src/main.py",
+      "src/tools/api.py",
+      "src/llm/models.py",
+      "src/agents/portfolio_manager.py"
+    ],
+    "effects": "Historical LangGraph analyst workflow; requests GET/POST to financial data provider, local cache, model calls, optional graph PNG. Analysis only; no brokerage or real-money trading.",
+    "next_action": "Freeze financial-provider responses and local model settings; run historical analysis only. Reproducibility of selected historical revision remains unverified.",
+    "historical": true,
+    "selection_reason": "Current HEAD 29b32f71861480e9bfd48b82cf0d3ca3e5680955 lacks StateGraph workflow. Selected 6c41ae8cf5fb4e30eb8cdb6a816eb56ff234989d, parent of a7a99e5b4cbbe789f4e16bd02d794e86a2a3a3d2 which removed src/main.py. This is a candidate historical pin, not a claim of last reproducible release."
+  }
+]

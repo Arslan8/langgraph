@@ -79,9 +79,10 @@ releases the reservation only after the host executor confirms the recorded
 boot, PID, and process start-time identity can no longer execute. The record and
 reservation survive coordinator restart.
 
-The call boundary defines the implemented lifetime. Do not let a protected
-in-process tool leave threads, processes, callbacks, or asynchronous work alive
-after it returns. Native execution must keep the reservation and confinement
+The call boundary defines the implemented lifetime. The admitted language cannot
+create threads, processes, callbacks, or background tasks. Framework resource
+terminals must finish their effects within their operation contract. Cancellation
+waits for a running synchronous terminal before releasing its resource scope. Native execution must keep the reservation and confinement
 lease until the worker and all descendants terminate.
 
 ## Guard model and framework sinks
@@ -119,10 +120,10 @@ Copies that bypass this API are outside the protected execution model.
 
 The mechanism enforces a coarse scheduling policy over operator classifications;
 it does not inspect or infer data dependencies and is not proof of
-noninterference against hostile code. A public-classified in-process tool can
-still read confidential ambient data, and a source can transmit internally,
-unless the implementation is trusted or external host/service adapters constrain
-its effective input authority and channels.
+noninterference against hostile code. Language-sandbox tools can call only
+admitted, mediated terminals, whose information-flow contracts must conservatively
+bound their input authority and channels. General Python running in the
+coordinator is outside that restricted execution boundary.
 
 Flow rules must be derived from the conservatively bounded effective authority,
 including runtime baseline and degradation. If that upper bound is unknown, do

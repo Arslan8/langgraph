@@ -1,10 +1,9 @@
 """Week-one `ToolNode` performance baseline."""
 
-from unittest.mock import Mock
-
 from langchain_core.messages import AIMessage, ToolMessage
 from langchain_core.runnables import RunnableConfig
 from langchain_core.tools import tool
+from langgraph.runtime import Runtime
 from pytest_benchmark.fixture import BenchmarkFixture
 
 from langgraph.prebuilt import ToolNode
@@ -18,10 +17,7 @@ def baseline_noop(value: int) -> int:
 
 def _config() -> RunnableConfig:
     """Build the minimal runtime configuration required by `ToolNode`."""
-    runtime = Mock()
-    runtime.store = None
-    runtime.context = None
-    runtime.stream_writer = lambda _: None
+    runtime = Runtime(context=None, store=None, stream_writer=lambda _: None)
     return {"configurable": {"__pregel_runtime": runtime}}
 
 

@@ -8,6 +8,7 @@ on:
       - "libs/prebuilt/**"
       - "libs/langgraph/**"
       - "docs/security/**"
+      - "proofs/worker-route/**"
   push:
     branches:
       - course/security-modules
@@ -16,6 +17,7 @@ on:
       - "libs/prebuilt/**"
       - "libs/langgraph/**"
       - "docs/security/**"
+      - "proofs/worker-route/**"
 
 permissions:
   contents: read
@@ -29,6 +31,78 @@ defaults:
     working-directory: libs/prebuilt
 
 jobs:
+  worker-route-proof:
+    name: Lean worker lifecycle component and runtime bridge
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Set up Python 3.13
+        uses: ./.github/actions/uv_setup
+        with:
+          python-version: "3.13"
+          cache-suffix: slanggraph-lean-worker-route
+          working-directory: libs/prebuilt
+      - name: Install dependencies
+        run: uv sync --frozen
+      - name: Install pinned Lean toolchain
+        env:
+          LEAN_ARCHIVE_SHA256: 47bf4bbd78f70c2e9670598ab7124d92b6efb7330ff33e5fbb4030f6fd72e4e4
+        run: |
+          curl --fail --location --retry 3 \
+            https://github.com/leanprover/lean4/releases/download/v4.34.1/lean-4.34.1-linux.tar.zst \
+            --output "$RUNNER_TEMP/lean-4.34.1-linux.tar.zst"
+          echo "$LEAN_ARCHIVE_SHA256  $RUNNER_TEMP/lean-4.34.1-linux.tar.zst" | sha256sum --check --strict
+          tar --zstd --extract --file "$RUNNER_TEMP/lean-4.34.1-linux.tar.zst" --directory "$RUNNER_TEMP"
+          echo "$RUNNER_TEMP/lean-4.34.1-linux/bin" >> "$GITHUB_PATH"
+      - name: Check audit rejection behavior
+        run: uv run python -m unittest discover -s ../../proofs/worker-route -p test_check.py -v
+      - name: Build, typecheck fixed obligations and replay the Lean kernel
+        # This component proof does not replace the strict system gate.
+        run: make security-verify-lean
+      - name: Enable native sandbox tests on the ephemeral runner
+        run: |
+          sudo apt-get update
+          sudo apt-get install --yes bubblewrap libseccomp2
+          if [ "$(sysctl -n kernel.apparmor_restrict_unprivileged_userns 2>/dev/null || true)" = "1" ]; then
+            sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0
+          fi
+      - name: Require compiled checker and native pipe integration
+        env:
+          LANGGRAPH_REQUIRE_LEAN_WORKER: "1"
+          LANGGRAPH_REQUIRE_LEAN_NATIVE: "1"
+          LANGGRAPH_LEAN_WORKER_BINARY: ${{ github.workspace }}/libs/prebuilt/lean-worker-route-report/artifacts/workerRoute
+        run: |
+          set -o pipefail
+          uv run pytest \
+            tests/security/test_lean_lifecycle.py \
+            tests/security/test_lean_linux_lifecycle.py \
+            tests/security/test_lean_native_execution.py \
+            tests/security/test_linux_cleanup_context.py \
+            tests/security/test_linux_pidfd_lifetime.py \
+            tests/security/test_linux_resource_resolution.py \
+            tests/security/test_linux_setup_cleanup.py \
+            tests/security/test_host_verification.py \
+            tests/security/test_native_async_lifetime.py \
+            --capture=tee-sys -o junit_logging=all \
+            --junitxml=lean-worker-route-report/runtime-tests.xml \
+            2>&1 | tee lean-worker-route-report/logs/runtime-tests.log
+      - name: Upload captured proof sources, executable and test evidence
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: lean-worker-route-${{ github.sha }}
+          path: |
+            libs/prebuilt/lean-worker-route-report/report.json
+            libs/prebuilt/lean-worker-route-report/snapshot/*.lean
+            libs/prebuilt/lean-worker-route-report/snapshot/*.toml
+            libs/prebuilt/lean-worker-route-report/snapshot/*.json
+            libs/prebuilt/lean-worker-route-report/snapshot/*.py
+            libs/prebuilt/lean-worker-route-report/snapshot/lean-toolchain
+            libs/prebuilt/lean-worker-route-report/source-after/
+            libs/prebuilt/lean-worker-route-report/artifacts/
+            libs/prebuilt/lean-worker-route-report/logs/
+            libs/prebuilt/lean-worker-route-report/runtime-tests.xml
+
   security-quality:
     name: Security package quality
     runs-on: ubuntu-latest

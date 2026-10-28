@@ -164,6 +164,8 @@ if TYPE_CHECKING:
     from langgraph.runtime import Runtime
     from pydantic_core import ErrorDetails
 
+    from langgraph.prebuilt.analysis.local import Analysis
+
 # right now we use a dict as the default, can change this to AgentState, but depends
 # on if this lives in LangChain or LangGraph... ideally would have some typed
 # messages key
@@ -828,6 +830,7 @@ class ToolNode(RunnableCallable):
         wrap_tool_call: ToolCallWrapper | None = None,
         awrap_tool_call: AsyncToolCallWrapper | None = None,
         security: SecurityConfig | None = None,
+        analysis: Analysis | None = None,
     ) -> None:
         """Initialize `ToolNode` with tools and configuration.
 
@@ -843,6 +846,7 @@ class ToolNode(RunnableCallable):
             awrap_tool_call: Async wrapper function to intercept tool execution.
                 If not provided, falls back to wrap_tool_call for async execution.
             security: Optional restrictive security configuration.
+            analysis: Optional plain callback dispatcher for tool lifecycle events.
         """
         super().__init__(self._func, self._afunc, name=name, tags=tags, trace=False)
         self._tools_by_name: dict[str, BaseTool] = {}
@@ -862,6 +866,7 @@ class ToolNode(RunnableCallable):
         self._security_registry_lock = RLock()
         self._handle_tool_errors = handle_tool_errors
         self._messages_key = messages_key
+        self._analysis = analysis
         self._wrap_tool_call = wrap_tool_call
         self._awrap_tool_call = awrap_tool_call
         for tool in tools:
@@ -1656,6 +1661,7 @@ class ToolNode(RunnableCallable):
         Raises:
             Exception: If tool fails and handle_tool_errors is False.
         """
+        self._notify_tool_phase("TOOL_PREPARE", request.tool_call)
         model_call = request.tool_call
         call = model_call
         tool = request.tool
@@ -1748,6 +1754,7 @@ class ToolNode(RunnableCallable):
                             call, Decision(Verdict.DENY, "host:missing_router")
                         )
                         return post_result
+                    self._notify_tool_phase("TOOL_DISPATCH", call)
                     host_result = self._security_host_router.invoke(
                         request.principal, security_call, authorization
                     )
@@ -1775,11 +1782,13 @@ class ToolNode(RunnableCallable):
                     )
                 else:
                     if security_call is not None and request.principal is not None:
+                        self._notify_tool_phase("TOOL_DISPATCH", call)
                         response = self._invoke_secured_tool_sync(
                             request.principal, security_call, request, config
                         )
                     else:
                         assert call_args is not None
+                        self._notify_tool_phase("TOOL_DISPATCH", call)
                         response = tool.invoke(call_args, config)
             except HostExecutionError as exc:
                 outcome = exc.outcome
@@ -1893,7 +1902,76 @@ class ToolNode(RunnableCallable):
                         flow_recovery,
                     )
 
+    def _notify_tool_phase(self, phase: str, call: ToolCall) -> None:
+        if self._analysis is not None:
+            from langgraph.prebuilt.analysis.events import BuiltinEvent
+
+            self._analysis._notify(
+                BuiltinEvent[phase], {"name": call["name"], "id": call["id"]}
+            )
+
+    async def _anotify_tool_phase(self, phase: str, call: ToolCall) -> None:
+        if self._analysis is not None:
+            from langgraph.prebuilt.analysis.events import BuiltinEvent
+
+            await self._analysis._anotify(
+                BuiltinEvent[phase], {"name": call["name"], "id": call["id"]}
+            )
+
+    @staticmethod
+    def _tool_completion_event(result: Any):
+        from langgraph.prebuilt.analysis.events import BuiltinEvent
+
+        messages = result if isinstance(result, list) else (result,)
+        failed = any(
+            isinstance(message, ToolMessage) and message.status == "error"
+            for message in messages
+        )
+        return BuiltinEvent.TOOL_ERROR if failed else BuiltinEvent.TOOL_RESULT
+
     def _run_one(
+        self,
+        call: ToolCall,
+        input_type: Literal["list", "dict", "tool_calls"],
+        tool_runtime: ToolRuntime,
+    ) -> ToolMessage | Command | list[Command | ToolMessage]:
+        if self._analysis is None:
+            return self._run_one_inner(call, input_type, tool_runtime)
+        from langgraph.prebuilt.analysis.events import BuiltinEvent
+
+        try:
+            self._notify_tool_phase("TOOL_PROPOSE", call)
+            result = self._run_one_inner(call, input_type, tool_runtime)
+        except GraphBubbleUp:
+            raise
+        except Exception as error:
+            self._analysis._notify(BuiltinEvent.TOOL_ERROR, error)
+            raise
+        self._analysis._notify(self._tool_completion_event(result), result)
+        return result
+
+    async def _arun_one(
+        self,
+        call: ToolCall,
+        input_type: Literal["list", "dict", "tool_calls"],
+        tool_runtime: ToolRuntime,
+    ) -> ToolMessage | Command | list[Command | ToolMessage]:
+        if self._analysis is None:
+            return await self._arun_one_inner(call, input_type, tool_runtime)
+        from langgraph.prebuilt.analysis.events import BuiltinEvent
+
+        try:
+            await self._anotify_tool_phase("TOOL_PROPOSE", call)
+            result = await self._arun_one_inner(call, input_type, tool_runtime)
+        except GraphBubbleUp:
+            raise
+        except Exception as error:
+            await self._analysis._anotify(BuiltinEvent.TOOL_ERROR, error)
+            raise
+        await self._analysis._anotify(self._tool_completion_event(result), result)
+        return result
+
+    def _run_one_inner(
         self,
         call: ToolCall,
         input_type: Literal["list", "dict", "tool_calls"],
@@ -1912,7 +1990,13 @@ class ToolNode(RunnableCallable):
         # Validation is deferred to _execute_tool_sync to allow interceptors
         # to short-circuit requests for unregistered tools
         tool = self.tools_by_name.get(call["name"])
-        principal = principal_from(tool_runtime.config)
+        principal = principal_from(
+            tool_runtime.config,
+            include_runtime_context=(
+                self._security_stack is not None
+                or self._security_object_router is not None
+            ),
+        )
         dispatch = self._security_object_router
         if dispatch is not None and principal is not None:
             try:
@@ -1996,6 +2080,7 @@ class ToolNode(RunnableCallable):
         Raises:
             Exception: If tool fails and handle_tool_errors is False.
         """
+        await self._anotify_tool_phase("TOOL_PREPARE", request.tool_call)
         model_call = request.tool_call
         call = model_call
         tool = request.tool
@@ -2102,6 +2187,7 @@ class ToolNode(RunnableCallable):
                             call, Decision(Verdict.DENY, "host:missing_router")
                         )
                         return post_result
+                    await self._anotify_tool_phase("TOOL_DISPATCH", call)
                     host_result = await self._security_host_router.ainvoke(
                         request.principal, security_call, authorization
                     )
@@ -2129,11 +2215,13 @@ class ToolNode(RunnableCallable):
                     )
                 else:
                     if security_call is not None and request.principal is not None:
+                        await self._anotify_tool_phase("TOOL_DISPATCH", call)
                         response = await self._invoke_secured_tool_async(
                             request.principal, security_call, request, config
                         )
                     else:
                         assert call_args is not None
+                        await self._anotify_tool_phase("TOOL_DISPATCH", call)
                         response = await tool.ainvoke(call_args, config)
             except HostExecutionError as exc:
                 outcome = exc.outcome
@@ -2247,7 +2335,7 @@ class ToolNode(RunnableCallable):
                         flow_recovery,
                     )
 
-    async def _arun_one(
+    async def _arun_one_inner(
         self,
         call: ToolCall,
         input_type: Literal["list", "dict", "tool_calls"],
@@ -2266,7 +2354,13 @@ class ToolNode(RunnableCallable):
         # Validation is deferred to _execute_tool_async to allow interceptors
         # to short-circuit requests for unregistered tools
         tool = self.tools_by_name.get(call["name"])
-        principal = principal_from(tool_runtime.config)
+        principal = principal_from(
+            tool_runtime.config,
+            include_runtime_context=(
+                self._security_stack is not None
+                or self._security_object_router is not None
+            ),
+        )
         dispatch = self._security_object_router
         if dispatch is not None and principal is not None:
             try:

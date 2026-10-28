@@ -250,3 +250,78 @@ def test_raw_checkpoint_history_is_reported(body):
     ).replace("yield value", "yield self.verify_history(value)")
     assert not check(mediated, module="checkpoint_security", rule="SGV108")
     assert not check_adapters({BASE + "checkpoint_security.py": mediated})["proof"]
+
+
+@pytest.mark.parametrize(
+    "return_path",
+    [
+        "return super().astream_events(value, config)",
+        "events = super().astream_events(value, config)\n        return events",
+        "events = super().astream_events(value, config)\n        alias = events\n        self._aoutput_filter(value, config)\n        return alias",
+    ],
+)
+@pytest.mark.parametrize("method", ["astream_events", "astream_log"])
+def test_legacy_callback_event_direct_returns_are_reported(return_path, method):
+    return_path = return_path.replace(".astream_events", f".{method}")
+    report = check_adapters(
+        {
+            "libs/langgraph/langgraph/pregel/main.py": f"class Pregel:\n    def {method}(self, value, config):\n        {return_path}\n"
+        }
+    )
+    assert (
+        len([item for item in report["diagnostics"] if item["rule"] == "SGV109"]) == 1
+    )
+    assert not report["proof"]
+
+
+def test_legacy_event_unsecured_branch_does_not_claim_filter_proof():
+    report = check_adapters(
+        {
+            "libs/langgraph/langgraph/pregel/main.py": dedent("""
+            class Pregel:
+                def astream_events(self, value, config):
+                    events = super().astream_events(value, config)
+                    if self._aoutput_filter is None:
+                        return events
+                    return unknown_filter(events)
+        """)
+        }
+    )
+    assert not any(item["rule"] == "SGV109" for item in report["diagnostics"])
+    assert not report["proof"]
+
+
+@pytest.mark.parametrize(
+    "body",
+    [
+        "return self._prepare_state_snapshot(config, saved)",
+        "raw = self._prepare_state_snapshot(config, saved)\n        alias = raw\n        self.filter(alias)\n        return alias",
+        "yield self._prepare_state_snapshot(config, saved)",
+        "yield from child.get_state_history(config)",
+        "for state in child.get_state_history(config):\n            yield state",
+        "return StateSnapshot(secret, (), {}, None, None, None, (), ())",
+    ],
+)
+def test_state_snapshot_raw_publication_is_reported(body):
+    report = check_adapters(
+        {
+            "libs/langgraph/langgraph/pregel/main.py": f"class Pregel:\n    def get_state(self, config):\n        {body}\n"
+        }
+    )
+    assert any(item["rule"] == "SGV110" for item in report["diagnostics"])
+    assert not report["proof"]
+
+
+def test_state_snapshot_effective_helper_is_not_a_proof():
+    report = check_adapters(
+        {
+            "libs/langgraph/langgraph/pregel/main.py": dedent("""
+            class Pregel:
+                async def aget_state(self, config):
+                    raw = await self._aprepare_state_snapshot(config, saved)
+                    return await self._afilter_state_snapshot(raw, config)
+        """)
+        }
+    )
+    assert not any(item["rule"] == "SGV110" for item in report["diagnostics"])
+    assert not report["proof"]

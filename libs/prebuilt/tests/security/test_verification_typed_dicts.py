@@ -166,6 +166,7 @@ def test_single_inherited_declaration_uses_native_constructor():
         DECLARATION.replace("TypedDict, total=False", "TypedDict, metaclass=Custom"),
         DECLARATION.replace("class Config", "@decorate\nclass Config"),
         DECLARATION.replace("value: object", "value: object = dispatch(None, None)"),
+        DECLARATION.replace("value: object", "(value): object"),
         "class Config(TypedDict):\n    pass\nfrom typing import TypedDict\n",
         "from typing import TypedDict\nTypedDict = None\nclass Config(TypedDict):\n    pass\n",
         "from typing import TypedDict\nclass Config(TypedDict, object):\n    pass\n",

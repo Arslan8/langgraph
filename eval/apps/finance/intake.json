@@ -1,0 +1,226 @@
+{
+  "id": "finance",
+  "repository": "virattt/ai-hedge-fund",
+  "subdirectory": ".",
+  "entrypoint": "src/main.py:run_hedge_fund -> create_workflow -> compile -> invoke",
+  "graph_files": [
+    "src/main.py",
+    "src/tools/api.py",
+    "src/llm/models.py",
+    "src/agents/portfolio_manager.py"
+  ],
+  "effects": "Historical LangGraph analyst workflow; requests GET/POST to financial data provider, local cache, model calls, optional graph PNG. Analysis only; no brokerage or real-money trading.",
+  "next_action": "Freeze financial-provider responses and local model settings; run historical analysis only. Reproducibility of selected historical revision remains unverified.",
+  "historical": true,
+  "selection_reason": "Current HEAD 29b32f71861480e9bfd48b82cf0d3ca3e5680955 lacks StateGraph workflow. Selected 6c41ae8cf5fb4e30eb8cdb6a816eb56ff234989d, parent of a7a99e5b4cbbe789f4e16bd02d794e86a2a3a3d2 which removed src/main.py. This is a candidate historical pin, not a claim of last reproducible release.",
+  "sha": "6c41ae8cf5fb4e30eb8cdb6a816eb56ff234989d",
+  "license": "MIT (see captured LICENSE text)",
+  "retrieved_at": "2026-10-26T00:31:38.372515+00:00",
+  "checkout": "/data/slanggraph-eval-upstreams/ai-hedge-fund",
+  "archive": {},
+  "source_evidence": [
+    {
+      "path": "src/main.py",
+      "sha256": "2af7246c8d38a9b2f03e60dbcbaedd2adf564d25ceba5fb92c678d5aa0322736",
+      "url": "https://github.com/virattt/ai-hedge-fund/blob/6c41ae8cf5fb4e30eb8cdb6a816eb56ff234989d/src/main.py",
+      "matches": [
+        {
+          "line": 5,
+          "text": "from langgraph.graph import END, StateGraph"
+        },
+        {
+          "line": 30,
+          "text": "def parse_hedge_fund_response(response):"
+        },
+        {
+          "line": 46,
+          "text": "def run_hedge_fund("
+        },
+        {
+          "line": 62,
+          "text": "agent = workflow.compile()"
+        },
+        {
+          "line": 64,
+          "text": "final_state = agent.invoke("
+        },
+        {
+          "line": 95,
+          "text": "def start(state: AgentState):"
+        },
+        {
+          "line": 100,
+          "text": "def create_workflow(selected_analysts=None):"
+        },
+        {
+          "line": 102,
+          "text": "workflow = StateGraph(AgentState)"
+        }
+      ]
+    },
+    {
+      "path": "src/tools/api.py",
+      "sha256": "c176b3b65727ed010e93fbb721450afc7358beb5beeeb6e7780ab1596d5be936",
+      "url": "https://github.com/virattt/ai-hedge-fund/blob/6c41ae8cf5fb4e30eb8cdb6a816eb56ff234989d/src/tools/api.py",
+      "matches": [
+        {
+          "line": 29,
+          "text": "def _make_api_request(url: str, headers: dict, method: str = \"GET\", json_data: dict = None, max_retries: int = 3) -> requests.Response:"
+        },
+        {
+          "line": 41,
+          "text": "requests.Response: The response object"
+        },
+        {
+          "line": 48,
+          "text": "response = requests.post(url, headers=headers, json=json_data)"
+        },
+        {
+          "line": 50,
+          "text": "response = requests.get(url, headers=headers)"
+        },
+        {
+          "line": 63,
+          "text": "def get_prices(ticker: str, start_date: str, end_date: str, api_key: str = None) -> list[Price]:"
+        },
+        {
+          "line": 99,
+          "text": "def get_financial_metrics("
+        },
+        {
+          "line": 141,
+          "text": "def search_line_items("
+        },
+        {
+          "line": 183,
+          "text": "def get_insider_trades("
+        },
+        {
+          "line": 249,
+          "text": "def get_company_news("
+        },
+        {
+          "line": 315,
+          "text": "def get_market_cap("
+        },
+        {
+          "line": 351,
+          "text": "def prices_to_df(prices: list[Price]) -> pd.DataFrame:"
+        },
+        {
+          "line": 364,
+          "text": "def get_price_data(ticker: str, start_date: str, end_date: str, api_key: str = None) -> pd.DataFrame:"
+        }
+      ]
+    },
+    {
+      "path": "src/llm/models.py",
+      "sha256": "7ff1b4e4266a32d3ef9150556987f4c7b039da2220999cb76a1caa04b84dabf4",
+      "url": "https://github.com/virattt/ai-hedge-fund/blob/6c41ae8cf5fb4e30eb8cdb6a816eb56ff234989d/src/llm/models.py",
+      "matches": [
+        {
+          "line": 43,
+          "text": "def to_choice_tuple(self) -> Tuple[str, str, str]:"
+        },
+        {
+          "line": 47,
+          "text": "def is_custom(self) -> bool:"
+        },
+        {
+          "line": 51,
+          "text": "def has_json_mode(self) -> bool:"
+        },
+        {
+          "line": 68,
+          "text": "def is_deepseek(self) -> bool:"
+        },
+        {
+          "line": 72,
+          "text": "def is_kimi(self) -> bool:"
+        },
+        {
+          "line": 76,
+          "text": "def is_gemini(self) -> bool:"
+        },
+        {
+          "line": 80,
+          "text": "def is_anthropic_reasoning(self) -> bool:"
+        },
+        {
+          "line": 84,
+          "text": "def is_ollama(self) -> bool:"
+        },
+        {
+          "line": 90,
+          "text": "def load_models_from_json(json_path: str) -> List[LLMModel]:"
+        },
+        {
+          "line": 127,
+          "text": "def get_model_info(model_name: str, model_provider: str) -> LLMModel | None:"
+        },
+        {
+          "line": 133,
+          "text": "def find_model_by_name(model_name: str) -> LLMModel | None:"
+        },
+        {
+          "line": 139,
+          "text": "def get_models_list():"
+        },
+        {
+          "line": 151,
+          "text": "def get_model(model_name: str, model_provider: ModelProvider, api_keys: dict = None) -> ChatOpenAI | ChatGroq | ChatOllama | GigaChat | None:"
+        }
+      ]
+    },
+    {
+      "path": "src/agents/portfolio_manager.py",
+      "sha256": "40943a1e4ec33b0de73d20ccb874c0d4fbbe35dc142fc1f463fe8b0da022f2e0",
+      "url": "https://github.com/virattt/ai-hedge-fund/blob/6c41ae8cf5fb4e30eb8cdb6a816eb56ff234989d/src/agents/portfolio_manager.py",
+      "matches": [
+        {
+          "line": 25,
+          "text": "def portfolio_management_agent(state: AgentState, agent_id: str = \"portfolio_manager\"):"
+        },
+        {
+          "line": 96,
+          "text": "def compute_allowed_actions("
+        },
+        {
+          "line": 160,
+          "text": "def _compact_signals(signals_by_ticker: dict[str, dict]) -> dict[str, dict]:"
+        },
+        {
+          "line": 177,
+          "text": "def generate_trading_decision("
+        },
+        {
+          "line": 239,
+          "text": "prompt = template.invoke(prompt_data)"
+        },
+        {
+          "line": 242,
+          "text": "def create_default_portfolio_output():"
+        }
+      ]
+    }
+  ],
+  "dependency_inputs": {
+    "poetry.lock": "be5efa9501880f91830b8b3c3cf2a7e8aa295da69a79e45491ad797c85084ffa",
+    "pyproject.toml": "27e44410d447d217b92ec8855f464986405edcfe82ca288f93b2a4c4a457f8de"
+  },
+  "python": {
+    "argv": [
+      "/data/slanggraph-eval-upstreams/ai-hedge-fund/.venv/bin/python",
+      "--version"
+    ],
+    "returncode": 0,
+    "stdout": "Python 3.13.11\n",
+    "stderr": ""
+  },
+  "license_sha256": "6cb192c4a37c69c84459d2e1b3da7af51b06d91e35be521c898107bdae18e2a4",
+  "license_text": "MIT License\n\nCopyright (c) 2024 Virat Singh\n\nPermission is hereby granted, free of charge, to any person obtaining a copy\nof this software and associated documentation files (the \"Software\"), to deal\nin the Software without restriction, including without limitation the rights\nto use, copy, modify, merge, publish, distribute, sublicense, and/or sell\ncopies of the Software, and to permit persons to whom the Software is\nfurnished to do so, subject to the following conditions:\n\nThe above copyright notice and this permission notice shall be included in all\ncopies or substantial portions of the Software.\n\nTHE SOFTWARE IS PROVIDED \"AS IS\", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR\nIMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,\nFITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE\nAUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER\nLIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,\nOUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE\nSOFTWARE.\n",
+  "intake_status": "blocked",
+  "baseline_run": null,
+  "effect_inventory_kind": "source inspection; not a runtime trace",
+  "environment_freeze_returncode": 0
+}

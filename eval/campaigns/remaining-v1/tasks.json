@@ -1,0 +1,505 @@
+{
+  "notebook-disposition": {
+    "coverage": {
+      "backing-store read": "missing required production integration",
+      "checkpoint restore/history": "missing required production integration",
+      "model input": "missing required production integration",
+      "publication": "missing required production integration",
+      "source lookup": "missing required production integration"
+    },
+    "image": "surrealdb/surrealdb@sha256:e5d7387e3727bbe2f7cd6d869e48cd34777272258572ead37c9656b25f745723",
+    "negative_probes": [
+      "source-ID substitution",
+      "stale-checkpoint reuse",
+      "unauthorized output"
+    ],
+    "sources": {
+      "open_notebook/database/repository.py": "f7d1554023bdd4bc71e200378e4371c2f04811dc1ab8358f13defe20cb6bde86",
+      "open_notebook/graphs/source.py": "2353b0c2aee2fd03d32c067626b6c708da0d0ca8bd4767f3288e4fe3e921a221",
+      "open_notebook/graphs/source_chat.py": "ac249e8cd2bc94683e40948fabea30a34680488524f44375b1ee77dcdb7f92f8"
+    },
+    "tasks": [
+      {
+        "id": "single-source-0",
+        "kind": "single-source lookup"
+      },
+      {
+        "id": "single-source-1",
+        "kind": "single-source lookup"
+      },
+      {
+        "id": "single-source-2",
+        "kind": "single-source lookup"
+      },
+      {
+        "id": "single-source-3",
+        "kind": "single-source lookup"
+      },
+      {
+        "id": "single-source-4",
+        "kind": "single-source lookup"
+      },
+      {
+        "id": "single-source-5",
+        "kind": "single-source lookup"
+      },
+      {
+        "id": "multi-source-0",
+        "kind": "multi-source summary"
+      },
+      {
+        "id": "multi-source-1",
+        "kind": "multi-source summary"
+      },
+      {
+        "id": "attribution",
+        "kind": "attribution"
+      },
+      {
+        "id": "calculation",
+        "kind": "permitted calculation"
+      }
+    ],
+    "upstream_commit": "a0f6f3081ae06328f0a451b3a3ef2959ca25721d"
+  },
+  "pandas-full": {
+    "conditions": [
+      "A",
+      "B",
+      "C"
+    ],
+    "fixture": [
+      [
+        "2026-01-05",
+        "North",
+        "A",
+        100
+      ],
+      [
+        "2026-01-10",
+        "South",
+        "B",
+        60
+      ],
+      [
+        "2026-02-05",
+        "North",
+        "A",
+        80
+      ],
+      [
+        "2026-02-12",
+        "South",
+        "B",
+        40
+      ],
+      [
+        "2026-03-01",
+        "North",
+        "A",
+        20
+      ],
+      [
+        "2026-03-08",
+        "South",
+        "B",
+        100
+      ],
+      [
+        "2026-01-05",
+        "North",
+        "A",
+        100
+      ],
+      [
+        "2026-04-01",
+        "South",
+        "B",
+        null
+      ]
+    ],
+    "graph_retries": 0,
+    "model": {
+      "base_url": "http://localhost:11434/v1",
+      "digest": "500a1f067a9f782620b40bee6f7b0c89e17ae61f686b92c24933e4ca4b2b8b41",
+      "max_retries": 0,
+      "name": "qwen3:8b",
+      "reasoning_effort": "none",
+      "seed": 20261005,
+      "temperature": 0,
+      "timeout_seconds": 600
+    },
+    "repetitions": 5,
+    "seed": 20261026,
+    "sources": {
+      "backend.py": "4a4b9119aae8eb17e67399b347a89382efa6c0c742b8d00dc1d2550f6c157137",
+      "pandas/integration.py": "12adc5788bfbca0db3dbd43eced851e96ff45700882badee04b35aaf6bc82f7b",
+      "pandas/oracle.py": "607449ce59d4870dfac87a451891c8b8a24a862831a27b6770f08bf3a44c03b5",
+      "pandas/probe_worker.py": "9988cf211a862d4f843c29e8210e29487a99f5123e550b26568166fe147cfb2a",
+      "pandas/worker.py": "2427365bb25aa5375425a0fcb11c7b2de1b8840938f6bccbb66c0d71a4397f71",
+      "pandas/worker_candidate.py": "ed73ada75ae2f8a6eaa28ee979d7aff8ada53719b243f0936c68ed0bd189c9ef"
+    },
+    "tasks": [
+      [
+        "monthly_total",
+        "Return a table of monthly sales totals, with month formatted YYYY-MM and total sales. Include all months.",
+        [
+          [
+            "2026-01",
+            260
+          ],
+          [
+            "2026-02",
+            120
+          ],
+          [
+            "2026-03",
+            120
+          ],
+          [
+            "2026-04",
+            0
+          ]
+        ]
+      ],
+      [
+        "monthly_mean",
+        "Return a table of monthly mean sales, with month formatted YYYY-MM and mean sales. Include months with only missing sales as null.",
+        [
+          [
+            "2026-01",
+            86.66666666666667
+          ],
+          [
+            "2026-02",
+            60
+          ],
+          [
+            "2026-03",
+            60
+          ],
+          [
+            "2026-04",
+            null
+          ]
+        ]
+      ],
+      [
+        "regional_totals",
+        "Return exactly region and total sales, summed by region.",
+        [
+          [
+            "North",
+            300
+          ],
+          [
+            "South",
+            200
+          ]
+        ]
+      ],
+      [
+        "product_totals",
+        "Return exactly product and total sales, summed by product.",
+        [
+          [
+            "A",
+            300
+          ],
+          [
+            "B",
+            200
+          ]
+        ]
+      ],
+      [
+        "top_products",
+        "Return the single top product by total sales, with product and total sales.",
+        [
+          [
+            "A",
+            300
+          ]
+        ]
+      ],
+      [
+        "date_filtered_total",
+        "Filter dates from 2026-02-01 through 2026-02-28 inclusive and return a table containing only the total sales.",
+        [
+          [
+            120
+          ]
+        ]
+      ],
+      [
+        "grouped_mean",
+        "Return exactly region and mean sales, grouped by region, ignoring missing sales.",
+        [
+          [
+            "North",
+            75
+          ],
+          [
+            "South",
+            66.66666666666667
+          ]
+        ]
+      ],
+      [
+        "missing_count",
+        "Return a one-cell table counting missing values in the sales column.",
+        [
+          [
+            1
+          ]
+        ]
+      ],
+      [
+        "duplicate_count",
+        "Return a one-cell table counting duplicate rows, keeping the first occurrence.",
+        [
+          [
+            1
+          ]
+        ]
+      ],
+      [
+        "monthly_chart",
+        "Produce a bar chart of total sales by month. Format month as YYYY-MM. Include all months.",
+        [
+          [
+            "2026-01",
+            260
+          ],
+          [
+            "2026-02",
+            120
+          ],
+          [
+            "2026-03",
+            120
+          ],
+          [
+            "2026-04",
+            0
+          ]
+        ]
+      ]
+    ],
+    "timeout_s": 180,
+    "timer": "subprocess wall time including graph/model/authorization/audit; setup separate",
+    "upstream_revision": "4ffeb7f38178aa250917f29b01355f8b89ba809e"
+  },
+  "sql-full": {
+    "fixture": [
+      [
+        1,
+        "alice",
+        "2026-01-05",
+        "North",
+        "A",
+        100
+      ],
+      [
+        2,
+        "alice",
+        "2026-01-10",
+        "South",
+        "B",
+        60
+      ],
+      [
+        3,
+        "alice",
+        "2026-02-05",
+        "North",
+        "A",
+        80
+      ],
+      [
+        4,
+        "alice",
+        "2026-02-12",
+        "South",
+        "B",
+        40
+      ],
+      [
+        5,
+        "alice",
+        "2026-03-01",
+        "North",
+        "A",
+        20
+      ],
+      [
+        6,
+        "alice",
+        "2026-03-08",
+        "South",
+        "B",
+        100
+      ]
+    ],
+    "graph_retries": 0,
+    "model": {
+      "base_url": "http://localhost:11434/v1",
+      "digest": "500a1f067a9f782620b40bee6f7b0c89e17ae61f686b92c24933e4ca4b2b8b41",
+      "max_retries": 0,
+      "name": "qwen3:8b",
+      "reasoning_effort": "none",
+      "seed": 20261005,
+      "temperature": 0,
+      "timeout_seconds": 600
+    },
+    "repetitions": 5,
+    "seed": 20261027,
+    "source_hashes": {
+      "application_campaign.py": "c1a5f6e650229547cfb99f117b73fdcceeb19b3e34bdbf305e8d6ed3bdf18197",
+      "bounded_sql.py": "0cdd11087bc6fa1c5921669b676e01cc21258e4ae6d1446e46a54b35223b3c85",
+      "capability_config.py": "65971d57935bfacf6c5b03da1888eb146c5f638f282ab8fdc31d5e894712f53f",
+      "composition.py": "645f856ed0832bd654fad588e44b08d05be9f35cbdcc7c725f49cbdd3513d34f",
+      "container_lifecycle.py": "495a88d27a210a49f0a4899f90302bba40476fc079e0e7341fda54384f00d524",
+      "evidence_utils.py": "e31c2fa9d116e79cf1621d194d5807d14cd207adfd84d7405988d8050a9d59c3",
+      "filesystem_worker.py": "13708cf441d27aa6e7b0e2be1cda79751925270d5bf62b333cc739357009afc8",
+      "manifest_mac.py": "2da4142f0d0a6a27b0ce81c68763903142537bb60512c5b49a5855379e848822",
+      "pump_composition.py": "3865dcf7b01114b8d05f961a8c39bc035891f497d31b6658e3a18746ec3002bf",
+      "pump_worker.py": "6b291e6f2a5d76e42ce25181ff6b1db2896bcc503905db12f0fe03231d80d6f5",
+      "record_worker.py": "69a93b46e97bca56583bc2c5909639f405d50c02000e372e8170843e9339cb0d",
+      "sql_application_backend.py": "2edaceb5c2cc2f7a84f23baeae667fc62e2f101b360657972874678a33551588",
+      "sql_campaign.py": "21eb698dd71052fbaa0ba648a6290edc2e909ab6effb8bb0937af9fc78dc4ca3",
+      "sql_worker.py": "0edcc9d98bec1f6b4dfb2414490d695e6709125945a116379ecd6500b787e214"
+    },
+    "tasks": [
+      [
+        "owned_lookup",
+        "Return id, product, sales for the sales row with id 1.",
+        [
+          [
+            1,
+            "A",
+            100
+          ]
+        ]
+      ],
+      [
+        "date_filtered_rows",
+        "Return id and sales for dates >= '2026-02-01' AND dates <= '2026-02-28', ordered by id.",
+        [
+          [
+            3,
+            80
+          ],
+          [
+            4,
+            40
+          ]
+        ]
+      ],
+      [
+        "count",
+        "Return the count of sales rows.",
+        [
+          [
+            6
+          ]
+        ]
+      ],
+      [
+        "sum",
+        "Return the sum of sales.",
+        [
+          [
+            400
+          ]
+        ]
+      ],
+      [
+        "mean",
+        "Return the average sales.",
+        [
+          [
+            66.66666666666667
+          ]
+        ]
+      ],
+      [
+        "min_max",
+        "Return minimum and maximum sales in one row.",
+        [
+          [
+            20,
+            100
+          ]
+        ]
+      ],
+      [
+        "regional_grouping",
+        "Return region and sum of sales grouped by region.",
+        [
+          [
+            "North",
+            200
+          ],
+          [
+            "South",
+            200
+          ]
+        ]
+      ],
+      [
+        "product_grouping",
+        "Return product and sum of sales grouped by product.",
+        [
+          [
+            "A",
+            200
+          ],
+          [
+            "B",
+            200
+          ]
+        ]
+      ],
+      [
+        "ordered_top_k",
+        "Return id and sales ordered by sales descending, then id ascending, limited to 2 rows.",
+        [
+          [
+            1,
+            100
+          ],
+          [
+            6,
+            100
+          ]
+        ]
+      ],
+      [
+        "two_condition_filter",
+        "Return id and sales where region = 'North' AND sales > 50, ordered by id.",
+        [
+          [
+            1,
+            100
+          ],
+          [
+            3,
+            80
+          ]
+        ]
+      ]
+    ],
+    "timeout_s": 180,
+    "unsupported": [
+      "joins",
+      "subqueries",
+      "UNION",
+      "ATTACH",
+      "PRAGMA",
+      "DDL",
+      "writes",
+      "extensions"
+    ]
+  }
+}

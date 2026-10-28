@@ -131,7 +131,7 @@ def test_manifest_maps_a_closed_argument_set_to_fixed_operations() -> None:
           object device
           normalizer identity
           attrs
-          enforced_by trusted_tool
+          enforced_by language_sandbox
         }
         tool control_pump {
           runs inprocess
@@ -178,7 +178,7 @@ def test_manifest_rejects_multiple_operation_selector_arguments() -> None:
               object device
               normalizer identity
               attrs
-              enforced_by trusted_tool
+              enforced_by language_sandbox
             }
             tool control_pump {
               map operation=inspect pump inspect pump-1 need
@@ -301,7 +301,7 @@ def test_normalizer_failure_is_a_concise_object_policy_denial() -> None:
           object path
           normalizer fs.realpath
           attrs
-          enforced_by trusted_tool
+          enforced_by language_sandbox
         }
         tool read_file {
           runs inprocess
@@ -676,13 +676,13 @@ def test_cedar_security_derives_and_enforces_trusted_resource_grant(
     assert 'action == slangGraph::Action::"fs::read"' in owner_policy
 
 
-def test_cedar_security_rejects_nontrusted_resource_enforcer() -> None:
+def test_cedar_security_rejects_non_sandbox_resource_enforcer() -> None:
     @tool
     def read_record(record_id: str) -> str:
         """Read one record."""
         return record_id
 
-    with pytest.raises(ValueError, match="must use enforced_by trusted_tool"):
+    with pytest.raises(ValueError, match="must use enforced_by language_sandbox"):
         cedar_security(
             read_record,
             classes="""
@@ -713,7 +713,7 @@ def test_cedar_security_accepts_unused_custom_class_permission() -> None:
       object item
       normalizer identity
       attrs owner
-      enforced_by trusted_tool
+      enforced_by language_sandbox
     }
     """,
         manifest="record read @{record_id} need",

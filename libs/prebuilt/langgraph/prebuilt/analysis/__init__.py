@@ -13,7 +13,7 @@ from langgraph.prebuilt.analysis.contracts import (
     FlowView,
     ValueRef,
 )
-from langgraph.prebuilt.analysis.events import BUILTIN_EVENTS, EventSpec
+from langgraph.prebuilt.analysis.events import BUILTIN_EVENTS, BuiltinEvent, EventSpec
 from langgraph.prebuilt.analysis.registry import AnalyzerRegistration, Registry
 
 __all__ = [
@@ -27,6 +27,7 @@ __all__ = [
     "AnalyzerRegistration",
     "AnnotationProposal",
     "BUILTIN_EVENTS",
+    "BuiltinEvent",
     "Coverage",
     "DependencyProposal",
     "EventSpec",
@@ -49,9 +50,12 @@ from langgraph.prebuilt.analysis.access.subscriptions import (
     AnalysisSubscription,
     NotificationHub,
 )
+from langgraph.prebuilt.analysis.local import Analysis
 from langgraph.prebuilt.analysis.runtime import AnalysisRuntime
+from langgraph.prebuilt.analysis.structured import StructuredAnalysis
 
 __all__ += [
+    "Analysis",
     "AccessContext",
     "AnalysisClient",
     "AnalysisQuery",
@@ -63,4 +67,5 @@ __all__ += [
     "AnalysisSubscription",
     "NotificationHub",
     "AnalysisRuntime",
+    "StructuredAnalysis",
 ]

@@ -5,7 +5,7 @@
 sync/async router entry points: seven ToolCall aliases and fourteen framework
 object routes. Host-confined `ToolNode` and `guarded_tool` calls enter that core
 through an exact-decision bridge; they are callers, not excluded peer
-boundaries. Framework placement and trusted in-process compatibility are
+boundaries. Framework placement and legacy unadmitted in-process compatibility are
 tracked below and do not yet carry a system-wide complete-mediation claim.
 
 The latest source review is recorded in [the October 8 recheck](#october-8-recheck-of-4ad6c95c).
@@ -172,7 +172,7 @@ implements the full `BoundaryHost` protocol.
 
 The exact-decision bridge admits the host-confined execution branches of
 `ToolNode` and `guarded_tool`; their preparation, flow reservation, post
-handling, and trusted in-process compatibility branches have not moved into the
+handling, and legacy unadmitted in-process compatibility branches have not moved into the
 router certificate. Approval now has its own verified router route. General
 subgraph/`Send`/agent, state/checkpointer, model-node, and publication paths
 remain outside the system claim until placement analysis assigns their

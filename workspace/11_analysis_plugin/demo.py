@@ -1,74 +1,36 @@
-"""Demo 11: an analysis plugin."""
+"""Demo 11: receive an event from a real tool call."""
 
-from uuid import uuid4
-
-from langgraph.prebuilt.analysis import (
-    BUILTIN_EVENTS,
-    AnalysisConfig,
-    AnalysisFinding,
-    AnalysisResult,
-    AnalysisRuntime,
-    AnalyzerRegistration,
-    Registry,
-)
-from langgraph.prebuilt.analysis.adapters.boundary import BoundaryAdapter
-from langgraph.prebuilt.analysis.provenance.store import MemoryProvenanceStore
-from langgraph.prebuilt.analysis.serialization import digest
+from langchain_core.tools import tool
+from langgraph.prebuilt import ToolNode
+from langgraph.prebuilt.analysis import Analysis, BuiltinEvent
+from langgraph.runtime import Runtime
 
 
-class DocumentMarker:
-    """A deterministic teaching analyzer, not a sensitive-data detector."""
+@tool
+def add(a: int, b: int) -> int:
+    """Add two numbers."""
+    return a + b
 
-    def analyze(self, event, context):
-        return AnalysisResult(
-            findings=(
-                AnalysisFinding(
-                    finding_id=str(uuid4()),
-                    analyzer_id="marker",
-                    analyzer_version="1",
-                    code="example.document.seen",
-                    subject_refs=event.input_refs,
-                    status="complete",
-                    configuration_digest=digest({"version": 1}),
-                ),
-            )
-        )
 
-    async def aanalyze(self, event, context):
-        return self.analyze(event, context)
+def on_result(message):
+    print(f"Tool {message.name} returned: {message.content}")
 
 
 def main():
-    registrations = (
-        AnalyzerRegistration("marker", "1", DocumentMarker(), ("input.admit",)),
-    )
-    store = MemoryProvenanceStore()
-    registry = Registry(
-        BUILTIN_EVENTS,
-        registrations,
-        producers=frozenset(spec.producer for spec in BUILTIN_EVENTS),
-    )
-    runtime = AnalysisRuntime(
-        AnalysisConfig("{}", ()),
-        registry,
-        store,
-        tenant_id="demo",
-        session_id="session",
-        run_id="lesson",
-        principal_id="owner",
-    )
-    boundary = BoundaryAdapter(runtime)
-    try:
-        document = boundary.value("Quarterly report")
-        snapshot = boundary.before("input.admit", (document,))
-        finding = snapshot.findings[0]
-        assert finding.code == "example.document.seen"
-        assert finding.subject_refs == (document,)
-        print("input.admit -> DocumentMarker -> example.document.seen")
-        print("Finding refers to the admitted document: yes")
-    finally:
-        runtime.close()
-        store.close()
+    with Analysis() as analysis:
+        analysis.on(BuiltinEvent.TOOL_RESULT, on_result)
+        tools = ToolNode([add], analysis=analysis)
+        tools.invoke(
+            [
+                {
+                    "name": "add",
+                    "args": {"a": 2, "b": 3},
+                    "id": "call-1",
+                    "type": "tool_call",
+                }
+            ],
+            runtime=Runtime(),
+        )
 
 
 if __name__ == "__main__":

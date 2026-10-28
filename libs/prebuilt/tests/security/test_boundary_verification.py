@@ -1,6 +1,7 @@
 """Positive boundary proofs and source-only negative variants."""
 
 import ast
+import types
 from pathlib import Path
 
 import pytest
@@ -115,8 +116,10 @@ def test_cross_tool_entry_cannot_switch_to_root_dispatch() -> None:
         "return self.host.invoke(child, call, decision.constraints)"
     ).body[0]
     report = verify_router_source(ast.unparse(tree))
-    assert report["source_proof"]["complete"]  # Tool permission alone holds.
-    assert not report["complete"]  # But the cross-tool protocol was bypassed.
+    # Tool permission holds, but the return protocol now rejects the wrong
+    # operation in the transfer engine as well as in the coverage check.
+    assert not report["source_proof"]["complete"]
+    assert not report["complete"]
     assert any("wrong root/cross-tool" in issue for issue in report["issues"])
 
 
@@ -146,6 +149,27 @@ def test_added_runtime_attribute_invalidates_admission(monkeypatch) -> None:
         host_router.HostRouter, "hidden_service", object(), raising=False
     )
     assert not verify_host_router()["complete"]
+
+
+@pytest.mark.parametrize("name", ["route", "invoke", "output_emit", "state"])
+def test_router_instances_cannot_shadow_verified_methods(name):
+    router = make_host_router(None, None)
+    assert not hasattr(router, "__dict__")
+    with pytest.raises(AttributeError):
+        setattr(router, name, lambda *args: "unmediated")
+
+
+@pytest.mark.parametrize("name", ["policy", "host"])
+def test_replaced_slot_descriptor_is_not_an_admitted_router(monkeypatch, name):
+    monkeypatch.setattr(host_router.HostRouter, name, None)
+    report = verify_host_router()
+    assert not report["complete"]
+    assert any(
+        "slot descriptor changed" in issue
+        for issue in report["runtime_binding"]["issues"]
+    )
+    with pytest.raises(ValueError, match="unresolved mediation"):
+        make_host_router(None, None)
 
 
 @pytest.mark.parametrize("asynchronous", [False, True])
@@ -232,3 +256,125 @@ def test_authorizer_inputs_cannot_be_rebound_before_checking():
         for authorization in entry["authorizations"]
     )
     assert not report["complete"]
+
+
+def test_router_returns_prove_dispatch_or_pending_approval_without_conflating_them():
+    report = verify_host_router()
+    assert report["complete"]
+    for entry in report["source_proof"]["entries"]:
+        name = entry["entry"].rsplit(".", 1)[-1]
+        kinds = {outcome["kind"] for outcome in entry["return_outcomes"]}
+        expected = {"authorized_operation"}
+        if name in {
+            "route",
+            "aroute",
+            "dispatch",
+            "adispatch",
+            "register",
+            "aregister",
+            "state",
+            "astate",
+            "model_invoke",
+            "amodel_invoke",
+            "output_emit",
+            "aoutput_emit",
+        }:
+            expected.add("escalated_authorization")
+        assert kinds == expected
+        assert all(outcome["verified"] for outcome in entry["return_outcomes"])
+    # Provenance evidence does not silently become a publication permission.
+    assert not report["source_proof"]["return_requirements"]
+    assert not report["source_proof"]["refusing_authorizers"]
+
+
+@pytest.mark.parametrize("asynchronous", [False, True])
+@pytest.mark.parametrize(
+    "replacement", ["request", "authorization.request", "None", "(value, request)"]
+)
+def test_authorized_dispatch_does_not_license_a_different_return(
+    asynchronous, replacement
+):
+    source = _source()
+    await_prefix = "await " if asynchronous else ""
+    method = "adispatch" if asynchronous else "dispatch"
+    old = f"return {await_prefix}self.host.{method}(principal, authorization.request)"
+    new = f"value = {await_prefix}self.host.{method}(principal, authorization.request)\n        return {replacement}"
+    assert old in source
+    report = verify_router_source(source.replace(old, new, 1))
+    assert not report["complete"]
+    assert any(
+        not outcome["verified"]
+        for entry in report["source_proof"]["entries"]
+        for outcome in entry["return_outcomes"]
+    )
+
+
+@pytest.mark.parametrize(
+    "condition", ["Verdict.DENY", "Verdict.ALLOW", "Verdict.REDACT"]
+)
+def test_only_escalated_authorization_may_return_without_dispatch(condition):
+    report = verify_router_source(
+        _source().replace("is Verdict.ESCALATE:", f"is {condition}:")
+    )
+    assert not report["complete"]
+    assert any(
+        not outcome["verified"]
+        for entry in report["source_proof"]["entries"]
+        for outcome in entry["return_outcomes"]
+    )
+
+
+@pytest.mark.parametrize(
+    "replacement",
+    [
+        "return authorization.request",
+        "return request",
+        "authorization.request = request\n            return authorization",
+        "authorization.decision.verdict = Verdict.ALLOW\n            return authorization",
+    ],
+)
+def test_pending_approval_must_be_the_unchanged_authorizer_result(replacement):
+    source = _source().replace("return authorization", replacement)
+    assert not verify_router_source(source)["complete"]
+
+
+@pytest.mark.parametrize("asynchronous", [False, True])
+def test_matching_loaded_source_is_refused_when_return_protocol_is_unprovable(
+    monkeypatch, tmp_path, asynchronous
+):
+    method = "aroute" if asynchronous else "route"
+    dispatch = "await self.host.adispatch" if asynchronous else "self.host.dispatch"
+    source = _source().replace(
+        f"return {dispatch}(principal, authorization.request)",
+        f"{dispatch}(principal, authorization.request)\n        return request",
+        1,
+    )
+    path = tmp_path / "host_router.py"
+    path.write_text(source)
+    # Compile for code-shape binding only. Never execute the candidate module or
+    # its violating method; the admission check must stop before construction.
+    compiled = compile(source, str(path), "exec", dont_inherit=True)
+    class_code = next(
+        item
+        for item in compiled.co_consts
+        if isinstance(item, types.CodeType) and item.co_name == "HostRouter"
+    )
+    method_code = next(
+        item
+        for item in class_code.co_consts
+        if isinstance(item, types.CodeType) and item.co_name == method
+    )
+    monkeypatch.setattr(host_router, "__file__", str(path))
+    monkeypatch.setattr(
+        getattr(host_router.HostRouter, method), "__code__", method_code
+    )
+    report = verify_host_router()
+    assert report["runtime_binding"]["verified"], report
+    assert not report["complete"]
+    assert any(
+        not outcome["verified"]
+        for entry in report["source_proof"]["entries"]
+        for outcome in entry["return_outcomes"]
+    )
+    with pytest.raises(ValueError, match="unresolved mediation obligations"):
+        make_host_router(None, None)

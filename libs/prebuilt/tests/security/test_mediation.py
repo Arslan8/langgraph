@@ -380,7 +380,7 @@ def test_framework_report_does_not_confuse_dispatch_with_completeness() -> None:
     assert {item["status"] for item in report["coverage"]} == {
         "analyzed",
         "source_bound",
-        "verified_under_contract",
+        "unresolved",
         "partially_verified",
         "unsupported",
     }
@@ -392,9 +392,19 @@ def test_framework_report_does_not_confuse_dispatch_with_completeness() -> None:
         "delegation-and-transfer",
         "publication-inventory",
     }
-    assert all(
-        evidence["status"] == "source_bound" for evidence in report["source_evidence"]
-    )
+    evidence = {item["id"]: item for item in report["source_evidence"]}
+    assert {
+        name for name, item in evidence.items() if item["status"] != "source_bound"
+    } == {"linux-grant-activation", "enforcement-receipt"}
+    for name in ("linux-grant-activation", "enforcement-receipt"):
+        item = evidence[name]
+        assert item["status"] == "unresolved"
+        assert item["observed_digest"] != item["reviewed_digest"]
+        assert item["reason"] == "reviewed source digest changed"
+    obligations = {item["id"]: item for item in report["obligations"]}
+    for name in ("confinement-activation", "execution-lifetime"):
+        assert obligations[name]["status"] == "unresolved"
+        assert "linux-grant-activation" in obligations[name]["source_evidence"]
     assert all(
         summary["source_evidence"]
         for check in report["checks"]

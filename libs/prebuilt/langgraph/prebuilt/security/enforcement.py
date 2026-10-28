@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import math
 import time
 from collections import defaultdict
 from collections.abc import Mapping, Sequence
@@ -926,9 +927,14 @@ class EnforcementCoordinator:
             raise ValueError(host_error)
         if context.boot_id != host.boot_id:
             raise ValueError("worker boot identity differs from host attestation")
+        plans = _assigned_adapter_plans(plan)
+        if not nonce:
+            raise ValueError("activation nonce must be non-empty")
+        if not plans.keys() <= self._adapters.keys():
+            raise ValueError("activation plan references an unknown adapter")
         evidence: list[ActivationEvidence] = []
         activated: set[str] = set()
-        for adapter_plan in plan.adapter_plans:
+        for adapter_plan in plans.values():
             adapter = self._adapters[adapter_plan.adapter_id]
             item = adapter.activate(adapter_plan, context, nonce)
             validation_time = time.time() if now is None else timestamp
@@ -982,12 +988,21 @@ class EnforcementCoordinator:
     ) -> bool:
         """Revalidate live host, worker, broker, credential, and adapter evidence."""
         timestamp = time.time() if now is None else now
-        if timestamp > receipt.valid_until:
+        if (
+            not math.isfinite(timestamp)
+            or not math.isfinite(receipt.valid_until)
+            or timestamp > receipt.valid_until
+            or receipt.valid_until > host.expires_at
+            or not receipt.nonce
+        ):
             return False
         if self._validate_host(host, host.nonce, timestamp) is not None:
             return False
         if (
-            receipt.grant_digest != grant.digest
+            plan.grant_digest != grant.digest
+            or plan.host_digest != host.digest
+            or context.boot_id != host.boot_id
+            or receipt.grant_digest != grant.digest
             or receipt.plan_digest != plan.digest
             or receipt.host_digest != host.digest
             or receipt.context_digest != context.digest
@@ -1013,9 +1028,15 @@ class EnforcementCoordinator:
         )
         if receipt.rule_enforcement != expected_rules:
             return False
-        plans = {item.adapter_id: item for item in plan.adapter_plans}
         try:
+            plans = _assigned_adapter_plans(plan)
+            if len(receipt.evidence) != len(plans):
+                return False
+            verified_adapters: set[str] = set()
+            verified_obligations: set[str] = set()
             for evidence in receipt.evidence:
+                if evidence.adapter_id in verified_adapters:
+                    return False
                 adapter = self._adapters[evidence.adapter_id]
                 adapter_plan = plans[evidence.adapter_id]
                 _validate_activation(
@@ -1023,16 +1044,31 @@ class EnforcementCoordinator:
                 )
                 if not adapter.verify_activation(evidence):
                     return False
+                if receipt.valid_until > evidence.expires_at:
+                    return False
+                verified_adapters.add(evidence.adapter_id)
+                verified_obligations.update(evidence.obligation_ids)
         except (KeyError, ValueError):
             return False
-        return True
+        return (
+            verified_adapters == plans.keys()
+            and verified_obligations == expected
+            and receipt.activated_obligations == verified_obligations
+        )
 
     def _validate_host(
         self, host: HostAttestation, nonce: str, timestamp: float
     ) -> str | None:
         if host.nonce != nonce:
             return "host_attestation_failed:nonce"
-        if timestamp < host.issued_at or timestamp > host.expires_at:
+        if (
+            not all(
+                math.isfinite(value)
+                for value in (timestamp, host.issued_at, host.expires_at)
+            )
+            or timestamp < host.issued_at
+            or timestamp > host.expires_at
+        ):
             return "host_attestation_failed:freshness"
         if not self._host_verifier.verify(host):
             return "host_attestation_failed:trust"
@@ -1179,6 +1215,49 @@ def _fully_enforced_rules(
     )
 
 
+def _assigned_adapter_plans(plan: EnforcementPlan) -> dict[str, AdapterPlan]:
+    """Check negotiated-plan composition without authorizing any new waiver."""
+    if not plan.assignments or not plan.adapter_plans:
+        raise ValueError("activation requires assigned enforcement obligations")
+    assigned: dict[str, set[str]] = defaultdict(set)
+    obligation_ids: set[str] = set()
+    for assignment in plan.assignments:
+        if (
+            not assignment.obligation_id
+            or not assignment.adapter_id
+            or assignment.obligation_id in obligation_ids
+            or (
+                assignment.support is not SupportLevel.EXACT
+                and assignment.support is not SupportLevel.TIGHTENED
+            )
+        ):
+            raise ValueError("activation assignments must have unique supported owners")
+        obligation_ids.add(assignment.obligation_id)
+        assigned[assignment.adapter_id].add(assignment.obligation_id)
+    waived = set(plan.waived_obligations)
+    if (
+        len(waived) != len(plan.waived_obligations)
+        or obligation_ids.intersection(waived)
+        or any(not obligation_id for obligation_id in waived)
+        or (
+            plan.mode
+            is not (EnforcementMode.DEGRADED if waived else EnforcementMode.ENFORCED)
+        )
+    ):
+        raise ValueError("activation mode does not match distinct waived obligations")
+    plans: dict[str, AdapterPlan] = {}
+    for adapter_plan in plan.adapter_plans:
+        if (
+            adapter_plan.adapter_id in plans
+            or adapter_plan.obligation_ids != assigned.get(adapter_plan.adapter_id)
+        ):
+            raise ValueError("adapter plans must exactly cover their assignments")
+        plans[adapter_plan.adapter_id] = adapter_plan
+    if plans.keys() != assigned.keys():
+        raise ValueError("adapter plans must cover every assigned adapter")
+    return plans
+
+
 def _validate_activation(
     evidence: ActivationEvidence,
     plan: AdapterPlan,
@@ -1194,7 +1273,14 @@ def _validate_activation(
         raise ValueError("activation worker binding mismatch")
     if evidence.obligation_ids != plan.obligation_ids:
         raise ValueError("activation obligation coverage mismatch")
-    if timestamp < evidence.activated_at or timestamp > evidence.expires_at:
+    if (
+        not all(
+            math.isfinite(value)
+            for value in (timestamp, evidence.activated_at, evidence.expires_at)
+        )
+        or timestamp < evidence.activated_at
+        or timestamp > evidence.expires_at
+    ):
         raise ValueError("activation evidence is stale")
 
 

@@ -1,0 +1,11 @@
+[package]
+name="slanggraph-apf-probe"
+version="0.1.0"
+edition="2021"
+[dependencies]
+apf-compiler={path="../../vendor/apf/crates/apf-compiler"}
+apf-openshell-projector={path="../../vendor/apf/crates/apf-openshell-projector"}
+apf-proto={path="../../vendor/apf/crates/apf-proto"}
+prost="0.13"
+apf-policy-eval={path="../../vendor/apf/crates/apf-policy-eval"}
+serde_json="1"

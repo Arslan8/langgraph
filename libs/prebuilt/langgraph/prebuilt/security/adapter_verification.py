@@ -67,6 +67,16 @@ RULES = (
         "Authenticate and principal-bind every history tuple and its pending writes before publication, and apply effective read values. Use non-consuming verification so history reads do not consume restore replay state.",
     ),
     Rule(
+        "SGV109",
+        "Legacy event/log iterator bypasses publication mediation",
+        "Mediate each legacy callback event and complete log state before publishing it, including inner-node events, and apply the effective result. Close the event producer on denial, cancellation or early consumer exit. A clean structural check is not a publication proof.",
+    ),
+    Rule(
+        "SGV110",
+        "State inspection publishes an unmediated snapshot",
+        "Mediate complete current-state and history snapshots using the caller's authority, including delegated subgraphs, and return the effective result. A clean structural check does not prove snapshot provenance or arbitrary helpers.",
+    ),
+    Rule(
         "SGV190",
         "Required adapter source is unavailable or unresolved",
         "Restore the required source/method or update this check with a source-only regression test for the new boundary; do not mark missing analysis as passed.",
@@ -242,7 +252,16 @@ def check_adapters(sources: dict[str, str]) -> dict[str, Any]:
         ),
         "ObjectManagerPolicy": ("object_permission", "aobject_permission", "_dac"),
         "ObjectManagerHost": ("_state_operation",),
-        "Pregel": ("stream", "astream"),
+        "Pregel": (
+            "stream",
+            "astream",
+            "astream_events",
+            "astream_log",
+            "get_state",
+            "aget_state",
+            "get_state_history",
+            "aget_state_history",
+        ),
     }
     for owner, names in required_methods.items():
         if owner not in classes:
@@ -371,6 +390,140 @@ def check_adapters(sources: dict[str, str]) -> dict[str, Any]:
         for member in cls.body:
             if not isinstance(member, (ast.FunctionDef, ast.AsyncFunctionDef)):
                 continue
+            if member.name in {
+                "get_state",
+                "aget_state",
+                "get_state_history",
+                "aget_state_history",
+            }:
+                # Recognize observed raw snapshot returns, aliases and delegated
+                # history yields. This is a counter-pattern, not helper proof.
+                snapshot_aliases: set[str] = set()
+
+                def raw_snapshot(node: ast.AST | None) -> bool:
+                    if isinstance(node, ast.Name):
+                        return node.id in snapshot_aliases
+                    call = _call(node) if node is not None else None
+                    return call is not None and (
+                        isinstance(call.func, ast.Attribute)
+                        and call.func.attr
+                        in {
+                            "_prepare_state_snapshot",
+                            "_aprepare_state_snapshot",
+                            "get_state",
+                            "aget_state",
+                            "get_state_history",
+                            "aget_state_history",
+                        }
+                        or isinstance(call.func, ast.Name)
+                        and call.func.id == "StateSnapshot"
+                    )
+
+                changed = True
+                while changed:
+                    previous = len(snapshot_aliases)
+                    for candidate in _nodes(member):
+                        targets: list[ast.expr] = []
+                        if isinstance(candidate, (ast.Assign, ast.AnnAssign)):
+                            if raw_snapshot(candidate.value):
+                                targets = (
+                                    candidate.targets
+                                    if isinstance(candidate, ast.Assign)
+                                    else [candidate.target]
+                                )
+                        elif isinstance(candidate, (ast.For, ast.AsyncFor)):
+                            if raw_snapshot(candidate.iter):
+                                targets = [candidate.target]
+                        snapshot_aliases.update(
+                            target.id
+                            for target in targets
+                            if isinstance(target, ast.Name)
+                        )
+                    changed = len(snapshot_aliases) != previous
+                for candidate in _nodes(member):
+                    if isinstance(
+                        candidate, (ast.Return, ast.Yield, ast.YieldFrom)
+                    ) and raw_snapshot(candidate.value):
+                        emit(
+                            "SGV110",
+                            path,
+                            candidate,
+                            f"Pregel.{member.name}",
+                            "Current-state/history snapshot bypasses the configured output publication route.",
+                        )
+            if member.name in {"astream_events", "astream_log"}:
+                # This is the observed direct-return counter-pattern, including
+                # local aliases. It does not certify an arbitrary filter helper.
+                aliases: set[str] = set()
+
+                def raw_events(node: ast.AST | None) -> bool:
+                    if isinstance(node, ast.Name):
+                        return node.id in aliases
+                    call = _call(node) if node is not None else None
+                    return (
+                        call is not None
+                        and ast.unparse(call.func) == f"super().{member.name}"
+                    )
+
+                assignments = [
+                    node
+                    for node in _nodes(member)
+                    if isinstance(node, (ast.Assign, ast.AnnAssign))
+                ]
+                changed = True
+                while changed:
+                    before = len(aliases)
+                    for assignment in assignments:
+                        if raw_events(assignment.value):
+                            targets = (
+                                assignment.targets
+                                if isinstance(assignment, ast.Assign)
+                                else [assignment.target]
+                            )
+                            aliases.update(
+                                target.id
+                                for target in targets
+                                if isinstance(target, ast.Name)
+                            )
+                    changed = len(aliases) != before
+
+                def visit_return(node: ast.AST, unsecured: bool = False) -> None:
+                    if isinstance(
+                        node,
+                        (
+                            ast.FunctionDef,
+                            ast.AsyncFunctionDef,
+                            ast.ClassDef,
+                            ast.Lambda,
+                        ),
+                    ):
+                        return
+                    if (
+                        isinstance(node, ast.If)
+                        and ast.unparse(node.test) == "self._aoutput_filter is None"
+                    ):
+                        for child in node.body:
+                            visit_return(child, True)
+                        for child in node.orelse:
+                            visit_return(child, unsecured)
+                        return
+                    if (
+                        isinstance(node, ast.Return)
+                        and raw_events(node.value)
+                        and not unsecured
+                    ):
+                        emit(
+                            "SGV109",
+                            path,
+                            node,
+                            f"Pregel.{member.name}",
+                            "Legacy callback events/logs escape the configured output publication route.",
+                        )
+                    for child in ast.iter_child_nodes(node):
+                        visit_return(child, unsecured)
+
+                for statement in member.body:
+                    visit_return(statement)
             for node in _nodes(member):
                 if (
                     isinstance(node, ast.Call)

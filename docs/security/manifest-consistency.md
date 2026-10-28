@@ -55,7 +55,7 @@ admission even if the manifest otherwise matches, including in unreachable code.
 The monitor implementations and their dependencies remain reviewed trusted code;
 registering an API is not proof that its implementation cannot escape.
 
-## Mandatory in-process admission
+## Mandatory language-sandbox admission
 
 `cedar_security` now requires this check for every in-process tool, including
 tools with resource-free manifests. It reads the actual sync and async function
@@ -68,7 +68,7 @@ Isolated `runs linux`/`runs broker` tools retain their host confinement path.
 Only approved framework APIs are modeled during admission. The local file API is:
 
 ```python
-from langgraph.prebuilt.security.inprocess import read_text
+from langgraph.prebuilt.security.language_sandbox import read_text
 
 @tool
 def read_document(path: str) -> str:
@@ -109,7 +109,7 @@ argument with an unresolved type is unknown, never silently accepted. Inert
 resource aliases and supported expressions still participate in effect inference,
 and `inferred ⊆ manifest` remains the admission rule. The declared resource class
 must agree with the client's lowering and enforcement contract (broker, or
-trusted-tool enforcement for registered object-bound in-process resources).
+language-sandbox enforcement for registered object-bound in-process resources).
 
 Object-bound APIs omit the selector argument: `counter.increment(2)` infers the
 identity of that registered counter object and the `increment` operation. Declare
@@ -132,7 +132,8 @@ restricted typed source model.
 
 Execution rechecks callable, bytecode, default-argument, and terminal bindings.
 Arguments and defaults must be strings, as required by the checker's model.
-The dispatcher calls the admitted function directly; it does not execute custom
+The dispatcher lowers the admitted body to an immutable data program and
+interprets it; it never invokes the original Python function or custom
 `BaseTool` validators or callbacks through `tool.invoke`. Tool schemas remain
 declarations for the surrounding framework, not executable admission evidence.
 Resource-free tools also use the verified dispatcher, preventing substitution
@@ -148,9 +149,12 @@ an arbitrary untrusted tool module into the coordinator and treat a later passin
 report as retroactive protection. A verified loader that checks the complete
 module/dependency initialization before execution is not implemented here.
 
-The resource monitors, normalizers, coordinator, and stable runtime bindings are
-also trusted. Binding checks detect changes between admission and invocation;
-they do not make tool reflection or concurrent hostile mutation supported.
+The interpreter, resource monitors, normalizers, and coordinator are enforcement
+code. Binding checks reject stale callables; captured program and terminal code
+also prevent a post-check mutation of the original tool or client function from
+selecting a different executable body. Tool reflection and monkey-patching are
+prohibited by the language. Hostile code already running in the coordinator can
+still corrupt the enforcement implementation; it requires process isolation.
 Filesystem replacement races are not covered. This is a restricted language
 boundary, not arbitrary-Python confinement or a complete-system proof.
 Legacy `SecurityConfig` without
@@ -179,7 +183,7 @@ class fs {
   object path
   normalizer identity
   attrs
-  enforced_by trusted_tool
+  enforced_by language_sandbox
 }
 tool read_document {
   fs read @{path} need
@@ -296,3 +300,60 @@ mandatory admission or turn a standalone report into an execution certificate.
 In-process admission uses the same diagnostic formatter in its
 `SecurityConfigurationError`. Demo 07 exercises that automatic path; correcting
 its manifest changes setup from rejection to success.
+
+### Language-sandbox terminology and Python execution boundary
+
+A **language-sandbox tool** means source was available, admission succeeded for
+the supported restricted language, and execution uses that admitted program.
+It does not mean the author or tool body is trusted to obey policy. The canonical
+class directive is `enforced_by language_sandbox`. `trusted_tool` is a deprecated
+parser alias and `EnforcementKind.TRUSTED_TOOL` is a compatibility alias; new
+receipts and generated declarations use `language_sandbox`. `runs inprocess`
+continues to describe location, not an enforcement mechanism. The canonical
+resource API import is `langgraph.prebuilt.security.language_sandbox.read_text`;
+the older `security.inprocess` import remains compatible.
+
+Checking `eval` and `exec` is insufficient. The executable boundary is an
+immutable data program lowered from the checked AST, with no Python bytecode
+execution for the candidate body. The language's value environment contains only
+inert data. Unsupported syntax rejects admission even in unreachable branches.
+
+| Python feature | Disposition in the admitted tool body |
+| --- | --- |
+| `eval`, `exec`, `compile`, generated functions and lambdas | Prohibited; no generic execution operation exists in the interpreter. |
+| Imports, `__import__`, import hooks and dynamic loading | Prohibited in the body. Imports performed during application setup are outside this boundary; unreviewed modules must not be loaded into the coordinator. |
+| Reflection, descriptors and dunder access | Prohibited. Attribute syntax is accepted only as an exact registered terminal name, never resolved on a candidate-supplied object. |
+| Monkey-patching and global/nonlocal mutation | Prohibited. Assignments target local data names only. |
+| Mutable function bindings, defaults, globals and client methods | The original function is never invoked. Admission captures an immutable program, inert defaults, and reviewed terminal code/bindings. Validation additionally rejects changed originals. |
+| Native extensions and arbitrary library calls | No direct call path. A supported operation must have an explicit reviewed terminal contract and runtime mediation; other calls reject admission. |
+| Privileged library objects and callbacks | Never enter the language environment. Exact scalar/data results are validated and copied; objects, callables, generators and custom conversion/equality protocols reject. |
+| Exceptions and asynchronous entrypoints | Candidate exception handlers, generators, `await` expressions and background task creation are unsupported. Async entrypoints execute the same restricted program; they do not invoke the original coroutine. |
+
+The interpreter, typed terminal contracts, resource implementations, grant
+monitors, Python runtime and coordinator remain enforcement dependencies. An
+arbitrary hostile Python thread already inside that process can modify those
+dependencies; this is not process isolation against a compromised coordinator.
+Use an isolated dispatcher for unsupported Python. Existing operator-hosted graph
+nodes (`NodeTrust` in the legacy placement API) are a separate boundary and do
+not acquire language-sandbox admission merely from being called `trusted`.
+
+### Checked program derivations
+
+Admission now also derives types and effects for the lowered immutable program.
+The checker in `security.language_verification` covers every instruction and both
+sides of every branch, including unreachable syntax. Its environments contain
+only inert data types. Calls require statically named terminal contracts with
+exact argument types; their effects are accumulated conservatively. Unknown
+instructions, unbound locals, mutable instruction sequences, unsupported types,
+contract mismatches and analysis-budget exhaustion reject admission. Execution
+recomputes this derivation before the first terminal call, so a cached success
+flag cannot authorize a changed program. Terminal results are checked against
+their declared data types before becoming local values.
+
+`admission.language_proofs()` returns the derivations and source/program hashes.
+These are type/effect proofs for the admitted language under terminal contracts.
+They do not, by themselves, prove that the interpreter implements those semantics,
+that terminal implementations authorize every effect, or that graph/host
+composition is complete. Those dependencies stay explicit in each result, and
+`system_complete` remains false. The independent source-to-manifest check is
+still required; a type derivation does not grant access to a resource.

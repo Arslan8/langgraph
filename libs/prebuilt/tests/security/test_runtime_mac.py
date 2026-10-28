@@ -13,7 +13,7 @@ from langchain_core.messages import AIMessage
 from langgraph._internal import _runtime_policy
 from langgraph.channels import LastValue
 from langgraph.func import entrypoint
-from langgraph.graph import START, MessagesState, StateGraph
+from langgraph.graph import END, START, MessagesState, StateGraph
 from langgraph.pregel import NodeBuilder, Pregel
 from langgraph.pregel.remote import RemoteGraph
 from langgraph.runtime import Runtime
@@ -29,6 +29,7 @@ from langgraph.prebuilt.security import (
     install_mac_policy,
     with_principal,
 )
+from langgraph.prebuilt.security.mac import _graph_boundaries
 from tests.security.test_manifest_admission import MANIFEST, PERMIT, reader
 
 FORBID = 'forbid(principal, action == slangGraph::Action::"fs::read", resource);'
@@ -194,6 +195,35 @@ def test_raw_pregel_and_functional_entrypoint_cannot_bypass_mac():
             SecurityConfigurationError, match="mac:unsupported_execution_boundary"
         ):
             asyncio.run(graph.ainvoke(1))
+
+
+@pytest.mark.skipif(shutil.which("cedar") is None, reason="Cedar CLI required")
+def test_legacy_secured_graphs_keep_the_pre_admission_boundary():
+    """Without closed admission the registry is the pre-admission shape test.
+
+    An exact `MediatedNode` wrapping an exact `ToolNode` for every node and no
+    branches records the wrapped ToolNodes; anything else records `None` and
+    refuses with `mac:unconfined_graph_body`. Nothing is admitted at compile.
+    """
+    node = ToolNode([reader])
+    plain = graph_for(node, cedar_security(reader, manifest=MANIFEST, policy=PERMIT))
+    builder = StateGraph(MessagesState)
+    builder.add_node("tools", ToolNode([reader]))
+    builder.add_edge(START, "tools")
+    builder.add_conditional_edges("tools", lambda state: END)
+    branched = builder.compile(
+        security=cedar_security(reader, manifest=MANIFEST, policy=PERMIT)
+    )
+    install_mac_policy(FORBID)
+
+    boundary = _graph_boundaries[plain]
+    assert type(boundary) is tuple and len(boundary) == 1 and boundary[0] is node
+    _runtime_policy.check_runtime_policy(plain)
+    assert _graph_boundaries[branched] is None
+    with pytest.raises(SecurityConfigurationError, match="mac:unconfined_graph_body"):
+        _runtime_policy.check_runtime_policy(branched)
+    for graph in (plain, branched):
+        assert not hasattr(graph.builder, "_security_admission")
 
 
 def test_graph_local_trust_promotion_cannot_bypass_mac():

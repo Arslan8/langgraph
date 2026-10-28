@@ -6,7 +6,12 @@ from textwrap import dedent
 import pytest
 
 from langgraph.prebuilt.security.mediation import Authorizer, Operation
-from langgraph.prebuilt.security.types import Decision, ToolCall
+from langgraph.prebuilt.security.types import (
+    Decision,
+    ToolCall,
+    _decision_arguments,
+    _DecisionArguments,
+)
 from langgraph.prebuilt.security.verification import VerificationSpec, verify
 
 RECORD = """
@@ -113,9 +118,29 @@ def test_actual_decision_transform_copies_arguments_into_readonly_view():
         if authorized.verdict is Verdict.ALLOW:
             return dispatch(principal, d.new_args['value'])
     """,
-        inspect.getsource(Decision),
+        "from collections.abc import Mapping, Iterator\nfrom typing import Any\n"
+        + inspect.getsource(_DecisionArguments)
+        + "\n"
+        + inspect.getsource(_decision_arguments)
+        + "\n"
+        + inspect.getsource(Decision),
     )
     assert report["complete"], report
+    entry = report["entries"][0]
+    assert len(entry["dispatches"]) == 1
+    assert entry["dispatches"][0]["authorized"]
+    assert entry["dispatches"][0]["bindings"] == [
+        "tool_call",
+        "input:principal",
+        "input:request",
+    ]
+    for name in (
+        "Decision.__post_init__",
+        "_DecisionArguments.__init__",
+        "_DecisionArguments.__getitem__",
+        "_decision_arguments",
+    ):
+        assert "example." + name in entry["visited_functions"]
 
 
 @pytest.mark.parametrize(
@@ -237,6 +262,8 @@ def test_proxy_mutation_raises_without_mutating_backing(mutation):
         "@dataclass(kw_only=True)\nclass Request:\n    value: object",
         "@dataclass\nclass Request:\n    value: ClassVar[object] = None",
         "@dataclass\nclass Request:\n    value: InitVar[object]",
+        "@dataclass\nclass Request:\n    (value): object",
+        "@dataclass\nclass Request:\n    (value): object = None",
         "@dataclass\nclass Request:\n    value: object = None\n    def value(self):\n        return dispatch",
         "@dataclass\nclass Request:\n    value: object\n    def __init__(self):\n        dispatch(None,None)",
     ],

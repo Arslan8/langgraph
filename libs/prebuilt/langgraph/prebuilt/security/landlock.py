@@ -271,9 +271,31 @@ class LandlockSandboxExecutor:
         constraints: Sequence[PolicyConstraint],
     ) -> HostExecutionResult:
         """Compile and run one asynchronous confined tool call."""
-        return await asyncio.to_thread(
-            self._invoke, principal, call, constraints, asynchronous=True
+        execution = asyncio.create_task(
+            asyncio.to_thread(
+                self._invoke, principal, call, constraints, asynchronous=True
+            )
         )
+        try:
+            return await asyncio.shield(execution)
+        except asyncio.CancelledError:
+            # Keep the real worker/broker cleanup inside _invoke alive, including
+            # when cancellation is requested again while that cleanup is waiting.
+            while not execution.done():
+                try:
+                    await asyncio.shield(execution)
+                except asyncio.CancelledError:
+                    continue
+                except Exception:
+                    break
+            try:
+                execution.result()
+            except HostExecutionError as exc:
+                if not exc.termination_confirmed:
+                    raise
+            except Exception:
+                pass
+            raise
 
     def _invoke(
         self,
@@ -355,14 +377,18 @@ class LandlockSandboxExecutor:
                 request["broker_fd"] = worker_broker_fd
             encoded = _encode_worker_request(request)
         except BaseException:
-            if ruleset is not None:
-                ruleset.close()
-            if worker_broker_fd is not None:
-                os.close(worker_broker_fd)
-            if broker_session is not None:
-                broker_session.close_parent()
-            private_tmp.cleanup()
-            artifact_tmp.cleanup()
+            self._cleanup_worker(
+                process=None,
+                ruleset=ruleset,
+                worker_broker_fd=worker_broker_fd,
+                pidfd=None,
+                cgroup=None,
+                broker_session=broker_session,
+                private_tmp=private_tmp,
+                artifact_tmp=artifact_tmp,
+                receipt=None,
+                active_error=sys.exc_info()[1],
+            )
             raise
         environment = {
             "PATH": "/usr/bin",
@@ -467,50 +493,142 @@ class LandlockSandboxExecutor:
                 ) from exc
             raise HostExecutionDenied("host:worker_activation_failed") from exc
         finally:
-            active_error = sys.exc_info()[1]
-            if ruleset is not None:
+            self._cleanup_worker(
+                process=process,
+                ruleset=ruleset,
+                worker_broker_fd=worker_broker_fd,
+                pidfd=pidfd,
+                cgroup=cgroup,
+                broker_session=broker_session,
+                private_tmp=private_tmp,
+                artifact_tmp=artifact_tmp,
+                receipt=receipt,
+                active_error=sys.exc_info()[1],
+            )
+
+    def _cleanup_worker(
+        self,
+        *,
+        process: subprocess.Popen[bytes] | None,
+        ruleset: LandlockRuleset | None,
+        worker_broker_fd: int | None,
+        pidfd: int | None,
+        cgroup: CgroupV2Scope | None,
+        broker_session: BrokerSession | None,
+        private_tmp: tempfile.TemporaryDirectory,
+        artifact_tmp: tempfile.TemporaryDirectory,
+        receipt: ActivationReceipt | None,
+        active_error: BaseException | None,
+    ) -> None:
+        """Attempt every cleanup and retain uncertainty about live authority.
+
+        Thread completion is not termination evidence. A stopped child, an empty
+        owned cgroup when present, and a stopped broker are all required before
+        marking termination confirmed. Without a cgroup the production worker's
+        fixed minimal seccomp filter forbids all process/thread creation and
+        executable replacement before releasing tool code. This lifetime rule
+        does not cover the separate exec-enabled evaluation worker. Cleanup
+        errors cannot publish success.
+        """
+        cleanup_failed = False
+        if ruleset is not None:
+            try:
                 ruleset.close()
-            if worker_broker_fd is not None:
-                try:
-                    os.close(worker_broker_fd)
-                except OSError:
-                    pass
-            if process is not None and process.poll() is None:
+            except Exception:
+                cleanup_failed = True
+        if worker_broker_fd is not None:
+            try:
+                os.close(worker_broker_fd)
+            except OSError:
+                cleanup_failed = True
+        worker_stopped = process is None
+        if process is not None:
+            try:
+                worker_stopped = process.poll() is not None
+            except Exception:
+                worker_stopped = False
+            if not worker_stopped:
                 killed_cgroup = False
                 if cgroup is not None:
                     try:
                         killed_cgroup = cgroup.kill()
-                    except OSError:
-                        killed_cgroup = False
-                if not killed_cgroup and pidfd is not None:
+                    except Exception:
+                        pass
+                signalled = killed_cgroup
+                if not signalled and pidfd is not None:
                     try:
                         signal.pidfd_send_signal(pidfd, signal.SIGKILL)
-                    except OSError:
+                        signalled = True
+                    except Exception:
+                        pass
+                if not signalled:
+                    try:
                         process.kill()
-                elif not killed_cgroup:
-                    process.kill()
-                process.wait(timeout=2)
-            if process is not None:
-                for stream in (process.stdin, process.stdout, process.stderr):
-                    if stream is not None:
+                    except Exception:
+                        cleanup_failed = True
+                try:
+                    process.wait(timeout=2)
+                except Exception:
+                    cleanup_failed = True
+                try:
+                    worker_stopped = process.poll() is not None
+                except Exception:
+                    worker_stopped = False
+            for stream in (process.stdin, process.stdout, process.stderr):
+                if stream is not None:
+                    try:
                         stream.close()
-            if pidfd is not None:
+                    except Exception:
+                        cleanup_failed = True
+        if pidfd is not None:
+            try:
                 os.close(pidfd)
-            if cgroup is not None:
+            except OSError:
+                cleanup_failed = True
+        if cgroup is not None:
+            try:
                 cgroup.close()
-            if broker_session is not None:
+            except Exception:
+                cleanup_failed = True
+                worker_stopped = False
+        broker_stopped = broker_session is None
+        if broker_session is not None:
+            try:
                 broker_session.close_parent()
-            broker_stopped = broker_session is None or broker_session.terminated
+            except Exception:
+                cleanup_failed = True
+            try:
+                broker_stopped = broker_session.terminated
+            except Exception:
+                broker_stopped = False
+        try:
             private_tmp.cleanup()
+        except Exception:
+            cleanup_failed = True
+        try:
             artifact_tmp.cleanup()
-            if isinstance(active_error, HostExecutionError):
-                active_error.termination_confirmed = broker_stopped
-            elif not broker_stopped and receipt is not None:
+        except Exception:
+            cleanup_failed = True
+        termination_confirmed = worker_stopped and broker_stopped
+        if isinstance(active_error, HostExecutionError):
+            active_error.termination_confirmed = termination_confirmed
+            if cleanup_failed or not termination_confirmed:
+                active_error.outcome = ExecutionOutcome.INDETERMINATE
+            return
+        if cleanup_failed or not termination_confirmed:
+            if receipt is not None:
+                reason = (
+                    "host:broker_operation_still_running"
+                    if worker_stopped and not broker_stopped and not cleanup_failed
+                    else "host:worker_cleanup_unconfirmed"
+                )
                 raise HostExecutionError(
-                    "host:broker_operation_still_running",
+                    reason,
                     receipt,
                     ExecutionOutcome.INDETERMINATE,
-                )
+                    termination_confirmed=termination_confirmed,
+                ) from None
+            raise HostExecutionDenied("host:worker_cleanup_unconfirmed") from None
 
     def _compile_grant(
         self, principal: Principal, call: ToolCall, spec: Any, private_tmp: Path

@@ -1,0 +1,1 @@
+{"id": "smoke", "kind": "clean", "task": "Resolve documented install failure with a separately reviewed dependency patch; provision dedicated Gmail OAuth test account and controlled recipients. No personal mailbox use.", "status": "not_frozen"}

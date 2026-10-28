@@ -16,7 +16,14 @@ from pathlib import Path
 from typing import Any
 
 from langgraph.prebuilt.security.adapter_verification import check_adapters
+from langgraph.prebuilt.security.admission_verification import (
+    verify_admission_surface,
+)
 from langgraph.prebuilt.security.boundary_verification import verify_host_router
+from langgraph.prebuilt.security.output_data_verification import (
+    verify_output_data_primitives,
+)
+from langgraph.prebuilt.security.output_verification import verify_output_correspondence
 from langgraph.prebuilt.security.publication_verification import verify_publications
 from langgraph.prebuilt.security.taint import analyze_source, apply_waivers
 
@@ -59,6 +66,7 @@ _REQUIRED = (
             "host_boundary",
             "objects",
             "object_manager",
+            "output_data",
             "stack",
             "config",
             "placement",
@@ -207,12 +215,40 @@ def verify_layers(repo: Path) -> dict[str, Any]:
     adapters = check_adapters(sources)
     publications = verify_publications(sources)
     router = verify_host_router()
+    output_correspondence = verify_output_correspondence(
+        sources.get(_SECURITY + "object_manager.py", ""),
+        sources.get(_SECURITY + "objects.py", ""),
+        output_data_source=sources.get(_SECURITY + "output_data.py", ""),
+    )
+    output_data_primitives = verify_output_data_primitives(
+        sources.get(_SECURITY + "output_data.py", ""),
+        sources.get(_SECURITY + "objects.py", ""),
+    )
+    # Evidence only: the closed admission surface never changes `complete`,
+    # `path_cover_proved` or any SGV diagnostic.
+    admission_surface = verify_admission_surface(
+        sources.get(_SECURITY + "admission.py", ""),
+        sources.get(_SECURITY + "config.py", ""),
+        sources.get(_SECURITY + "placement.py", ""),
+        sources.get(_SECURITY + "mac.py", ""),
+    )
     router_path = _SECURITY + "host_router.py"
     if (
         inventory["source_sha256"].get(router_path)
         != router["runtime_binding"]["source_sha256"]
     ):
         inventory["issues"].append("loaded router does not match audited repository")
+    # The validator contract consumed by the host-output derivation must come
+    # from the audited output_data.py, never from a differently supplied source.
+    audited = inventory["source_sha256"].get(_SECURITY + "output_data.py")
+    for component in (output_correspondence, output_data_primitives):
+        derived = component["source_sha256"].get(
+            "langgraph.prebuilt.security.output_data"
+        )
+        if derived is not None and derived != audited:
+            inventory["issues"].append(
+                "output validator derivation does not match audited repository"
+            )
     escapes = analyze_source(
         repo / "libs/prebuilt/langgraph/prebuilt", repo / "libs/langgraph/langgraph"
     )
@@ -232,6 +268,7 @@ def verify_layers(repo: Path) -> dict[str, Any]:
         "schema_version": 2,
         "complete": bool(
             router["complete"]
+            and output_correspondence["proved"]
             and inventory["path_cover_proved"]
             and adapters["proof"]
             and publications["complete"]
@@ -244,6 +281,9 @@ def verify_layers(repo: Path) -> dict[str, Any]:
         "claim": "System completeness is not established by this report. Router proof and discovery evidence are separate.",
         "operations": operations,
         "router": router,
+        "host_output_correspondence": output_correspondence,
+        "output_data_primitives": output_data_primitives,
+        "admission_surface": admission_surface,
         "placement": inventory,
         "adapters": adapters,
         "publications": publications,

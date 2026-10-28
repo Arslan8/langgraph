@@ -1,6 +1,7 @@
 """Tests for conservative graph callback taint analysis."""
 
 import json
+from dataclasses import replace
 from pathlib import Path
 
 from langgraph.prebuilt.security import EscapeKind, analyze_source
@@ -350,3 +351,62 @@ def test_waiver_gate_rejects_stale_duplicate_and_blanket_entries(
     assert disposition.unwaived
     assert any("reason:" in error for error in disposition.errors)
     assert any("stale:*" in error for error in disposition.errors)
+
+
+def test_source_bound_review_rejects_changes_at_the_same_fingerprint(
+    tmp_path: Path,
+) -> None:
+    source = "def node(state): eval(state['x'])\ngraph.add_node(node)\n"
+    report = _scan(tmp_path, source)
+    manifest = tmp_path / "waivers.json"
+    digests = dict(report.source_sha256)
+    manifest.write_text(
+        json.dumps(
+            {
+                "version": 2,
+                "waivers": [
+                    {
+                        "fingerprint": finding.fingerprint,
+                        "reason": "Only this exact source is a reviewed analyzer fixture.",
+                        "source_sha256": digests[finding.path],
+                    }
+                    for finding in report.findings
+                ],
+            }
+        )
+    )
+    assert apply_waivers(report, manifest).safe
+
+    changed = _scan(tmp_path, source.replace("['x']", "['y']"))
+    assert [f.fingerprint for f in changed.findings] == [
+        f.fingerprint for f in report.findings
+    ]
+    disposition = apply_waivers(changed, manifest)
+    assert not disposition.safe
+    assert disposition.unwaived == changed.findings
+    assert all("source_changed:" in error for error in disposition.errors)
+
+
+def test_source_bound_review_requires_analysis_source_evidence(tmp_path: Path) -> None:
+    report = _scan(
+        tmp_path, "def node(state): eval(state['x'])\ngraph.add_node(node)\n"
+    )
+    manifest = tmp_path / "waivers.json"
+    manifest.write_text(
+        json.dumps(
+            {
+                "version": 2,
+                "waivers": [
+                    {
+                        "fingerprint": finding.fingerprint,
+                        "reason": "Only this exact source is a reviewed analyzer fixture.",
+                        "source_sha256": dict(report.source_sha256)[finding.path],
+                    }
+                    for finding in report.findings
+                ],
+            }
+        )
+    )
+    disposition = apply_waivers(replace(report, source_sha256=()), manifest)
+    assert not disposition.safe
+    assert not disposition.waived

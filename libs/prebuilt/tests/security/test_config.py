@@ -151,3 +151,43 @@ def test_secured_tool_node_cannot_be_reconfigured() -> None:
         SecurityConfig().configure_tool_node(node)
 
     assert node._security_config is first
+
+
+@pytest.mark.parametrize(
+    "declared",
+    [{"prepare"}, ("prepare",), frozenset({""}), frozenset({1}), ["prepare"]],
+    ids=["set", "tuple", "empty-name", "non-str", "list"],
+)
+def test_trusted_application_nodes_must_be_an_exact_frozenset_of_names(
+    declared,
+) -> None:
+    with pytest.raises(TypeError, match="trusted_application_nodes"):
+        SecurityConfig(closed_admission=True, trusted_application_nodes=declared)
+
+
+def test_trusted_application_nodes_require_closed_admission() -> None:
+    assert SecurityConfig().trusted_application_nodes == frozenset()
+    with pytest.raises(ValueError, match="requires closed_admission"):
+        SecurityConfig(trusted_application_nodes=frozenset({"prepare"}))
+    config = SecurityConfig(
+        closed_admission=True, trusted_application_nodes=frozenset({"prepare"})
+    )
+    assert config.trusted_application_nodes == frozenset({"prepare"})
+
+
+@pytest.mark.parametrize(
+    "declared",
+    [{"a:branch:b"}, ("a:branch:b",), frozenset({""}), frozenset({1})],
+    ids=["set", "tuple", "empty-name", "non-str"],
+)
+def test_trusted_application_branches_must_be_an_exact_frozenset_of_names(
+    declared,
+) -> None:
+    with pytest.raises(TypeError, match="trusted_application_branches"):
+        SecurityConfig(closed_admission=True, trusted_application_branches=declared)
+
+
+def test_trusted_application_branches_require_closed_admission() -> None:
+    assert SecurityConfig().trusted_application_branches == frozenset()
+    with pytest.raises(ValueError, match="requires closed_admission"):
+        SecurityConfig(trusted_application_branches=frozenset({"a:branch:b"}))

@@ -1,0 +1,12 @@
+{
+  "version": 1,
+  "profile": "narrow",
+  "status": "intent-only; not enforced by A",
+  "principal": "synthetic-notebook-user",
+  "run_mutation_allowed": false,
+  "permissions": {
+    "allowed_collection": "read/write",
+    "restricted_collection": "deny"
+  },
+  "scope": "Intent for future B/C; source-chat only is not multi-user isolation"
+}

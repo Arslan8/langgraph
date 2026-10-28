@@ -75,6 +75,7 @@
   "Limits",
   "LandlockRuleset",
   "LandlockSandboxExecutor",
+  "LeanLifecycleChecker",
   "LinuxSandboxExecutor",
   "LinuxCapabilities",
   "LinuxToolSpec",

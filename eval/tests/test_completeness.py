@@ -14,5 +14,7 @@ def test_e4_synthetic_shapes_land_on_refusing_operations(tmp_path: Path) -> None
     )
 
     assert payload["all_shapes_refused_before_effect"] is True
-    assert payload["escape_findings_waived"] == 56
+    # The 2026-10-26 source-bound review reconciled moved and stale sites.
+    # This count describes reviewed findings, not a complete-mediation proof.
+    assert payload["escape_findings_waived"] == 61
     assert all(row["executed_children"] == 0 for row in payload["rows"])

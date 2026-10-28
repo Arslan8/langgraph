@@ -28,7 +28,7 @@ def test_tables_are_generated_from_verified_events(tmp_path: Path) -> None:
             },
         )
 
-    paths = generate_tables(audit_dir, tmp_path / "tables")
+    generate_tables(audit_dir, tmp_path / "tables")
     rendered = (tmp_path / "tables" / "e1-exposure.md").read_text(encoding="utf-8")
     assert "read_file" in rendered
     assert "terminal event hash" in rendered

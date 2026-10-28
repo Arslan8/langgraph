@@ -1,0 +1,524 @@
+{
+  "id": "notebook",
+  "repository": "lfnovo/open-notebook",
+  "subdirectory": ".",
+  "entrypoint": "api/routers/sources.py:create_source_json -> process_source_command -> source_graph; api/routers/source_chat.py:send_message_to_source_chat -> source_chat_graph",
+  "graph_files": [
+    "api/routers/sources.py",
+    "api/routers/search.py",
+    "commands/source_commands.py",
+    "open_notebook/graphs/source.py",
+    "open_notebook/graphs/ask.py",
+    "open_notebook/graphs/chat.py",
+    "open_notebook/database/repository.py",
+    "api/routers/source_chat.py",
+    "open_notebook/graphs/source_chat.py"
+  ],
+  "effects": "Source retrieval/extraction in content_process; save_source persists through SurrealDB; worker queues embeddings; ask graph searches sources; chat uses SQLite checkpoints. API file upload and async workers are outside graph. Notebook association alone is not isolation.",
+  "next_action": "Baseline source-chat smoke passes locally. Add complete execution-host tracing, reset/oracle calibration and supported source/storage mediation before any protected-port claim.",
+  "sha": "a0f6f3081ae06328f0a451b3a3ef2959ca25721d",
+  "license": "MIT (see captured LICENSE text)",
+  "retrieved_at": "2026-10-26T00:31:38.372515+00:00",
+  "checkout": "/data/slanggraph-eval-upstreams/open-notebook",
+  "archive": {},
+  "source_evidence": [
+    {
+      "path": "api/routers/sources.py",
+      "sha256": "fb4bde302a16a6391288f47407e94601364dc2a46bb2abedac13a81b6e3563d5",
+      "url": "https://github.com/lfnovo/open-notebook/blob/a0f6f3081ae06328f0a451b3a3ef2959ca25721d/api/routers/sources.py",
+      "matches": [
+        {
+          "line": 49,
+          "text": "async def _assert_file_supported(file_path: str) -> None:"
+        },
+        {
+          "line": 75,
+          "text": "def _truncate_error(msg: Optional[str], limit: int = 200) -> Optional[str]:"
+        },
+        {
+          "line": 105,
+          "text": "async def _stamp_source_view(source_id: str) -> None:"
+        },
+        {
+          "line": 117,
+          "text": "def generate_unique_filename(original_filename: str, upload_folder: str) -> str:"
+        },
+        {
+          "line": 159,
+          "text": "def _write_uploaded_file(filename: str, content: bytes) -> str:"
+        },
+        {
+          "line": 161,
+          "text": "so a large upload doesn't block the event loop for other requests.\"\"\""
+        },
+        {
+          "line": 177,
+          "text": "async def save_uploaded_file(upload_file: UploadFile) -> str:"
+        },
+        {
+          "line": 186,
+          "text": "def parse_source_form_data("
+        },
+        {
+          "line": 203,
+          "text": "def str_to_bool(value: str) -> bool:"
+        },
+        {
+          "line": 258,
+          "text": "async def get_sources("
+        },
+        {
+          "line": 384,
+          "text": "def _source_to_response("
+        },
+        {
+          "line": 413,
+          "text": "def _cleanup_uploaded_file("
+        },
+        {
+          "line": 427,
+          "text": "async def _build_content_state("
+        },
+        {
+          "line": 479,
+          "text": "async def _create_source_async_path("
+        },
+        {
+          "line": 566,
+          "text": "async def _create_source_sync_path("
+        },
+        {
+          "line": 640,
+          "text": "async def create_source("
+        },
+        {
+          "line": 709,
+          "text": "async def create_source_json(source_data: SourceCreate):"
+        },
+        {
+          "line": 716,
+          "text": "async def _resolve_source_file(source_id: str) -> tuple[str, str]:"
+        },
+        {
+          "line": 741,
+          "text": "def _is_source_file_available(source: Source) -> Optional[bool]:"
+        },
+        {
+          "line": 756,
+          "text": "async def get_source(source_id: str):"
+        },
+        {
+          "line": 810,
+          "text": "async def check_source_file(source_id: str):"
+        },
+        {
+          "line": 825,
+          "text": "async def download_source_file(source_id: str):"
+        },
+        {
+          "line": 844,
+          "text": "async def get_source_status(source_id: str):"
+        },
+        {
+          "line": 906,
+          "text": "async def update_source(source_id: str, source_update: SourceUpdate):"
+        },
+        {
+          "line": 935,
+          "text": "async def retry_source_processing(source_id: str):"
+        },
+        {
+          "line": 1056,
+          "text": "async def delete_source(source_id: str):"
+        },
+        {
+          "line": 1076,
+          "text": "async def get_source_insights(source_id: str):"
+        },
+        {
+          "line": 1109,
+          "text": "async def create_source_insight(source_id: str, request: CreateSourceInsightRequest):"
+        }
+      ]
+    },
+    {
+      "path": "api/routers/search.py",
+      "sha256": "4641faf5740ff8a94d11200925297a8e25d99e5ac8e83f04c27daddc6e55ff96",
+      "url": "https://github.com/lfnovo/open-notebook/blob/a0f6f3081ae06328f0a451b3a3ef2959ca25721d/api/routers/search.py",
+      "matches": [
+        {
+          "line": 26,
+          "text": "async def search_knowledge_base(search_request: SearchRequest):"
+        },
+        {
+          "line": 77,
+          "text": "async def stream_ask_response("
+        },
+        {
+          "line": 141,
+          "text": "async def ask_knowledge_base(ask_request: AskRequest):"
+        },
+        {
+          "line": 203,
+          "text": "async def ask_knowledge_base_simple(ask_request: AskRequest):"
+        }
+      ]
+    },
+    {
+      "path": "commands/source_commands.py",
+      "sha256": "ab1e439c4ebccaaa3e6255305e1771459b24482cb66435075ca1095e1019ec8e",
+      "url": "https://github.com/lfnovo/open-notebook/blob/a0f6f3081ae06328f0a451b3a3ef2959ca25721d/commands/source_commands.py",
+      "matches": [
+        {
+          "line": 64,
+          "text": "async def process_source_command("
+        },
+        {
+          "line": 125,
+          "text": "result = await source_graph.ainvoke(  # type: ignore[call-overload]"
+        },
+        {
+          "line": 228,
+          "text": "async def run_transformation_command("
+        },
+        {
+          "line": 270,
+          "text": "await transform_graph.ainvoke(  # type: ignore[call-overload]"
+        }
+      ]
+    },
+    {
+      "path": "open_notebook/graphs/source.py",
+      "sha256": "2353b0c2aee2fd03d32c067626b6c708da0d0ca8bd4767f3288e4fe3e921a221",
+      "url": "https://github.com/lfnovo/open-notebook/blob/a0f6f3081ae06328f0a451b3a3ef2959ca25721d/open_notebook/graphs/source.py",
+      "matches": [
+        {
+          "line": 10,
+          "text": "from langgraph.graph import END, START, StateGraph"
+        },
+        {
+          "line": 64,
+          "text": "def _usable_engine(engine: str, kind: str) -> str:"
+        },
+        {
+          "line": 85,
+          "text": "def _is_youtube_url(url: str) -> bool:"
+        },
+        {
+          "line": 99,
+          "text": "def _extraction_error(error: \"cc.ContentCoreError\", url: str) -> ValueError:"
+        },
+        {
+          "line": 160,
+          "text": "async def content_process(state: SourceState) -> dict:"
+        },
+        {
+          "line": 270,
+          "text": "async def save_source(state: SourceState) -> dict:"
+        },
+        {
+          "line": 307,
+          "text": "def trigger_transformations(state: SourceState, config: RunnableConfig) -> List[Send]:"
+        },
+        {
+          "line": 326,
+          "text": "async def transform_content(state: TransformationState) -> Optional[dict]:"
+        },
+        {
+          "line": 338,
+          "text": "result = await transform_graph.ainvoke(  # type: ignore[call-overload]"
+        },
+        {
+          "line": 354,
+          "text": "workflow = StateGraph(SourceState)"
+        },
+        {
+          "line": 369,
+          "text": "source_graph = workflow.compile()"
+        }
+      ]
+    },
+    {
+      "path": "open_notebook/graphs/ask.py",
+      "sha256": "e80b854a48843a207d78a35ba8c54863fe799975cded2c1e951b4ff223dff342",
+      "url": "https://github.com/lfnovo/open-notebook/blob/a0f6f3081ae06328f0a451b3a3ef2959ca25721d/open_notebook/graphs/ask.py",
+      "matches": [
+        {
+          "line": 7,
+          "text": "from langgraph.graph import END, START, StateGraph"
+        },
+        {
+          "line": 65,
+          "text": "async def call_model_with_messages(state: ThreadState, config: RunnableConfig) -> dict:"
+        },
+        {
+          "line": 82,
+          "text": "ai_message = await model.ainvoke(system_prompt)"
+        },
+        {
+          "line": 112,
+          "text": "async def trigger_queries(state: ThreadState, config: RunnableConfig):"
+        },
+        {
+          "line": 128,
+          "text": "async def provide_answer(state: SubGraphState, config: RunnableConfig) -> dict:"
+        },
+        {
+          "line": 155,
+          "text": "ai_message = await model.ainvoke(system_prompt)"
+        },
+        {
+          "line": 169,
+          "text": "async def write_final_answer(state: ThreadState, config: RunnableConfig) -> dict:"
+        },
+        {
+          "line": 178,
+          "text": "ai_message = await model.ainvoke(system_prompt)"
+        },
+        {
+          "line": 194,
+          "text": "agent_state = StateGraph(ThreadState)"
+        },
+        {
+          "line": 203,
+          "text": "graph = agent_state.compile()"
+        }
+      ]
+    },
+    {
+      "path": "open_notebook/graphs/chat.py",
+      "sha256": "e667f6cbfa5538863b85e24773ad0c48ff37c30c97d9010b17da93cfb0b71bf7",
+      "url": "https://github.com/lfnovo/open-notebook/blob/a0f6f3081ae06328f0a451b3a3ef2959ca25721d/open_notebook/graphs/chat.py",
+      "matches": [
+        {
+          "line": 8,
+          "text": "from langgraph.checkpoint.sqlite import SqliteSaver"
+        },
+        {
+          "line": 9,
+          "text": "from langgraph.graph import END, START, StateGraph"
+        },
+        {
+          "line": 30,
+          "text": "def call_model_with_messages(state: ThreadState, config: RunnableConfig) -> dict:"
+        },
+        {
+          "line": 39,
+          "text": "def run_in_new_loop():"
+        },
+        {
+          "line": 73,
+          "text": "ai_message = model.invoke(payload)"
+        },
+        {
+          "line": 99,
+          "text": "memory = SqliteSaver(conn)"
+        },
+        {
+          "line": 101,
+          "text": "agent_state = StateGraph(ThreadState)"
+        },
+        {
+          "line": 105,
+          "text": "graph = agent_state.compile(checkpointer=memory)"
+        }
+      ]
+    },
+    {
+      "path": "open_notebook/database/repository.py",
+      "sha256": "f7d1554023bdd4bc71e200378e4371c2f04811dc1ab8358f13defe20cb6bde86",
+      "url": "https://github.com/lfnovo/open-notebook/blob/a0f6f3081ae06328f0a451b3a3ef2959ca25721d/open_notebook/database/repository.py",
+      "matches": [
+        {
+          "line": 25,
+          "text": "_IDENTIFIER_RE = re.compile(r\"^[a-zA-Z_][a-zA-Z0-9_]*$\")"
+        },
+        {
+          "line": 28,
+          "text": "def _ensure_safe_identifier(value: str, kind: str) -> str:"
+        },
+        {
+          "line": 35,
+          "text": "def _get_env_or_default(name: str, default: str) -> str:"
+        },
+        {
+          "line": 40,
+          "text": "def get_database_url() -> str:"
+        },
+        {
+          "line": 54,
+          "text": "def get_database_password() -> str:"
+        },
+        {
+          "line": 59,
+          "text": "def get_database_namespace() -> str:"
+        },
+        {
+          "line": 64,
+          "text": "def get_database_name() -> str:"
+        },
+        {
+          "line": 69,
+          "text": "def parse_record_ids(obj: Any) -> Any:"
+        },
+        {
+          "line": 80,
+          "text": "def ensure_record_id(value: Union[str, RecordID]) -> RecordID:"
+        },
+        {
+          "line": 88,
+          "text": "async def db_connection():"
+        },
+        {
+          "line": 103,
+          "text": "async def repo_query("
+        },
+        {
+          "line": 123,
+          "text": "async def repo_create(table: str, data: Dict[str, Any]) -> Dict[str, Any]:"
+        },
+        {
+          "line": 144,
+          "text": "async def repo_relate("
+        },
+        {
+          "line": 170,
+          "text": "async def repo_upsert("
+        },
+        {
+          "line": 183,
+          "text": "async def repo_update("
+        },
+        {
+          "line": 210,
+          "text": "async def repo_delete(record_id: Union[str, RecordID]):"
+        },
+        {
+          "line": 221,
+          "text": "async def repo_insert("
+        }
+      ]
+    },
+    {
+      "path": "api/routers/source_chat.py",
+      "sha256": "5bae9aead69c411fcbbe8b1935d54377346b130ed38c329722dffb01adba488e",
+      "url": "https://github.com/lfnovo/open-notebook/blob/a0f6f3081ae06328f0a451b3a3ef2959ca25721d/api/routers/source_chat.py",
+      "matches": [
+        {
+          "line": 96,
+          "text": "async def create_source_chat_session("
+        },
+        {
+          "line": 140,
+          "text": "async def get_source_chat_sessions(source_id: str = Path(..., description=\"Source ID\")):"
+        },
+        {
+          "line": 201,
+          "text": "async def get_source_chat_session("
+        },
+        {
+          "line": 216,
+          "text": "# Use sync get_state() in a thread since SqliteSaver doesn't support async"
+        },
+        {
+          "line": 268,
+          "text": "async def update_source_chat_session("
+        },
+        {
+          "line": 319,
+          "text": "async def delete_source_chat_session("
+        },
+        {
+          "line": 351,
+          "text": "async def stream_source_chat_response("
+        },
+        {
+          "line": 357,
+          "text": "# Use sync get_state() in a thread since SqliteSaver doesn't support async"
+        },
+        {
+          "line": 433,
+          "text": "async def send_message_to_source_chat("
+        }
+      ]
+    },
+    {
+      "path": "open_notebook/graphs/source_chat.py",
+      "sha256": "ac249e8cd2bc94683e40948fabea30a34680488524f44375b1ee77dcdb7f92f8",
+      "url": "https://github.com/lfnovo/open-notebook/blob/a0f6f3081ae06328f0a451b3a3ef2959ca25721d/open_notebook/graphs/source_chat.py",
+      "matches": [
+        {
+          "line": 8,
+          "text": "from langgraph.checkpoint.sqlite import SqliteSaver"
+        },
+        {
+          "line": 9,
+          "text": "from langgraph.graph import END, START, StateGraph"
+        },
+        {
+          "line": 36,
+          "text": "def _source_content_is_available("
+        },
+        {
+          "line": 48,
+          "text": "def call_model_with_source_context("
+        },
+        {
+          "line": 69,
+          "text": "def _call_model_with_source_context_inner("
+        },
+        {
+          "line": 77,
+          "text": "def build_context():"
+        },
+        {
+          "line": 153,
+          "text": "def run_in_new_loop():"
+        },
+        {
+          "line": 192,
+          "text": "ai_message = model.invoke(payload)"
+        },
+        {
+          "line": 216,
+          "text": "def _format_source_context(context_data: Dict) -> str:"
+        },
+        {
+          "line": 226,
+          "text": "memory = SqliteSaver(conn)"
+        },
+        {
+          "line": 228,
+          "text": "# Create the StateGraph"
+        },
+        {
+          "line": 229,
+          "text": "source_chat_state = StateGraph(SourceChatState)"
+        },
+        {
+          "line": 233,
+          "text": "source_chat_graph = source_chat_state.compile(checkpointer=memory)"
+        }
+      ]
+    }
+  ],
+  "dependency_inputs": {
+    "uv.lock": "78c3575b2edff34ef62fc5e659e5e086c7f61aa78a95ce80ca4d4827bba2d73b",
+    "pyproject.toml": "a5aec4193409b4b6b4627eecc10f9c10d9779afa84fca4aa538a8047c9395308"
+  },
+  "python": {
+    "argv": [
+      "/data/slanggraph-eval-upstreams/open-notebook/.venv/bin/python",
+      "--version"
+    ],
+    "returncode": 0,
+    "stdout": "Python 3.12.3\n",
+    "stderr": ""
+  },
+  "license_sha256": "5262176eef0dc9e46c8825249000585f115b7ef5fab500bf1f530717bf2ce0b9",
+  "license_text": "MIT License\nCopyright (c) 2024 Luis Novo\nPermission is hereby granted, free of charge, to any person obtaining a copy\nof this software and associated documentation files (the \"Software\"), to deal\nin the Software without restriction, including without limitation the rights\nto use, copy, modify, merge, publish, distribute, sublicense, and/or sell\ncopies of the Software, and to permit persons to whom the Software is\nfurnished to do so, subject to the following conditions:\nThe above copyright notice and this permission notice shall be included in all\ncopies or substantial portions of the Software.\nTHE SOFTWARE IS PROVIDED \"AS IS\", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR\nIMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,\nFITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE\nAUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER\nLIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,\nOUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE\nSOFTWARE.",
+  "intake_status": "reproducible with documented local service configuration (API backend only)",
+  "baseline_run": "results/notebook-A-smoke-r1-9c2d3add86b94f3cb17a94e7e1af1531/result.json",
+  "effect_inventory_kind": "source inspection; not a runtime trace",
+  "environment_freeze_returncode": 0
+}

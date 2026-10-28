@@ -1,11 +1,37 @@
 # Public developer access
 
+This API consumes the optional structured analysis store. Plain `Analysis` callbacks
+can use their own logging or result consumers without this API; see
+[callbacks and structured opt-in](plugin-api.md).
+
 `AnalysisClient` queries the same canonical records used by policy snapshots; it
 never reruns an analyzer. Import `AnalysisClient`, `AccessContext`, `AnalysisQuery`,
 `FindingPage`, `LabelView`, `ProvenancePage`, `AnalysisSnapshotView`,
 `AnalysisNotification`, and `AnalysisSubscription` from `langgraph.prebuilt.analysis`.
 All returned DTOs are immutable. Historical views are debugging/evaluation data,
 never authorization tokens.
+
+## Local sessions without identity boilerplate
+
+For an explicitly local, in-memory session, `StructuredAnalysis.client` creates the
+scoped client internally. Queries and subscriptions use the same stored records and
+notifications as the lower-level client. The session supplies isolated IDs, storage
+and access checks; its client is revoked when the session closes. These generated
+IDs do not authenticate external users. Keep the explicit `AccessContext` path below
+for authenticated applications.
+
+`StructuredAnalysis.checkpoint(*refs)` returns a trusted local handle whose
+`restore()` creates a fresh store, verifies its signed envelope and configuration,
+and imports metadata without rerunning analyzers. `restore(configuration=...)`
+rejects incompatible configuration. The handle owns local identity and signing
+material; it is an in-process utility, not a portable credential or key-management
+scheme. Production callers retain the existing `CheckpointBinding` API.
+
+See [demo 16](../../../workspace/16_analysis_inspection/README.md) for inspection and
+[demo 17](../../../workspace/17_analysis_checkpoints/README.md) for checkpoints.
+Both explicitly opt into standard records. Ordinary plugin callbacks can continue
+using private result formats. [Demo 18](../../../workspace/18_analysis_evaluation/README.md)
+evaluates a plain function offline without the structured runtime at all.
 
 ## Runnable example
 

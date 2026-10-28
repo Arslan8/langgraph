@@ -5,6 +5,7 @@ from __future__ import annotations
 import hashlib
 import hmac
 import json
+from _thread import RLock as _NativeRLock
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, field
 from threading import RLock
@@ -36,6 +37,12 @@ from langgraph.prebuilt.security.objects import (
     StateRequest,
     ToolRegistryRequest,
 )
+from langgraph.prebuilt.security.output_data import (
+    OutputDataError,
+    validate_output_data,
+    validate_output_request,
+    validate_security_labels,
+)
 from langgraph.prebuilt.security.stack import SecurityStack
 from langgraph.prebuilt.security.types import (
     Approval,
@@ -44,6 +51,7 @@ from langgraph.prebuilt.security.types import (
     Principal,
     Tool,
     Verdict,
+    _validate_principal,
 )
 
 _STORE_ENVELOPE_METADATA = "__slanggraph_security__"
@@ -190,6 +198,8 @@ class CheckpointEnvelope:
 class ObjectManagerHost:
     """Trusted framework-object effects after HostRouter authorization."""
 
+    __slots__ = ("_checkpoint_key", "_state", "_store", "_tools", "_restored", "_lock")
+
     def __init__(
         self,
         *,
@@ -207,6 +217,14 @@ class ObjectManagerHost:
 
     def dispatch(self, principal: Principal, request: FrameworkRequest) -> object:
         """Apply exactly one already-authorized framework operation."""
+        if (
+            type(request) is not DispatchRequest
+            and type(request) is not ToolRegistryRequest
+            and type(request) is not StateRequest
+            and type(request) is not ModelInvocationRequest
+            and type(request) is not OutputRequest
+        ):
+            raise TypeError("unknown framework request")
         with self._lock:
             if isinstance(request, DispatchRequest):
                 return request.child
@@ -221,6 +239,7 @@ class ObjectManagerHost:
             if isinstance(request, ModelInvocationRequest):
                 return request.context
             if isinstance(request, OutputRequest):
+                validate_output_request(request)
                 if not request.labels.confidentiality.issubset(request.clearance):
                     raise PermissionError("output:clearance")
                 return request.content
@@ -352,37 +371,40 @@ class ObjectManagerHost:
         raise PermissionError("state:unsupported_operation")
 
     def labels_for_output(self, principal: Principal, value: Any) -> SecurityLabels:
-        """Join labels for state values present in one externally emitted item."""
-        confidentiality: set[str] = set()
-        integrities: set[str] = set()
+        """Admit output data and conservatively inherit named channel labels.
 
-        def visit(item: Any, key: str | None = None) -> None:
-            if isinstance(item, LabeledValue):
-                confidentiality.update(item.labels.confidentiality)
-                integrities.add(item.labels.integrity)
-                return
-            if key is not None:
-                stored = self._state.get(
-                    (principal.user_id, principal.session_id, "", key)
-                )
-                if isinstance(stored, LabeledValue) and stored.value == item:
-                    confidentiality.update(stored.labels.confidentiality)
-                    integrities.add(stored.labels.integrity)
-            if isinstance(item, Mapping):
-                for child_key, child in item.items():
-                    visit(child, str(child_key))
-            elif isinstance(item, Sequence) and not isinstance(
-                item, (str, bytes, bytearray)
-            ):
-                for child in item:
-                    visit(child)
-
-        with self._lock:
-            visit(value)
-        integrity = (
-            "trusted" if not integrities or integrities == {"trusted"} else "low"
-        )
-        return SecurityLabels(frozenset(confidentiality), integrity)
+        Matching keys inherit labels without comparing arbitrary payload values.
+        This does not infer provenance for renamed or otherwise derived data.
+        """
+        if type(self) is not ObjectManagerHost:
+            raise OutputDataError("output_data:state_shape")
+        _validate_principal(principal)
+        channel_labels: dict[str, SecurityLabels] = {}
+        try:
+            lock = self._lock
+            if type(lock) is not _NativeRLock:
+                raise OutputDataError("output_data:state_shape")
+            with lock:
+                state = self._state
+                if type(state) is not dict or len(state) > 100_000:
+                    raise OutputDataError("output_data:state_shape")
+                for key, stored in tuple(dict.items(state)):
+                    if (
+                        type(key) is not tuple
+                        or len(key) != 4
+                        or any(type(part) is not str for part in key)
+                    ):
+                        raise OutputDataError("output_data:state_key")
+                    if key[:3] == (principal.user_id, principal.session_id, ""):
+                        if type(stored) is not LabeledValue:
+                            raise OutputDataError("output_data:state_value")
+                        channel_labels[key[3]] = validate_security_labels(stored.labels)
+                return validate_output_data(value, channel_labels=channel_labels)
+        except AttributeError:
+            pass
+        # Missing native slots attach their receiver to AttributeError.obj.
+        # Refuse outside the handler without retaining that exception chain.
+        raise OutputDataError("output_data:state_shape")
 
     def _verify_checkpoint(
         self, principal: Principal, checkpoint: CheckpointEnvelope

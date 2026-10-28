@@ -1,28 +1,53 @@
-# Demo 18: evaluating an analyzer
+# Demo 18: evaluating an analyzer offline
 
-Run one keyword analyzer against four labeled examples. Count a true positive, true negative, false positive and false negative, then calculate precision and recall.
+For plugin writers measuring their own analyzer. Call an ordinary function on
+labeled examples and compare its answers with the expected labels:
 
-Run from the repository root with the prebuilt environment:
-
-```bash
-libs/prebuilt/.venv/bin/python workspace/18_analysis_evaluation/demo.py
+```python
+def analyze(text):
+    return "secret" in text.lower()
 ```
 
-If the environment is missing, run `uv sync --directory libs/prebuilt` first.
-No model, network, credentials, Cedar CLI, or Linux sandbox is needed.
+This deliberately crude function returns a boolean chosen by the developer. No
+analysis runtime, registry, callbacks, findings, storage or identity strings are
+needed. Developers can substitute another result format and adapt the evaluator.
 
-## What to look for
+Run:
 
-Each confusion-matrix category has one example. Precision and recall are both 50%. Boundary processing time varies by machine.
+```bash
+python3 workspace/18_analysis_evaluation/demo.py
+```
 
-The script asserts the expected behavior and exits unsuccessfully on a mismatch.
+Expected output includes:
+
+```text
+TP: The secret password is swordfish
+TN: Lunch is at noon
+FP: The novel is called Secret Garden
+FN: The password is swordfish
+Precision: 50%; recall: 50%
+```
+
+- **TP:** correctly identified sensitive content.
+- **TN:** correctly identified nonsensitive content.
+- **FP:** false alarm on nonsensitive content.
+- **FN:** missed sensitive content.
+
+Precision asks how often a positive prediction was correct. Recall asks how much
+of the sensitive content was found. The script also times the analyzer call itself;
+that tiny measurement varies by machine and may round to zero milliseconds.
 
 ## Try it
 
-Add another benign sentence containing `secret` and update the expected counts. Precision falls because the analyzer produces another false positive.
+Add a benign sentence containing `secret` and update the expected counts. It adds
+a false positive and lowers precision. Change the analyzer and compare the results.
 
 ## Scope
 
-This tiny synthetic fixture teaches measurement; it is not a quality benchmark or a sensitive-data detector. Timing includes runtime processing and is not overhead relative to an uninstrumented baseline. No enforcement policy runs here.
+This is an offline measurement lesson, not a production detector, representative
+benchmark, or runtime enforcement mechanism. No tool arguments are gated by its
+predictions. It evaluates developer code independently of the framework, consistent
+with plugins owning their results and evaluation approach. Only Python's standard
+library is required.
 
-[All demos and setup notes](../README.md)
+[All demos](../README.md)

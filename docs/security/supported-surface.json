@@ -1,0 +1,1289 @@
+{
+  "schema_version": 2,
+  "kind": "slanggraph-supported-surface",
+  "generated": "2026-10-27",
+  "claim": "Route-scoped acceptance only. A route is accepted when every applicable SGV901/SGV902/SGV903 obligation listed for it is discharged by checks recomputed from the current sources, every exclusion listed for it carries a refusal code registered in langgraph.prebuilt.security.unsupported (REGISTRY or PREFIXES), and ungated_exclusions is empty. This is not whole-system completeness: unsupported routes, ungated effects and every premise listed here remain open.",
+  "source_inventory": "eval/scope/cohort-inventory-draft.md",
+  "obligation_definitions": {
+    "source": "eval/campaigns/remediation-v2/acceptance.json",
+    "SGV901": "all supported effect paths and publication placement",
+    "SGV902": "adapter composition and authoritative data/label correspondence",
+    "SGV903": "truthful request-bound activation/lifetime observations and native enforcement correspondence"
+  },
+  "verifier": {
+    "module": "langgraph.prebuilt.security.route_verification",
+    "source": "libs/prebuilt/langgraph/prebuilt/security/route_verification.py",
+    "state": "in progress (untracked in git at generation time); this manifest is written against its MANIFEST_SCHEMA_VERSION = 2 loader",
+    "consumes": [
+      "schema_version",
+      "kind",
+      "routes[].id",
+      "routes[].status",
+      "routes[].obligations.SGV90x.{applicable,reason,required_evidence}",
+      "routes[].exclusions[].{feature,gate_code,gate_code_prefix,enforced_at}",
+      "ungated_exclusions",
+      "check_ids[].proof (overclaim detection only)"
+    ],
+    "does_not_consume": [
+      "status_reason, pending_checks, premises, applications, unregistered_refusals, unsupported_capabilities and admission; these are inventory for readers"
+    ],
+    "evidence_standard": "docs/security/evidence-standard.md"
+  },
+  "check_ids": {
+    "router-source-proof": {
+      "meaning": "Source-derived normal-return protocol for every HostRouter entry, bound to the loaded class (boundary_verification.verify_host_router).",
+      "passes_when": "report.complete is true, summary.verified == summary.discovered > 0 (currently 21/21), and runtime_binding.source_sha256 equals the current host_router.py.",
+      "recomputed": true,
+      "proof": true,
+      "component": "langgraph.prebuilt.security.boundary_verification.verify_host_router",
+      "component_source": "libs/prebuilt/langgraph/prebuilt/security/boundary_verification.py",
+      "last_recorded": "eval/campaigns/remediation-v2/raw/receipt-integration-v1/final-checks.json strict_summary.router discovered 21, verified 21"
+    },
+    "host-output-correspondence": {
+      "meaning": "For the exact admitted OutputRequest path, each normal return from ObjectManagerHost.dispatch/adispatch is the identical request.content and confidentiality is a subset of request.clearance (output_verification.verify_output_correspondence), with the validator dependency recomputed from output_data.py.",
+      "passes_when": "report.proved is true with output_data_source supplied so the validator dependency is derived, not assumed.",
+      "recomputed": true,
+      "proof": true,
+      "component": "langgraph.prebuilt.security.output_verification.verify_output_correspondence",
+      "component_source": "libs/prebuilt/langgraph/prebuilt/security/output_verification.py",
+      "last_recorded": "eval/campaigns/remediation-v2/raw/receipt-integration-v1/final-checks.json strict_summary.host_output_correspondence_proved true"
+    },
+    "output-validator-contract": {
+      "meaning": "Primitive contracts of the recursive output validator (output_data.validate_output_request) derived from source under typed ownership premises (output_data_verification.verify_output_data_primitives).",
+      "passes_when": "report.proved is true for every primitive entry.",
+      "recomputed": true,
+      "proof": true,
+      "component": "langgraph.prebuilt.security.output_data_verification.verify_output_data_primitives",
+      "component_source": "libs/prebuilt/langgraph/prebuilt/security/output_data_verification.py",
+      "last_recorded": "eval/campaigns/remediation-v2/raw/receipt-integration-v1/final-checks.json strict_summary.output_data_primitive_contracts_complete true"
+    },
+    "output-mediator-correspondence": {
+      "meaning": "placement.OutputMediator._emit/_aemit: every normal return is exactly rebuild(result) where result is the value dispatched through router.output_emit/aoutput_emit for the request built from the captured router, host, destination and clearance; an ObjectAuthorization result never returns normally.",
+      "passes_when": "report.proved is true from the new component verify_output_mediator_correspondence over placement.py, host_router.py, output_data.py, objects.py and object_manager.py.",
+      "recomputed": true,
+      "proof": true,
+      "component": "langgraph.prebuilt.security.output_mediator_verification.verify_output_mediator_correspondence",
+      "component_exists": true,
+      "note": "Current route verification recomputes this component and records it passing for R4. Its declared premises remain explicit."
+    },
+    "admission-surface": {
+      "meaning": "Source-derived obligations for the opt-in closed admission gate: exact_type_selection (admission.py), closed_compile_refusal (config.py), descriptor_dispatch (placement.py) and runtime_mac_closed_admission (mac.py).",
+      "passes_when": "report.proved is true, i.e. all four obligations proved with no issues.",
+      "recomputed": true,
+      "proof": true,
+      "component": "langgraph.prebuilt.security.admission_verification.verify_admission_surface",
+      "component_source": "libs/prebuilt/langgraph/prebuilt/security/admission_verification.py",
+      "component_exists": true,
+      "note": "Current route verification recomputes all four obligations and records the component passing. Its own premises are copied into each route that requires it."
+    },
+    "host-route:linux-sandbox": {
+      "meaning": "REGRESSION: review-pattern structural checks over linux.py and _linux_worker.py (host_verification.verify_linux_host_route): grant_lowering, activation_before_execution, channel_identity, cancellation_lifetime.",
+      "passes_when": "every structural_checks boolean is true. The report's proved is all-False and complete is False by construction; this check is a regression guard, not a proof.",
+      "recomputed": true,
+      "proof": false,
+      "component": "langgraph.prebuilt.security.host_verification.verify_linux_host_route",
+      "component_source": "libs/prebuilt/langgraph/prebuilt/security/host_verification.py",
+      "known_evasions_recorded_in_component": true
+    },
+    "lean-audit:proofs/worker-route": {
+      "meaning": "A fresh `make security-verify-lean` run (libs/prebuilt/Makefile -> proofs/worker-route/check.py) passes with Lean kernel replay, and the audit's source_after identities equal the current proofs/worker-route sources.",
+      "passes_when": "report.passed, kernel_replay_checked and kernel_typecheck_passed are all true and every *.lean and check.py sha256 in source_after equals the current file. proof is reported true only as model_proved: a proof of the finite captured model, never of source, compiler, decoder, OS or runtime refinement.",
+      "recomputed": true,
+      "proof": true,
+      "proof_scope": "finite model only (model_proved); source_refinement_proved, runtime_refinement_proved, compiler_refinement_proved, decoder_refinement_proved and os_refinement_proved are false in every retained audit",
+      "component": "proofs/worker-route/check.py",
+      "current_state": "PASSING for the current tree. eval/campaigns/remediation-v2/raw/checks/codex-grant-lean-audit-v2/report.json records protocol worker-route-grant-v3, 72 fixed theorem obligations, five rejected negative controls, 20 driver tests, fresh kernel replay, stable source identities, passed true and model_proved true. The earlier claude-lean-audit-v1 parse failure and receipt-v2 audit remain historical observations."
+    },
+    "runtime-evidence:<path>": {
+      "meaning": "A recorded, labelled runtime run at <path> (repository-relative JSON object).",
+      "passes_when": "the record has a top-level boolean outcome field (passed/ok/complete) equal to true, no non-empty failures or issues list, at least one recorded source identity matches the current tree, and every (path, sha256) pair recorded under source_sha256/source_identity/sources keys for an existing current file still equals that file. Never recomputed, never a proof.",
+      "recomputed": false,
+      "proof": false,
+      "note": "A record without an outcome field is a check failure, not evidence. Records whose hashes live under other keys (for example source_hashes, source_before/source_after) are not hash-bound by the verifier; where that is the case the route notes it."
+    },
+    "gate:<code>": {
+      "meaning": "The refusal code <code> is registered in langgraph.prebuilt.security.unsupported REGISTRY (exact) or PREFIXES (prefix form).",
+      "passes_when": "the code is present in REGISTRY, or in PREFIXES when the exclusion is marked gate_code_prefix. Registration is not a proof that the code is raised before the feature's effects.",
+      "recomputed": true,
+      "proof": false,
+      "component_source": "libs/prebuilt/langgraph/prebuilt/security/unsupported.py"
+    },
+    "lean-audit:proofs/language-route": {
+      "meaning": "Fresh audit of the Lean model of the admitted language and derive_program (proofs/language-route): kernel typecheck, fresh leanchecker replay, standard axioms only, and agreement with the Python checker on controls regenerated from the real lowering.",
+      "passes_when": "proofs/language-route/check.py reports passed, kernel_typecheck_passed and kernel_replay_checked, and its recorded source identities equal the current *.lean and check.py files.",
+      "recomputed": true,
+      "proof": true
+    },
+    "language-derivation": {
+      "meaning": "Source-derived execution choke point: LanguageProgram.invoke derives the same captured snapshot before any terminal call, lower proves at admission, ManifestAdmission.invoke/ainvoke validate first and execute only through program.invoke; plus fixed useful/forbidden controls against the live checker.",
+      "passes_when": "language_route_verification.verify_language_route reports proved on the current _language_sandbox.py and inprocess.py.",
+      "recomputed": true,
+      "proof": true
+    },
+    "dataset-read": {
+      "meaning": "Source-derived ordering of dataset_operation.read_dataset/aread_dataset (pinned id lookup, exact unconstrained policy allow, then the no-symlink pinned open, digest of exactly the returned bytes) plus fixed live controls (allow returns exact bytes; deny opens nothing; unknown, changed and oversize refused).",
+      "passes_when": "dataset_route_verification.verify_dataset_route reports proved on the current dataset_operation.py.",
+      "recomputed": true,
+      "proof": true
+    },
+    "operation-catalog": {
+      "meaning": "The runtime operation catalog (docs/security/runtime-operations.json) is complete: every operation the evaluation uses is proved or a stated trusted-runtime premise, cited classes/methods/functions exist, refusal codes are registered, supported routes use only catalogued operations, and every framework operation is mapped or excluded (D8/D10).",
+      "passes_when": "operation_catalog.verify_catalog reports complete.",
+      "recomputed": true,
+      "proof": false
+    }
+  },
+  "routes": [
+    {
+      "id": "language-sandbox-tool",
+      "label": "R1",
+      "capability": "admitted language-IR programs executed in-process through modeled terminals",
+      "status": "supported",
+      "status_reason": "SGV903 has no qualifying runtime evidence. The language derivation captures (eval/campaigns/remediation-v2/raw/proof-language/derivations.json, derivations-v2.json) carry no top-level boolean outcome field, so neither can be named as a runtime-evidence check, and their source_hashes for language_verification.py, _language_sandbox.py and inprocess.py (captured 2026-10-27T00:30Z) no longer equal the current files. A re-capture must record passed: true and a source_sha256 map before SGV903 can be bound.",
+      "pending_checks": [
+        "runtime-evidence: a fresh language derivation capture with an outcome field and source_sha256 (none exists)"
+      ],
+      "execution_route": "in-process:language-sandbox",
+      "entry_points": [
+        "langgraph.prebuilt.security.placement.MediatedNode.invoke",
+        "langgraph.prebuilt.security.placement.MediatedNode.ainvoke",
+        "langgraph.prebuilt.security.placement.MediatedNode._invoke_admitted",
+        "langgraph.prebuilt.security.placement.MediatedNode._ainvoke_admitted",
+        "langgraph.prebuilt.tool_node.ToolNode._func",
+        "langgraph.prebuilt.tool_node.ToolNode._afunc",
+        "langgraph.prebuilt.security.object_policy._LanguageSandboxDispatcher.invoke",
+        "langgraph.prebuilt.security.object_policy._LanguageSandboxDispatcher.ainvoke",
+        "langgraph.prebuilt.security.inprocess.ManifestAdmission.invoke",
+        "langgraph.prebuilt.security.inprocess.ManifestAdmission.ainvoke",
+        "langgraph.prebuilt.security._language_sandbox.LanguageProgram.invoke"
+      ],
+      "enforcement_points": [
+        "langgraph.prebuilt.security.admission.admit_node (kind language_program)",
+        "langgraph.prebuilt.security.config._closed_admission_inventory",
+        "langgraph.prebuilt.security.config._verify_admitted_graph",
+        "langgraph.prebuilt.security.admission.recheck",
+        "langgraph.prebuilt.security.placement.MediatedNode._invoke_admitted (empty kwargs, bounded input, pinned ToolNode._func)",
+        "langgraph.prebuilt.security.host_router.HostRouter.dispatch",
+        "langgraph.prebuilt.security.host_router.HostRouter.invoke",
+        "langgraph.prebuilt.security.object_policy.ObjectPolicyHostExecutor (exact) with langgraph.prebuilt.security.object_policy.CedarObjectAuthorizer (exact, no waivers)",
+        "langgraph.prebuilt.security.object_policy._LanguageSandboxDispatcher.invoke",
+        "langgraph.prebuilt.security.inprocess.ManifestAdmission.validate",
+        "langgraph.prebuilt.security.language_verification.derive_program (re-derived by LanguageProgram.invoke before every run)",
+        "langgraph.prebuilt.security._language_sandbox.LanguageProgram.invoke",
+        "langgraph.prebuilt.security.mac.RuntimeMAC.check"
+      ],
+      "sources": [
+        "libs/prebuilt/langgraph/prebuilt/security/_language_sandbox.py",
+        "libs/prebuilt/langgraph/prebuilt/security/language_sandbox.py",
+        "libs/prebuilt/langgraph/prebuilt/security/language_verification.py",
+        "libs/prebuilt/langgraph/prebuilt/security/inprocess.py",
+        "libs/prebuilt/langgraph/prebuilt/security/object_policy.py",
+        "libs/prebuilt/langgraph/prebuilt/security/admission.py",
+        "libs/prebuilt/langgraph/prebuilt/security/placement.py"
+      ],
+      "documentation": [
+        "docs/security/source-verification.md",
+        "docs/security/manifest-consistency.md",
+        "docs/security/security-properties.md",
+        "docs/security/admission.md"
+      ],
+      "applications": [],
+      "scope_note": "Only programs admitted as exact LanguageProgram values with closed terminal IDs execute; the original Python tool function is never invoked. No application cohort is recorded through this route; eval/campaigns/remediation-v2/raw/language-metaclass/capture.json is a refusal probe, not an application.",
+      "obligations": {
+        "SGV901": {
+          "applicable": true,
+          "required_evidence": [
+            "admission-surface",
+            "router-source-proof",
+            "gate:admission:unsupported_node_body",
+            "gate:admission:unsupported_branch",
+            "gate:admission:descriptor_changed",
+            "gate:admission:unsupported_async",
+            "gate:admission:closed_admission_required",
+            "operation-catalog"
+          ],
+          "reason": "Under closed admission only an exact ToolNode dispatched through an exact ObjectPolicyHostExecutor and exact _LanguageSandboxDispatcher is admitted as a node body; every dispatch crosses HostRouter.dispatch and HostRouter.invoke, whose return protocol is the router source proof."
+        },
+        "SGV902": {
+          "applicable": true,
+          "required_evidence": [
+            "router-source-proof",
+            "admission-surface"
+          ],
+          "reason": "Adapter composition on this route is the captured executor/dispatcher/authorizer chain whose identity admission.recheck re-reads before each dispatch; the router proof fixes what HostRouter.invoke may return."
+        },
+        "SGV903": {
+          "applicable": true,
+          "required_evidence": [
+            "lean-audit:proofs/language-route",
+            "language-derivation"
+          ],
+          "reason": "Containment without an OS adapter: the Lean model proves that any program the checker accepts calls only registered terminals during any evaluation (checked_program_calls_only_registered), the Lean checker agrees with derive_program on controls from the real lowering, and the source check shows every execution re-derives the same captured snapshot first. The interpreter, terminals and admission code are trusted (docs/security/threat-model.md).",
+          "related_evidence": [
+            "eval/campaigns/remediation-v2/raw/proof-language/derivations-v2.json (derivation capture; no outcome field; source_hashes stale for 3 of 5 files)",
+            "eval/campaigns/remediation-v2/raw/proof-language/derivations.json (earlier capture; no outcome field; older _language_sandbox.py hash)",
+            "eval/campaigns/remediation-v2/raw/language-metaclass/capture.json (refusal probe; no outcome field)"
+          ]
+        }
+      },
+      "premises": [
+        "Threat model: the language-sandbox interpreter, registered terminals and admission code are trusted (docs/security/threat-model.md); the Lean proof covers the checker and the intended semantics, not their implementation.",
+        "Interpreter correctness: CPython evaluates the data-only program, its captured Signature binding and the terminal calls as written (language_verification.py docstring: not a certificate for the Python interpreter).",
+        "Execution-language implementation correspondence: _language_sandbox.LanguageProgram.invoke executes exactly the instruction forms that derive_program admitted (derivations dependency 'execution-language implementation correspondence').",
+        "Terminal identity and authorization contracts: framework terminals (for example inprocess.read_text) implement their declared TerminalContract result types and information-flow contracts; the derivation does not certify terminal implementations (security-properties.md: correctness of those terminals and their declared information-flow contracts remains required).",
+        "Host isolation where required: the in-process route does not supervise descendants or background work; such work is forbidden in the protected model (security-properties.md).",
+        "Initialization and runtime binding: module bodies, imports, pinned registries and dataclass layouts of admission.py, config.py, placement.py and mac.py match the loaded runtime (admission_verification premises).",
+        "Recheck correctness: admission.recheck recomputes identity over the captured links; only its presence before dispatch is derived.",
+        "Graph construction effects before compile(security=...) and entry points without an installed RuntimeMAC are outside the proved surface."
+      ],
+      "exclusions": [
+        {
+          "feature": "general Python node bodies, metadata-promoted nodes, wrappers containing a ToolNode, ToolNode with wrappers/injected args, foreign executor or dispatcher",
+          "gate_code": "admission:unsupported_node_body",
+          "enforced_at": "langgraph.prebuilt.security.admission.admit_node via config._closed_admission_inventory",
+          "condition": "SecurityConfig(closed_admission=True) at compile",
+          "evidence": "libs/prebuilt/langgraph/prebuilt/security/admission.py"
+        },
+        {
+          "feature": "conditional branch that is not the pinned framework branch",
+          "gate_code": "admission:unsupported_branch",
+          "enforced_at": "langgraph.prebuilt.security.admission.admit_branch",
+          "condition": "SecurityConfig(closed_admission=True) at compile",
+          "evidence": "libs/prebuilt/langgraph/prebuilt/security/admission.py"
+        },
+        {
+          "feature": "captured link drift after admission (executor, dispatcher, authorizer, program or source digest)",
+          "gate_code": "admission:descriptor_changed",
+          "enforced_at": "langgraph.prebuilt.security.admission.recheck via config._verify_admitted_graph, mac.register_mac_boundary and mac.RuntimeMAC.check",
+          "evidence": "libs/prebuilt/langgraph/prebuilt/security/admission.py"
+        },
+        {
+          "feature": "async-only node body or async dispatch whose exact executor/dispatcher defines no coroutine ainvoke",
+          "gate_code": "admission:unsupported_async",
+          "enforced_at": "langgraph.prebuilt.security.admission.admit_node and placement.MediatedNode._ainvoke_admitted",
+          "evidence": "libs/prebuilt/langgraph/prebuilt/security/placement.py"
+        },
+        {
+          "feature": "secured graph with branches compiled without closed admission under an installed RuntimeMAC",
+          "gate_code": "admission:closed_admission_required",
+          "enforced_at": "langgraph.prebuilt.security.mac.RuntimeMAC.check",
+          "evidence": "libs/prebuilt/langgraph/prebuilt/security/mac.py"
+        },
+        {
+          "feature": "program expression outside the admitted data-and-terminal language",
+          "gate_code": "language_sandbox:unsupported_expression",
+          "gate_code_prefix": true,
+          "gate_code_form": "language_sandbox:unsupported_expression:<node>",
+          "enforced_at": "langgraph.prebuilt.security._language_sandbox.LanguageProgram.lower",
+          "evidence": "libs/prebuilt/langgraph/prebuilt/security/_language_sandbox.py"
+        },
+        {
+          "feature": "program statement outside the admitted data-and-terminal language",
+          "gate_code": "language_sandbox:unsupported_statement",
+          "gate_code_prefix": true,
+          "gate_code_form": "language_sandbox:unsupported_statement:<node>",
+          "enforced_at": "langgraph.prebuilt.security._language_sandbox.LanguageProgram.lower",
+          "evidence": "libs/prebuilt/langgraph/prebuilt/security/_language_sandbox.py"
+        },
+        {
+          "feature": "RuntimeMAC boundary whose dispatcher is not an admitted exact class",
+          "gate_code": "mac:unsupported_dispatcher",
+          "enforced_at": "langgraph.prebuilt.security.mac.RuntimeMAC.check",
+          "evidence": "libs/prebuilt/langgraph/prebuilt/security/mac.py"
+        },
+        {
+          "feature": "RuntimeMAC boundary whose authorizer is not an exact CedarObjectAuthorizer",
+          "gate_code": "mac:unsupported_authorizer",
+          "enforced_at": "langgraph.prebuilt.security.mac.RuntimeMAC.check",
+          "evidence": "libs/prebuilt/langgraph/prebuilt/security/mac.py"
+        },
+        {
+          "feature": "resource contract bound in-process without a supported binding",
+          "gate_code": "resource:unsupported_inprocess_binding",
+          "enforced_at": "langgraph.prebuilt.security.mediators.objects",
+          "evidence": "libs/prebuilt/langgraph/prebuilt/security/mediators/objects.py"
+        }
+      ],
+      "unregistered_refusals": [
+        {
+          "feature": "non-string program arguments",
+          "code": "language_proof:arguments_must_be_strings",
+          "enforced_at": "langgraph.prebuilt.security._language_sandbox.LanguageProgram.invoke",
+          "evidence": "libs/prebuilt/langgraph/prebuilt/security/_language_sandbox.py",
+          "note": "literal code raised in source but absent from unsupported.REGISTRY/PREFIXES; not counted as a gated exclusion"
+        },
+        {
+          "feature": "synchronous invoke of an async-only admitted tool",
+          "code": "manifest_consistency:async_tool_requires_ainvoke",
+          "enforced_at": "langgraph.prebuilt.security.inprocess.ManifestAdmission.invoke",
+          "evidence": "libs/prebuilt/langgraph/prebuilt/security/inprocess.py",
+          "note": "literal code raised in source but absent from unsupported.REGISTRY/PREFIXES; not counted as a gated exclusion"
+        }
+      ],
+      "decision": "2026-10-27: promoted at the advisor's direction after the Lean proof of the checker (proofs/language-route) and the choke-point check passed. Trust assumptions per docs/security/threat-model.md: interpreter, registered terminals and admission code are in the trusted computing base."
+    },
+    {
+      "id": "tool-node-dispatch",
+      "label": "R2",
+      "capability": "exact ToolNode under MediatedNode with a captured admission descriptor dispatching through HostRouter to a host",
+      "status": "supported",
+      "status_basis": "Current recomputation passes admission-surface and router-source-proof, and every in-scope exclusion names a registered gate. Acceptance is the verifier's recomputation, not this declaration.",
+      "pending_checks": [],
+      "execution_route": "coordinator:mediated-tool-node-dispatch",
+      "entry_points": [
+        "langgraph.prebuilt.security.placement.MediatedNode.invoke",
+        "langgraph.prebuilt.security.placement.MediatedNode.ainvoke",
+        "langgraph.prebuilt.security.placement.MediatedNode._invoke_admitted",
+        "langgraph.prebuilt.security.placement.MediatedNode._ainvoke_admitted",
+        "langgraph.prebuilt.tool_node.ToolNode._func",
+        "langgraph.prebuilt.tool_node.ToolNode._afunc",
+        "langgraph.prebuilt.security.host_router.HostRouter.invoke",
+        "langgraph.prebuilt.security.host_router.HostRouter.ainvoke"
+      ],
+      "enforcement_points": [
+        "langgraph.prebuilt.security.admission.admit_node (kinds language_program, tool_node, native_deployment)",
+        "langgraph.prebuilt.security.admission.admit_branch (kind framework_branch)",
+        "langgraph.prebuilt.security.config._closed_admission_inventory",
+        "langgraph.prebuilt.security.config._verify_admitted_graph",
+        "langgraph.prebuilt.security.admission.recheck",
+        "langgraph.prebuilt.security.placement.MediatedNode._invoke_admitted",
+        "langgraph.prebuilt.security.placement.MediatedNode._dispatch -> HostRouter.dispatch",
+        "langgraph.prebuilt.security.host_boundary.make_authorized_host_router",
+        "langgraph.prebuilt.security.host_boundary.AuthorizedHostRouter",
+        "langgraph.prebuilt.security.host_router.HostRouter.invoke",
+        "langgraph.prebuilt.security.mac.register_mac_boundary",
+        "langgraph.prebuilt.security.mac.RuntimeMAC.check"
+      ],
+      "sources": [
+        "libs/prebuilt/langgraph/prebuilt/security/admission.py",
+        "libs/prebuilt/langgraph/prebuilt/security/config.py",
+        "libs/prebuilt/langgraph/prebuilt/security/placement.py",
+        "libs/prebuilt/langgraph/prebuilt/security/host_router.py",
+        "libs/prebuilt/langgraph/prebuilt/security/host_boundary.py",
+        "libs/prebuilt/langgraph/prebuilt/security/mac.py",
+        "libs/prebuilt/langgraph/prebuilt/tool_node.py"
+      ],
+      "documentation": [
+        "docs/security/admission.md",
+        "docs/security/host-routing-completeness.md"
+      ],
+      "applications": [],
+      "scope_note": "This route is the dispatch spine shared by R1 and R3 when the graph is compiled with SecurityConfig(closed_admission=True). The host adapter behind HostRouter is R1 or R3 and is evidenced there. No recorded application compiles with closed admission (the pandas v19 ToolNode graph does not set it), so applications is empty; libs/prebuilt/tests/security/test_admission.py and test_admission_dispatch.py are the exercised witnesses.",
+      "obligations": {
+        "SGV901": {
+          "applicable": true,
+          "required_evidence": [
+            "admission-surface",
+            "router-source-proof",
+            "gate:admission:unsupported_node_body",
+            "gate:admission:unsupported_branch",
+            "gate:admission:descriptor_changed",
+            "gate:admission:unsupported_async",
+            "gate:admission:closed_admission_required",
+            "operation-catalog"
+          ],
+          "reason": "Closed admission refuses every node or branch body that is not an admitted descriptor; MediatedNode._invoke_admitted calls only the pinned ToolNode._func on the captured node after recheck and HostRouter.dispatch; the five admission codes are the refusals that close the body path."
+        },
+        "SGV902": {
+          "applicable": true,
+          "required_evidence": [
+            "router-source-proof",
+            "admission-surface"
+          ],
+          "reason": "The adapter composition is the captured executor/dispatcher/authorizer identity re-read by recheck; HostRouter.invoke's source-derived return protocol is what the dispatch may hand back to ToolNode."
+        },
+        "SGV903": {
+          "applicable": false,
+          "required_evidence": [],
+          "reason": "no host adapter on this route"
+        }
+      },
+      "premises": [
+        "Initialization: module and class bodies, imports, refusal code constants, pinned registries and dataclass layouts of admission.py, config.py, placement.py and mac.py match the loaded runtime (admission_verification premises).",
+        "Runtime binding: type(x) is <Class> on framework classes reads native storage with no instance or class shadowing; AdmittedDescriptor, _CapturedToolNode and _CapturedBranch are native frozen slot records.",
+        "Recheck correctness: admission.recheck recomputes identity over the captured links; its correctness is covered by the admission tests, not derived.",
+        "Async adapters: _require_async_route and the exact executor/dispatcher coroutine ainvoke routes own their lifecycle and transport.",
+        "Framework primitives: ToolNode._func/_afunc, tools_condition, host executors and dispatchers are trusted framework code; the admitted host confines candidate tool bodies.",
+        "Graph construction effects before compile(security=...) (naming, type hints, signatures, schema inference) and entry points without an installed RuntimeMAC are outside the proved surface."
+      ],
+      "exclusions": [
+        {
+          "feature": "node body that is not an admitted execution descriptor (plain function, metadata-promoted node, wrapper containing a ToolNode, arbitrary Runnable subclass, ToolNode with wrappers/injected args/foreign executor, unsupported executor or dispatcher, missing LinuxToolSpec, non-exact builder containers)",
+          "gate_code": "admission:unsupported_node_body",
+          "enforced_at": "langgraph.prebuilt.security.admission.admit_node via config._closed_admission_inventory",
+          "condition": "SecurityConfig(closed_admission=True) at compile",
+          "evidence": "libs/prebuilt/langgraph/prebuilt/security/admission.py"
+        },
+        {
+          "feature": "conditional branch that is not the pinned framework branch",
+          "gate_code": "admission:unsupported_branch",
+          "enforced_at": "langgraph.prebuilt.security.admission.admit_branch via config._closed_admission_inventory",
+          "condition": "SecurityConfig(closed_admission=True) at compile",
+          "evidence": "libs/prebuilt/langgraph/prebuilt/security/admission.py"
+        },
+        {
+          "feature": "async-only node body or branch without the framework executor shim; async dispatch without exact coroutine ainvoke routes",
+          "gate_code": "admission:unsupported_async",
+          "enforced_at": "langgraph.prebuilt.security.admission.admit_node / admit_branch; placement.MediatedNode._ainvoke_admitted",
+          "evidence": "libs/prebuilt/langgraph/prebuilt/security/admission.py"
+        },
+        {
+          "feature": "captured link drift after admission or a mediated wrapper not wrapping its captured implementation",
+          "gate_code": "admission:descriptor_changed",
+          "enforced_at": "langgraph.prebuilt.security.admission.recheck via config._verify_admitted_graph, mac.register_mac_boundary and mac.RuntimeMAC.check",
+          "evidence": "libs/prebuilt/langgraph/prebuilt/security/admission.py"
+        },
+        {
+          "feature": "secured graph with conditional branches compiled without closed_admission=True, executed under an installed RuntimeMAC",
+          "gate_code": "admission:closed_admission_required",
+          "enforced_at": "langgraph.prebuilt.security.mac.RuntimeMAC.check",
+          "evidence": "libs/prebuilt/langgraph/prebuilt/security/mac.py"
+        },
+        {
+          "feature": "RuntimeMAC boundary whose execution boundary class is not admitted",
+          "gate_code": "mac:unsupported_execution_boundary",
+          "enforced_at": "langgraph.prebuilt.security.mac.RuntimeMAC.check",
+          "evidence": "libs/prebuilt/langgraph/prebuilt/security/mac.py"
+        },
+        {
+          "feature": "dispatch without principal/security context",
+          "gate_code": "host:missing_security_context",
+          "enforced_at": "langgraph.prebuilt.tool_node.ToolNode._func / _afunc",
+          "evidence": "libs/prebuilt/langgraph/prebuilt/tool_node.py",
+          "registration_note": "being registered in unsupported.REGISTRY at generation time"
+        },
+        {
+          "feature": "dispatch with no host router (in-process fallback)",
+          "gate_code": "host:missing_router",
+          "enforced_at": "langgraph.prebuilt.tool_node.ToolNode._func / _afunc",
+          "evidence": "libs/prebuilt/langgraph/prebuilt/tool_node.py",
+          "registration_note": "being registered in unsupported.REGISTRY at generation time"
+        }
+      ]
+    },
+    {
+      "id": "linux-worker-compute",
+      "label": "R3",
+      "capability": "general Python via worker profiles in a LinuxSandboxExecutor worker with the Lean receipt checker selected",
+      "status": "supported",
+      "status_reason": "The current grant-v3 Lean audit passes with current source identities. A fresh 150-trial Pandas cohort exercises the exact audited binary and records seven worker plus five application source identities; a separate 3/3 native record binds eight route/test sources. Runtime records are observations, the host-route check is a regression guard, and the finite Lean model does not prove its listed Python/compiler/decoder/OS premises.",
+      "pending_checks": [],
+      "execution_route": "isolated-worker:linux-sandbox+lean-receipt-checker",
+      "entry_points": [
+        "langgraph.prebuilt.tool_node.ToolNode._func",
+        "langgraph.prebuilt.tool_node.ToolNode._afunc",
+        "langgraph.prebuilt.security.linux.LinuxSandboxExecutor.invoke"
+      ],
+      "enforcement_points": [
+        "langgraph.prebuilt.security.host_boundary.make_authorized_host_router",
+        "langgraph.prebuilt.security.host_boundary.AuthorizedHostRouter",
+        "langgraph.prebuilt.security.host_router.HostRouter.invoke",
+        "langgraph.prebuilt.security.host_boundary.HostExecutorBoundary.invoke",
+        "langgraph.prebuilt.security.linux.LinuxSandboxExecutor.invoke",
+        "langgraph.prebuilt.security.enforcement (EnforcementCoordinator: _assigned_adapter_plans, _validate_activation, validate_receipt)",
+        "langgraph.prebuilt.security.lean_grant (bounded native grant admission before obligation compilation)",
+        "langgraph.prebuilt.security.lean_lifecycle.LeanLifecycleChecker (certificate required before GO and before result release; sealed memfd execution of the pinned binary)",
+        "langgraph.prebuilt.security.linux._LinuxBubblewrapAdapter.activate",
+        "langgraph.prebuilt.security.linux._verified_artifact_fd",
+        "langgraph.prebuilt.security.linux._assess_limit_obligation",
+        "langgraph.prebuilt.security._linux_worker.main (_apply_limits, _apply_landlock, _apply_seccomp before _invoke)"
+      ],
+      "sources": [
+        "libs/prebuilt/langgraph/prebuilt/security/linux.py",
+        "libs/prebuilt/langgraph/prebuilt/security/_linux_worker.py",
+        "libs/prebuilt/langgraph/prebuilt/security/lean_lifecycle.py",
+        "libs/prebuilt/langgraph/prebuilt/security/lean_grant.py",
+        "libs/prebuilt/langgraph/prebuilt/security/enforcement.py",
+        "libs/prebuilt/langgraph/prebuilt/security/host_boundary.py",
+        "proofs/worker-route/WorkerRoute.lean",
+        "proofs/worker-route/ReceiptCoverage.lean",
+        "proofs/worker-route/GrantCoverage.lean",
+        "proofs/worker-route/Main.lean",
+        "proofs/worker-route/check.py"
+      ],
+      "documentation": [
+        "docs/security/lean-worker-route.md",
+        "docs/security/lean-receipt-composition-plan.md",
+        "docs/security/host-routing-completeness.md",
+        "proofs/worker-route/README.md"
+      ],
+      "applications": [
+        {
+          "id": "pandas-c-generated-computation",
+          "cohort": "pandas",
+          "configuration": "C",
+          "maps_to_route": "linux-worker-compute",
+          "evidence": "eval/campaigns/remediation-v2/raw/pandas-grant-v3-full-v1/verification.json",
+          "result": "C 50/50 (A 50/50, B 50/50) against audited grant-v3 binary 6097be9b7b84639959c7a0b9de31c79f23486e9f01bf1b6de575dfab25c7cb08",
+          "note": "Utility/positive-execution evidence only (scope field disclaims any security claim). The record binds seven current worker sources and five current Pandas route/harness sources. The outer vendor graphs are compiled without SecurityConfig and the added ToolNode graph does not set closed_admission=True."
+        },
+        {
+          "id": "pandas-c-generated-computation",
+          "cohort": "pandas",
+          "configuration": "C",
+          "maps_to_route": "linux-worker-compute",
+          "evidence": "eval/campaigns/remediation-v2/raw/pandas-v19-full/verification.json",
+          "result": "C 50/50 (A 50/50, B 50/50) without the Lean checker",
+          "note": "Utility evidence only; pre-dates the Lean receipt checker, so it does not exercise this route's required checker."
+        },
+        {
+          "id": "pandas-c-generated-computation",
+          "cohort": "pandas",
+          "configuration": "C",
+          "maps_to_route": "linux-worker-compute",
+          "evidence": "eval/campaigns/remaining-v1/raw/pandas-full/trials.jsonl",
+          "result": "historical C 29/50, 0 retries",
+          "note": "Historical; retained for the denominator only."
+        }
+      ],
+      "scope_note": "Generated computation inside the worker only. The pandas application's model calls, dataset loading, checkpointer/state persistence, human-review continuations, Streamlit UI/session storage and outer-graph publication are outside this route; plain outer-graph node bodies are refused under closed admission, but the recorded pandas graphs do not set closed_admission=True. Worker-private /tmp is intentionally writable and no write-secrecy claim is made. Network confinement is an OS/seccomp premise rather than a registered admission refusal; the application-specific network probe remains absent. The Lean checker is required on this route; LinuxSandboxExecutor without lifecycle_checker is the earlier route and is not this route.",
+      "obligations": {
+        "SGV901": {
+          "applicable": true,
+          "required_evidence": [
+            "admission-surface",
+            "router-source-proof",
+            "gate:admission:unsupported_node_body",
+            "gate:admission:unsupported_branch",
+            "gate:admission:descriptor_changed",
+            "gate:admission:unsupported_async",
+            "gate:admission:closed_admission_required",
+            "operation-catalog"
+          ],
+          "reason": "Each compute call reaches the worker only through an admitted native_deployment/tool_node descriptor, MediatedNode._invoke_admitted, AuthorizedHostRouter and HostRouter.invoke; closed admission refuses every other node body."
+        },
+        "SGV902": {
+          "applicable": true,
+          "required_evidence": [
+            "router-source-proof",
+            "admission-surface",
+            "lean-audit:proofs/worker-route"
+          ],
+          "reason": "HostExecutorBoundary must carry principal, bound call and grant to the executor unchanged; ReceiptCoverage.lean/GrantCoverage.lean model the grant-derived obligation, plan, receipt and evidence composition the executor projects (finite model only)."
+        },
+        "SGV903": {
+          "applicable": true,
+          "required_evidence": [
+            "lean-audit:proofs/worker-route",
+            "runtime-evidence:eval/campaigns/remediation-v2/raw/grant-integration-v1/native-runtime-evidence.json",
+            "runtime-evidence:eval/campaigns/remediation-v2/raw/pandas-grant-v3-full-v1/verification.json",
+            "host-route:linux-sandbox"
+          ],
+          "reason": "GO and result release require a Lean-checked certificate over the projected grant, obligations, plan and receipt. The current native 3/3 record and Pandas grant-v3 150/150 cohort bind current source identities and the exact audited binary; they remain labelled observations, not proofs. The structural review guards lowering, activation order, channel identity and cleanup lifetime without proving them.",
+          "related_evidence": [
+            "eval/campaigns/remediation-v2/raw/receipt-integration-v1/final-checks.json (integration summary; no outcome field, so not a runtime-evidence check)",
+            "eval/campaigns/remediation-v2/raw/receipt-integration-v1/source-capture.json (457 source identities at the receipt-v2 run; linux.py, placement.py and lean_lifecycle.py have since changed)",
+            "eval/campaigns/remediation-v2/raw/checks/claude-lean-audit-v1/report.json (failed audit of the current grant-v3 sources)",
+            "eval/campaigns/remediation-v2/raw/checks/receipt-bridge-v2/final-v1.json (180 bridge tests against the v2 executable)",
+            "eval/campaigns/remediation-v2/raw/receipt-native-diagnostic-v1/report.json (3 native tests)"
+          ]
+        }
+      },
+      "premises": [
+        "Python source call placement and all native effect paths correspond to the model (codex-grant-lean-audit-v2 unproved_obligations).",
+        "Certificate fields faithfully project the negotiated Python plan and receipt; adapter signatures, freshness, expiry, support claims, waiver authorization and complete obligation generation are established outside the finite composition model.",
+        "Every authorization, identity, support, activation, result, cleanup and cancellation fact is truthful, complete and ordered.",
+        "JSON encoding/decoding preserves the model inputs and rejects ambiguous or unsupported inputs; neither identifier encoding nor the decoder has a refinement proof.",
+        "The Lean compiler, C toolchain, binary loader and deployed executable preserve the checked definitions; the binary hash identifies bytes only.",
+        "The operating system, namespace, seccomp, LSM and lifetime mechanisms enforce the claimed native properties.",
+        "Linux namespaces, bind mounts, PR_SET_PDEATHSIG, pid-namespace teardown, seccomp-bpf, rlimits and any LSM/MAC behave as documented (host_verification PREMISES).",
+        "bubblewrap honors --unshare-all, --die-with-parent, --cap-drop ALL, --clearenv, --*-bind-fd and --json-status-fd; libseccomp encodes rules.",
+        "The digest-pinned interpreter in -I -S mode imports only trusted stdlib modules before the worker shim's main runs.",
+        "Policy evaluation (DAC/MAC) produced the authorized grant; the structural checker covers lowering and execution, not authorization.",
+        "Original worker PID/start-time observation and stable procfs remain premises for cleanup; openat2 resource descriptors do not freeze file contents, discover hardlink aliases or prove namespace stability (lean-worker-route.md).",
+        "Lean's own leanchecker replay is not an independent verifier (independent_checker_verified false)."
+      ],
+      "exclusions": [
+        {
+          "feature": "model requests (routing and code generation) issued from a plain outer-graph node body",
+          "gate_code": "admission:unsupported_node_body",
+          "enforced_at": "langgraph.prebuilt.security.admission.admit_node via config._closed_admission_inventory",
+          "condition": "SecurityConfig(closed_admission=True) at compile; the recorded pandas graphs (eval/apps/pandas/policy/narrow-v3.json, eval/apps/pandas/integration.py) do not set it, so the refusal is inherent to the route, not observed in that application",
+          "application": "pandas-c-generated-computation",
+          "evidence": "libs/prebuilt/langgraph/prebuilt/security/admission.py",
+          "remapped_from": "ungated (v1)"
+        },
+        {
+          "feature": "adapter input loading of the dataset into graph state from a plain node body",
+          "gate_code": "admission:unsupported_node_body",
+          "enforced_at": "langgraph.prebuilt.security.admission.admit_node via config._closed_admission_inventory",
+          "condition": "SecurityConfig(closed_admission=True) at compile; not set by the recorded pandas graphs",
+          "application": "pandas-c-generated-computation",
+          "evidence": "libs/prebuilt/langgraph/prebuilt/security/admission.py",
+          "remapped_from": "ungated (v1)"
+        },
+        {
+          "feature": "final output publication (output.json, figures, state writes) performed inside a plain outer-graph node body",
+          "gate_code": "admission:unsupported_node_body",
+          "enforced_at": "langgraph.prebuilt.security.admission.admit_node via config._closed_admission_inventory",
+          "condition": "SecurityConfig(closed_admission=True) at compile; not set by the recorded pandas graphs. Publication through OutputMediator or raw debug/state/event APIs is route R4, not this exclusion",
+          "application": "pandas-c-generated-computation",
+          "evidence": "libs/prebuilt/langgraph/prebuilt/security/admission.py",
+          "remapped_from": "ungated (v1)"
+        },
+        {
+          "feature": "node body that is not an admitted native_deployment/tool_node descriptor",
+          "gate_code": "admission:unsupported_node_body",
+          "enforced_at": "langgraph.prebuilt.security.admission.admit_node",
+          "condition": "SecurityConfig(closed_admission=True) at compile",
+          "evidence": "libs/prebuilt/langgraph/prebuilt/security/admission.py"
+        },
+        {
+          "feature": "captured executor, runtime roots, LinuxToolSpec records or artifact digest drift after admission",
+          "gate_code": "admission:descriptor_changed",
+          "enforced_at": "langgraph.prebuilt.security.admission.recheck",
+          "evidence": "libs/prebuilt/langgraph/prebuilt/security/admission.py"
+        },
+        {
+          "feature": "conditional branch that is not the pinned framework branch",
+          "gate_code": "admission:unsupported_branch",
+          "enforced_at": "langgraph.prebuilt.security.admission.admit_branch",
+          "evidence": "libs/prebuilt/langgraph/prebuilt/security/admission.py"
+        },
+        {
+          "feature": "async-only node body",
+          "gate_code": "admission:unsupported_async",
+          "enforced_at": "langgraph.prebuilt.security.admission.admit_node",
+          "evidence": "libs/prebuilt/langgraph/prebuilt/security/admission.py"
+        },
+        {
+          "feature": "secured graph with branches compiled without closed admission under an installed RuntimeMAC",
+          "gate_code": "admission:closed_admission_required",
+          "enforced_at": "langgraph.prebuilt.security.mac.RuntimeMAC.check",
+          "evidence": "libs/prebuilt/langgraph/prebuilt/security/mac.py"
+        },
+        {
+          "feature": "required obligation with no supporting adapter (e.g. directory grant needing a broker)",
+          "gate_code": "adapter_rule_unsupported",
+          "gate_code_prefix": true,
+          "gate_code_form": "adapter_rule_unsupported:<obligation_id>",
+          "enforced_at": "langgraph.prebuilt.security.enforcement (adapter selection)",
+          "evidence": "libs/prebuilt/langgraph/prebuilt/security/enforcement.py"
+        },
+        {
+          "feature": "grant rule the Linux host cannot lower",
+          "gate_code": "host:unsupported_rule",
+          "gate_code_prefix": true,
+          "gate_code_form": "host:unsupported_rule:<rule>",
+          "enforced_at": "langgraph.prebuilt.security.landlock",
+          "evidence": "libs/prebuilt/langgraph/prebuilt/security/landlock.py"
+        },
+        {
+          "feature": "special resource (device, socket, procfs path) requested as a filesystem grant",
+          "gate_code": "host:special_resource_unsupported",
+          "enforced_at": "langgraph.prebuilt.security.linux",
+          "evidence": "libs/prebuilt/langgraph/prebuilt/security/linux.py"
+        },
+        {
+          "feature": "process/thread creation from generated code (pids != 1): the @minimal seccomp adapter assesses the limit obligation as unsupported (assessment label minimal_seccomp_supports_pids_one_only) and the coordinator refuses the obligation",
+          "gate_code": "adapter_rule_unsupported",
+          "gate_code_prefix": true,
+          "gate_code_form": "adapter_rule_unsupported:<obligation_id>",
+          "enforced_at": "langgraph.prebuilt.security.linux._assess_limit_obligation via langgraph.prebuilt.security.enforcement (adapter selection)",
+          "evidence": "libs/prebuilt/langgraph/prebuilt/security/linux.py",
+          "note": "minimal_seccomp_supports_pids_one_only is an assessment label, not a refusal code; the refusal is the registered adapter_rule_unsupported: prefix"
+        },
+        {
+          "feature": "tool artifact substituted after manifest pinning",
+          "gate_code": "host:artifact_changed",
+          "enforced_at": "langgraph.prebuilt.security.linux._verified_artifact_fd",
+          "evidence": "libs/prebuilt/langgraph/prebuilt/security/linux.py",
+          "registration_note": "being registered in unsupported.REGISTRY at generation time"
+        }
+      ],
+      "unregistered_refusals": [
+        {
+          "feature": "ainvoke on the Lean-selected synchronous route",
+          "code": "host:lean_async_route_unavailable",
+          "enforced_at": "langgraph.prebuilt.security.linux.LinuxSandboxExecutor.ainvoke",
+          "evidence": "libs/prebuilt/langgraph/prebuilt/security/linux.py",
+          "note": "literal code raised in source but absent from unsupported.REGISTRY/PREFIXES"
+        },
+        {
+          "feature": "direct LinuxSandboxExecutor dispatch under an installed RuntimeMAC",
+          "code": "mac:tool_requires_object_authorization",
+          "enforced_at": "langgraph.prebuilt.security.mac.RuntimeMAC.check",
+          "evidence": "libs/prebuilt/langgraph/prebuilt/security/mac.py",
+          "note": "literal code raised in source but absent from unsupported.REGISTRY/PREFIXES"
+        },
+        {
+          "feature": "network/services broker unavailable for a lowered rule",
+          "code": "broker:unavailable",
+          "enforced_at": "langgraph.prebuilt.security.landlock",
+          "evidence": "libs/prebuilt/langgraph/prebuilt/security/landlock.py",
+          "note": "literal code raised in source but absent from unsupported.REGISTRY/PREFIXES"
+        }
+      ],
+      "decision": "Advisor decision 2026-10-27 completed: grant-v3 now passes make security-verify-lean on the current tree, and fresh source-bound native and Pandas C records replace the receipt-v2 runtime checks. Route promoted only after those checks passed."
+    },
+    {
+      "id": "output-publication",
+      "label": "R4",
+      "capability": "publication and streaming through one mediated interface",
+      "status": "supported",
+      "status_reason": "Current recomputation passes the admission, router, output-validator, host-output, and output-mediator correspondence checks for this declared publication route. Raw publication APIs outside this route and the 51 unresolved whole-system publication entries remain outside the supported claim.",
+      "pending_checks": [],
+      "execution_route": "trusted-runtime:output-mediator",
+      "entry_points": [
+        "langgraph.prebuilt.security.placement.OutputMediator.__call__",
+        "langgraph.prebuilt.security.placement.OutputMediator.acall",
+        "langgraph.prebuilt.security.placement.OutputMediator.stream",
+        "langgraph.prebuilt.security.placement.OutputMediator.astream",
+        "langgraph.prebuilt.security.placement.OutputMediator.callback",
+        "langgraph.prebuilt.security.placement.OutputMediator.acallback",
+        "langgraph.prebuilt.security.placement.OutputMediator._emit",
+        "langgraph.prebuilt.security.placement.OutputMediator._aemit"
+      ],
+      "enforcement_points": [
+        "langgraph.prebuilt.security.placement._require_output_host",
+        "langgraph.prebuilt.security.placement.OutputMediator._emit",
+        "langgraph.prebuilt.security.placement.OutputMediator._aemit",
+        "langgraph.prebuilt.security.host_router.HostRouter.output_emit",
+        "langgraph.prebuilt.security.host_router.HostRouter.aoutput_emit",
+        "langgraph.prebuilt.security.object_manager.ObjectManagerHost.dispatch",
+        "langgraph.prebuilt.security.object_manager.ObjectManagerHost.adispatch",
+        "langgraph.prebuilt.security.output_data.validate_output_request"
+      ],
+      "sources": [
+        "libs/prebuilt/langgraph/prebuilt/security/placement.py",
+        "libs/prebuilt/langgraph/prebuilt/security/host_router.py",
+        "libs/prebuilt/langgraph/prebuilt/security/object_manager.py",
+        "libs/prebuilt/langgraph/prebuilt/security/output_data.py",
+        "libs/prebuilt/langgraph/prebuilt/security/objects.py",
+        "libs/prebuilt/langgraph/prebuilt/security/output_verification.py",
+        "libs/prebuilt/langgraph/prebuilt/security/output_data_verification.py",
+        "libs/prebuilt/langgraph/prebuilt/security/publication_verification.py"
+      ],
+      "documentation": [
+        "docs/security/source-verification.md",
+        "docs/security/host-routing-completeness.md"
+      ],
+      "applications": [],
+      "scope_note": "No application cohort publishes through OutputMediator. publication_verification counts 60 publication entries, 9 verified and 51 unresolved (eval/campaigns/remediation-v2/raw/receipt-integration-v1/final-checks.json strict_summary.publication_analysis).",
+      "obligations": {
+        "SGV901": {
+          "applicable": true,
+          "required_evidence": [
+            "admission-surface",
+            "router-source-proof",
+            "gate:admission:unsupported_node_body",
+            "gate:admission:unsupported_branch",
+            "gate:admission:descriptor_changed",
+            "gate:admission:unsupported_async",
+            "gate:admission:closed_admission_required",
+            "operation-catalog"
+          ],
+          "reason": "Publication placement under closed admission: node bodies that would publish directly are refused; mediated publication crosses HostRouter.output_emit whose return protocol is the router source proof."
+        },
+        "SGV902": {
+          "applicable": true,
+          "required_evidence": [
+            "router-source-proof",
+            "host-output-correspondence",
+            "output-validator-contract",
+            "output-mediator-correspondence"
+          ],
+          "reason": "Data/label correspondence is the chain OutputMediator._emit -> HostRouter.output_emit -> ObjectManagerHost.dispatch with validate_output_request: the host returns the identical content with confidentiality within clearance, the validator's primitive contracts hold, and the mediator returns exactly the rebuilt dispatched result."
+        },
+        "SGV903": {
+          "applicable": false,
+          "required_evidence": [],
+          "reason": "no host adapter on this route"
+        }
+      },
+      "premises": [
+        "The effective request is an exact OutputRequest with an exact SecurityLabels value; confidentiality and clearance are exact native frozensets of inert strings. Annotations and constructors alone do not prove these premises (output_verification entry_premises).",
+        "Native dataclass/slot/classifier/frozenset semantics apply. Checked source definitions, annotation/type names, imported names, builtins and method bindings match runtime and remain unchanged; instance/class method shadowing is excluded by separate admission. Module/class initialization, assignment RHS evaluation, imports and constructors are not proved by this component and must separately establish these bindings.",
+        "The receiver is an exact ObjectManagerHost with native attribute access and no instance method shadowing. Its _lock is a native reentrant lock with no user callbacks and no exception suppression. Request fields and all relevant bindings remain stable across the call.",
+        "CPython semantics for exact type identity, native scalar/container operations, member/getset descriptors, generators and exception handling (output_data_verification _VALIDATOR_PREMISES).",
+        "Initialization and runtime binding: every derived module inventory holds the value of its source initializer, imported names select the named classes, and none is rebound afterwards (initialization_proved and runtime_binding_proved remain false).",
+        "Field stability: no other thread mutates the request, its labels or any traversed container during validation.",
+        "Process-global events are outside this model: cyclic garbage collection of unrelated objects (finalizers, weakref callbacks), signal handlers and asynchronous exceptions can run at allocation or bytecode boundaries.",
+        "Refusal tracebacks are not sanitized: literal refusal arguments carry no candidate data, but traceback frames reference the candidate, so callers must not publish them.",
+        "Remaining composition (output_verification): authorization of the effective request for its actual principal, destination and call context; admission of payload data/capabilities and label provenance; caller publication and pending-approval/continuation handling; every other request kind; complete placement and host isolation/lifetime.",
+        "All framework publication APIs (stream events, legacy event/log iterators, callbacks, current-state and history inspection) route through OutputMediator. This is enforced by the SGV109/SGV110 source-pattern regressions and the bounded before/after captures (raw/legacy-event-regression, raw/callback-regression, raw/state-publication-regression); the generic publication analysis still leaves 51/60 entries unresolved, so this is a regression-backed premise, not a proof."
+      ],
+      "exclusions": [
+        {
+          "feature": "non-exact OutputMediator subclass",
+          "gate_code": "output:unsupported_mediator",
+          "enforced_at": "langgraph.prebuilt.security.placement.OutputMediator",
+          "evidence": "libs/prebuilt/langgraph/prebuilt/security/placement.py"
+        },
+        {
+          "feature": "substituted router",
+          "gate_code": "output:unsupported_router",
+          "enforced_at": "langgraph.prebuilt.security.placement._require_output_host",
+          "evidence": "libs/prebuilt/langgraph/prebuilt/security/placement.py"
+        },
+        {
+          "feature": "substituted or non-exact ObjectManagerHost",
+          "gate_code": "output:unsupported_host",
+          "enforced_at": "langgraph.prebuilt.security.placement._require_output_host",
+          "evidence": "libs/prebuilt/langgraph/prebuilt/security/placement.py"
+        },
+        {
+          "feature": "output payload above declared labels",
+          "gate_code": "output_data:payload_confidentiality",
+          "enforced_at": "langgraph.prebuilt.security.output_data.validate_output_request",
+          "evidence": "libs/prebuilt/langgraph/prebuilt/security/output_data.py"
+        },
+        {
+          "feature": "low-integrity payload labeled trusted",
+          "gate_code": "output_data:payload_integrity",
+          "enforced_at": "langgraph.prebuilt.security.output_data.validate_output_request",
+          "evidence": "libs/prebuilt/langgraph/prebuilt/security/output_data.py"
+        },
+        {
+          "feature": "output outside the bounded native projection (budget, depth, cycle, non-native containers, unlabeled values, unsupported types)",
+          "gate_code": "output_data:unsupported_type",
+          "enforced_at": "langgraph.prebuilt.security.output_data.validate_output_request",
+          "evidence": "libs/prebuilt/langgraph/prebuilt/security/output_data.py",
+          "note": "representative of the registered output_data:* family (budget, depth, cycle, string_required, native_dictionary_required, string_key_required, native_string_set_required, labels_required, nonfinite_float, interrupt_schema, uuid, record_shape, model_extra, model_private, live_exception, unsupported_type, invalid_layout, request_required, state_shape, state_key, state_value)"
+        },
+        {
+          "feature": "publication request that is not an exact OutputRequest",
+          "gate_code": "output_data:request_required",
+          "enforced_at": "langgraph.prebuilt.security.output_data.validate_output_request",
+          "evidence": "libs/prebuilt/langgraph/prebuilt/security/output_data.py"
+        },
+        {
+          "feature": "unknown or type-erroneous output refusal surfaced by the host",
+          "gate_code": "unsupported:output:unknown",
+          "enforced_at": "langgraph.prebuilt.security.object_manager.ObjectManagerHost.dispatch",
+          "evidence": "libs/prebuilt/langgraph/prebuilt/security/object_manager.py"
+        }
+      ],
+      "unregistered_refusals": [
+        {
+          "feature": "stream item without framework envelope",
+          "code": "output:missing_framework_envelope",
+          "enforced_at": "langgraph.prebuilt.security.placement.OutputMediator.stream / astream",
+          "evidence": "libs/prebuilt/langgraph/prebuilt/security/placement.py",
+          "note": "literal code raised in source but absent from unsupported.REGISTRY/PREFIXES; carried in v1 as a gated exclusion, demoted here"
+        }
+      ],
+      "decision": "2026-10-27: promoted after output-mediator-correspondence was implemented, fixed for six review-found holes and passed a second adversarial review with no holes. Raw publication APIs remain a regression-backed premise (SGV109/SGV110)."
+    },
+    {
+      "id": "sql-bounded-select",
+      "capability": "databases via narrow brokers",
+      "status": "unsupported",
+      "status_reason": "Mediator lives in evaluation code (eval/remaining/bounded_sql.py); production sqlite_record_mediator covers records(key,value) only; no production entry point, no verification.json, no check id can be named for SGV902/SGV903.",
+      "execution_route": "mediated-broker:evaluation-bounded-sql",
+      "entry_points": [],
+      "enforcement_points": [
+        "eval/remaining/bounded_sql.py (evaluation harness, not production)"
+      ],
+      "applications": [
+        {
+          "cohort": "sql",
+          "configuration": "C",
+          "evidence": "eval/campaigns/remaining-v1/raw/sql-full/trials.jsonl",
+          "result": "A/B/C 50/50; canary in model input C 0/50"
+        },
+        {
+          "cohort": "sql",
+          "configuration": "C",
+          "evidence": "eval/campaigns/remaining-v1/raw/sql-adversarial-v2/trials.jsonl",
+          "result": "160/160 refusals, 20/20 allowed"
+        }
+      ],
+      "scope_note": "Unsupported; retained for the cohort denominator.",
+      "obligations": {
+        "SGV901": {
+          "applicable": true,
+          "required_evidence": [
+            "router-source-proof"
+          ],
+          "reason": "Required for promotion; no production route exists to bind further checks to."
+        },
+        "SGV902": {
+          "applicable": false,
+          "required_evidence": [],
+          "reason": "No production mediator; harness-only cohort (eval/remaining/bounded_sql.py). No production adapter to verify, so no check id can be named."
+        },
+        "SGV903": {
+          "applicable": false,
+          "required_evidence": [],
+          "reason": "No production mediator; harness-only cohort. No production host route, so no check id can be named."
+        }
+      },
+      "exclusions": [
+        {
+          "feature": "SQL model requests, metadata sampling in A/B, outer-graph publication",
+          "gate_code": null,
+          "enforced_at": "none",
+          "evidence": "eval/scope/cohort-inventory-draft.md"
+        },
+        {
+          "feature": "SQL model requests, metadata sampling in A/B, outer-graph publication",
+          "gate_code": null,
+          "enforced_at": "none",
+          "evidence": "eval/scope/cohort-inventory-draft.md",
+          "reason_ungated": "unsupported route with no production mediator",
+          "recorded_as": "ungated capability of an unsupported route (does not block supported routes; blocks promotion of this route)"
+        }
+      ]
+    },
+    {
+      "id": "model-invoke-hook",
+      "label": "R5",
+      "capability": "LLM call as a modeled runtime operation with a policy hook: an admitted MODEL_CALL node runs HostRouter.model_invoke before the pinned model call, so policy grants or withholds the capability to call the LLM",
+      "status": "supported",
+      "status_basis": "Promoted 2026-10-27 after the MODEL_CALL admission kind landed: admission-surface proves the hook runs before the pinned model call; test_model_hook.py shows allow runs, deny never invokes the model, hidden LLM calls and swaps are refused.",
+      "pending_checks": [],
+      "execution_route": "coordinator:mediated-model-node",
+      "entry_points": [
+        "langgraph.prebuilt.security.placement.MediatedNode.invoke",
+        "langgraph.prebuilt.security.placement.MediatedNode.ainvoke",
+        "langgraph.prebuilt.security.host_router.HostRouter.model_invoke",
+        "langgraph.prebuilt.security.host_router.HostRouter.amodel_invoke"
+      ],
+      "enforcement_points": [
+        "langgraph.prebuilt.security.admission.admit_node (kind model_call, exact allowlisted classes)",
+        "langgraph.prebuilt.security.placement.MediatedNode._model_input / _amodel_input (hook before the call)",
+        "langgraph.prebuilt.security.mac.RuntimeMAC (compiled-node binding)"
+      ],
+      "scope_note": "Advisor decision 2026-10-27: the runtime provides the hook point and capability policy only. It does not perform the call or guarantee what content the model receives; future guards attach at this hook. LLM calls made any other way (inside ordinary function nodes) are refused under closed admission.",
+      "obligations": {
+        "SGV901": {
+          "applicable": true,
+          "required_evidence": [
+            "admission-surface",
+            "router-source-proof",
+            "gate:admission:unsupported_node_body",
+            "gate:admission:unsupported_branch",
+            "gate:admission:descriptor_changed",
+            "gate:admission:unsupported_async",
+            "gate:admission:closed_admission_required",
+            "operation-catalog"
+          ],
+          "reason": "Every LLM call on the admitted surface is an admitted MODEL_CALL node whose hook runs before the call; other bodies are refused."
+        },
+        "SGV902": {
+          "applicable": true,
+          "required_evidence": [
+            "router-source-proof",
+            "admission-surface"
+          ],
+          "reason": "The hook routes the exact ModelInvocationRequest through the proved HostRouter; a non-allow decision raises before the pinned model call."
+        },
+        "SGV903": {
+          "applicable": false,
+          "required_evidence": [],
+          "reason": "no host adapter on this route; the LLM endpoint is external and content guarantees are out of scope by decision"
+        }
+      },
+      "premises": [
+        "Threat model (docs/security/threat-model.md): controller runtime, admission code and the allowlisted model client classes are trusted.",
+        "No guarantee about the content sent to or returned by the LLM; only the capability decision is enforced.",
+        "The model call runs in the coordinator process, not a confined host (recorded by admission-surface)."
+      ],
+      "exclusions": [
+        {
+          "feature": "LLM call inside an ordinary function node",
+          "gate_code": "admission:unsupported_node_body",
+          "enforced_at": "langgraph.prebuilt.security.admission.admit_node",
+          "evidence": "tests/security/test_model_hook.py"
+        }
+      ]
+    },
+    {
+      "id": "dataset-read",
+      "label": "R6",
+      "capability": "runtime operation dataset_read: pinned, policy-checked read of an operator-registered dataset",
+      "status": "supported",
+      "status_basis": "Recomputed dataset-read check passes; refusal codes registered.",
+      "pending_checks": [],
+      "execution_route": "trusted-runtime:dataset-operation",
+      "entry_points": [
+        "langgraph.prebuilt.security.dataset_operation.read_dataset",
+        "langgraph.prebuilt.security.dataset_operation.aread_dataset"
+      ],
+      "enforcement_points": [
+        "dataset_operation._require_allow (exact unconstrained allow before any open)",
+        "landlock.open_path_descriptor(no_symlinks=True)",
+        "digest check on the returned bytes"
+      ],
+      "scope_note": "Pandas catalog operation (D8/D10). The caller is trusted application code (D11); the authorize callable is the runtime policy hook.",
+      "obligations": {
+        "SGV901": {
+          "applicable": true,
+          "required_evidence": [
+            "dataset-read",
+            "gate:dataset:denied",
+            "gate:dataset:unknown",
+            "operation-catalog"
+          ],
+          "reason": "Every dataset read passes the policy allow before any file is opened; unknown ids refuse."
+        },
+        "SGV902": {
+          "applicable": true,
+          "required_evidence": [
+            "dataset-read"
+          ],
+          "reason": "The bytes returned are exactly the pinned path's bytes whose digest matched the pin; no caller-supplied path exists."
+        },
+        "SGV903": {
+          "applicable": false,
+          "required_evidence": [],
+          "reason": "no host adapter on this route"
+        }
+      },
+      "premises": [
+        "Kernel openat2/RESOLVE_NO_SYMLINKS semantics; operator-configured registry; trusted caller (D11)."
+      ],
+      "exclusions": [
+        {
+          "feature": "caller-supplied dataset paths",
+          "gate_code": "dataset:unknown",
+          "enforced_at": "dataset_operation._prepare",
+          "evidence": "tests/security/test_dataset_operation.py"
+        }
+      ]
+    }
+  ],
+  "remapped_from_v1": {
+    "pandas-c-generated-computation": "now an application entry under routes[linux-worker-compute].applications; the route it exercised is R3",
+    "ungated_to_gated": [
+      "model requests from plain outer-graph node bodies -> admission:unsupported_node_body (R3 exclusions)",
+      "dataset loading in plain node bodies -> admission:unsupported_node_body (R3 exclusions)",
+      "final output publication inside plain node bodies -> admission:unsupported_node_body (R3 exclusions)"
+    ],
+    "kept_ungated": [
+      "worker-private /tmp writes: eval/apps/pandas/policy/mapping.csv records 'private /tmp explicitly writable' and eval/apps/pandas/policy/manifest-v19.json names no tmp restriction, so no refusal fires",
+      "network from generated code: kernel EPERM under @minimal, no refusal code, not exercised",
+      "outer-graph state/checkpointer persistence: checkpointers are in admission.not_proved; nothing refuses",
+      "human_review approval interrupts: not exercised, nothing refuses",
+      "Streamlit upload and session storage: outside any secured graph",
+      "raw debug/state/event APIs not routed through OutputMediator: 51/60 publication entries unresolved",
+      "sql model requests, A/B metadata sampling and outer-graph publication: unsupported route, no production mediator"
+    ],
+    "gated_to_unregistered": [
+      "output:missing_framework_envelope (R4): literal code present in source but not in unsupported.REGISTRY/PREFIXES; listed under unregistered_refusals so the verifier does not count it as a gate"
+    ],
+    "gate_code_corrections": [
+      "minimal_seccomp_supports_pids_one_only (v1 gate for pids != 1) is an assessment label in linux._assess_limit_obligation, not a refusal code; the exclusion now cites the registered prefix adapter_rule_unsupported:<obligation_id>",
+      "host:missing_security_context, host:missing_router and host:artifact_changed are kept as gate codes; the coordinator is registering them in unsupported.REGISTRY at generation time"
+    ],
+    "removed_check_ids": [
+      "publication-entries:<qualname> (v1): not a verifier check id; the publication inventory is reported by publication_verification but is not a route gate"
+    ]
+  },
+  "ungated_exclusions": [],
+  "unregistered_refusals_summary": {
+    "meaning": "Literal refusal codes raised in production source but absent from unsupported.REGISTRY and unsupported.PREFIXES. The gate:<code> check cannot pass for them, so they are not counted as gated exclusions. Registering them is a code change outside this inventory.",
+    "being_registered_by_coordinator": [
+      "host:missing_security_context (tool_node.py)",
+      "host:missing_router (tool_node.py)",
+      "host:artifact_changed (linux.py, landlock.py)"
+    ],
+    "codes": [
+      "host:lean_async_route_unavailable (linux.py)",
+      "mac:tool_requires_object_authorization (mac.py)",
+      "output:missing_framework_envelope (placement.py)",
+      "broker:unavailable (landlock.py)",
+      "language_proof:arguments_must_be_strings (_language_sandbox.py)",
+      "manifest_consistency:async_tool_requires_ainvoke (inprocess.py)"
+    ]
+  },
+  "unsupported_capabilities": [
+    {
+      "capability": "framework records (fixed projections)",
+      "gate_code": null,
+      "enforced_at": null,
+      "evidence": "docs/security/status.md",
+      "reason": "not exercised by any supported application"
+    },
+    {
+      "capability": "async/parallel execution",
+      "gate_code": null,
+      "enforced_at": null,
+      "evidence": "docs/security/status.md",
+      "reason": "ainvoke paths exist; no application evidence; the Lean-selected Linux route refuses ainvoke (host:lean_async_route_unavailable, unregistered)",
+      "admission_note": "Under SecurityConfig(closed_admission=True) an async-only node body or a branch whose afunc is not the framework executor shim refuses with admission:unsupported_async at compile. The admitted ToolNode ainvoke path is not refused, so gate_code stays null."
+    },
+    {
+      "capability": "subagents/subgraphs/Send",
+      "gate_code": null,
+      "enforced_at": null,
+      "evidence": "docs/security/status.md",
+      "reason": "placement Partial",
+      "admission_note": "Under SecurityConfig(closed_admission=True) a nested compiled graph or subagent callable used as a node body refuses with admission:unsupported_node_body at compile. Send dispatch is not admission-gated, so gate_code stays null."
+    },
+    {
+      "capability": "memory/checkpoints",
+      "gate_code": null,
+      "enforced_at": null,
+      "evidence": "docs/security/status.md",
+      "reason": "state hooks Partial; not exercised; checkpointers in admission.not_proved"
+    },
+    {
+      "capability": "approvals bound to effective request",
+      "gate_code": null,
+      "enforced_at": null,
+      "evidence": "docs/security/status.md",
+      "reason": "router hook implemented, no application use"
+    },
+    {
+      "capability": "publication and streaming",
+      "gate_code": "output:unsupported_mediator",
+      "enforced_at": "langgraph.prebuilt.security.placement.OutputMediator",
+      "evidence": "libs/prebuilt/langgraph/prebuilt/security/placement.py",
+      "reason": "route output-publication unsupported: output-mediator-correspondence component absent; raw APIs ungated"
+    },
+    {
+      "capability": "model requests (outbound data transfer)",
+      "gate_code": null,
+      "enforced_at": null,
+      "evidence": "docs/security/status.md",
+      "reason": "model_invoke hook not placed on model nodes",
+      "admission_note": "Under SecurityConfig(closed_admission=True) no model-calling node body is admitted (admission:unsupported_node_body at compile). That refuses the body; it does not mediate model requests, so gate_code stays null."
+    },
+    {
+      "capability": "network/services via brokers",
+      "gate_code": null,
+      "enforced_at": "langgraph.prebuilt.security.landlock",
+      "evidence": "libs/prebuilt/langgraph/prebuilt/security/landlock.py",
+      "reason": "endpoint scoping Phase two; the literal broker:unavailable code is unregistered"
+    },
+    {
+      "capability": "databases via narrow brokers",
+      "gate_code": null,
+      "enforced_at": null,
+      "evidence": "eval/remaining/bounded_sql.py",
+      "reason": "only evaluation mediator"
+    },
+    {
+      "capability": "general shell/subprocess",
+      "gate_code": "adapter_rule_unsupported",
+      "gate_code_prefix": true,
+      "enforced_at": "langgraph.prebuilt.security.linux._assess_limit_obligation via langgraph.prebuilt.security.enforcement (adapter selection)",
+      "evidence": "libs/prebuilt/langgraph/prebuilt/security/linux.py",
+      "reason": "@minimal forbids process creation; the pids limit obligation is assessed unsupported (label minimal_seccomp_supports_pids_one_only) and refused with the adapter_rule_unsupported: prefix"
+    },
+    {
+      "capability": "MCP with declared subset",
+      "gate_code": null,
+      "enforced_at": null,
+      "evidence": "libs/prebuilt/langgraph/prebuilt/security/mcp_proxy.py",
+      "reason": "stdio-only proxy; no application evidence"
+    },
+    {
+      "capability": "app:sql",
+      "gate_code": null,
+      "enforced_at": null,
+      "evidence": "eval/campaigns/remaining-v1/raw/sql-full/trials.jsonl",
+      "reason": "bounded mediator is evaluation code"
+    },
+    {
+      "capability": "app:notebook",
+      "gate_code": null,
+      "enforced_at": null,
+      "evidence": "eval/campaigns/remaining-v1/raw/notebook-disposition/trials.jsonl",
+      "reason": "C refused at evaluation preflight 50/50"
+    },
+    {
+      "capability": "app:email",
+      "gate_code": null,
+      "enforced_at": null,
+      "evidence": "eval/apps/email/intake.json",
+      "reason": "no runs; install failed"
+    },
+    {
+      "capability": "app:research",
+      "gate_code": null,
+      "enforced_at": null,
+      "evidence": "eval/apps/research/intake.json",
+      "reason": "no runs"
+    },
+    {
+      "capability": "app:coding",
+      "gate_code": null,
+      "enforced_at": null,
+      "evidence": "eval/apps/coding/intake.json",
+      "reason": "no runs; needs subprocess worker profile"
+    },
+    {
+      "capability": "app:newspaper",
+      "gate_code": null,
+      "enforced_at": null,
+      "evidence": "eval/apps/newspaper/intake.json",
+      "reason": "no runs"
+    },
+    {
+      "capability": "app:finance",
+      "gate_code": null,
+      "enforced_at": null,
+      "evidence": "eval/apps/finance/intake.json",
+      "reason": "no runs"
+    }
+  ],
+  "admission": {
+    "status": "opt-in",
+    "route_independent": true,
+    "module": "langgraph.prebuilt.security.admission",
+    "documentation": "docs/security/admission.md",
+    "enabled_by": "SecurityConfig(closed_admission=True)",
+    "default": "closed_admission=False; configure_graph, placement and runtime MAC registration behave as before",
+    "scope_note": "Closed admission refuses any secured graph entry that is not an admitted execution descriptor before any compile-time candidate protocol runs in config.py. It closes the arbitrary node/branch body path within its admitted surface only. It does not prove imports, builder initialization, reducer/cache/retry callbacks, checkpointers, stream callbacks, module mutation, output publication, or compiler/decoder/OS enforcement, and it does not close SGV901 by itself. Routes R1-R4 consume it through the admission-surface check and the gate:admission:* checks; the verifier does not read this section directly.",
+    "verification_component": "langgraph.prebuilt.security.admission_verification.verify_admission_surface",
+    "evidence": [
+      "libs/prebuilt/langgraph/prebuilt/security/admission.py",
+      "libs/prebuilt/langgraph/prebuilt/security/admission_verification.py",
+      "libs/prebuilt/langgraph/prebuilt/security/config.py",
+      "libs/prebuilt/langgraph/prebuilt/security/mac.py",
+      "libs/prebuilt/tests/security/test_admission.py",
+      "libs/prebuilt/tests/security/test_admission_verification.py",
+      "eval/campaigns/remediation-v2/raw/checks/receipt-next-placement-v1/report.json"
+    ],
+    "admitted_kinds": [
+      {
+        "kind": "language_program",
+        "entry": "node",
+        "route": "language-sandbox-tool",
+        "requires": "exact ToolNode (bound ToolNode._func/_afunc, no _wrap_tool_call/_awrap_tool_call, exact dict of exact StructuredTool, no injected args) dispatched through config.host_executor = exact ObjectPolicyHostExecutor with exact CedarObjectAuthorizer (no enforcement waivers) and exact _LanguageSandboxDispatcher whose exact ManifestAdmission.validate() passes; one registered tool; every program an exact LanguageProgram whose terminal IDs equal its contract set",
+        "identity": "sha256 over tool name, program bodies, signatures, sorted terminal IDs, contracts and source digests; source_sha256 over sorted program source digests"
+      },
+      {
+        "kind": "tool_node",
+        "entry": "node",
+        "route": "tool-node-dispatch",
+        "requires": "the same exact ToolNode shape dispatched through exact ObjectPolicyHostExecutor with exact CedarObjectAuthorizer (no waivers) and exact ObjectBrokerDispatcher; every registered tool has an exact LinuxToolSpec with str entrypoint and sha256 artifact digest; runtime_roots is an exact tuple",
+        "identity": "sha256 over tool names, host broker, runtime roots and projected LinuxToolSpec records; source_sha256 over sorted artifact digests"
+      },
+      {
+        "kind": "native_deployment",
+        "entry": "node",
+        "route": "linux-worker-compute",
+        "requires": "the same exact ToolNode shape dispatched either through exact ObjectPolicyHostExecutor with exact CedarObjectAuthorizer (no waivers) and exact DockerObjectDispatcher (image, sha256 worker digest, projected LinuxToolSpec records) or directly through an exact LinuxSandboxExecutor (runtime roots, projected LinuxToolSpec records). Under an installed RuntimeMAC the direct LinuxSandboxExecutor path is still refused with mac:tool_requires_object_authorization (unregistered literal)",
+        "identity": "sha256 over host, image/worker digest or runtime roots, and projected LinuxToolSpec records; source_sha256 over sorted artifact digests"
+      },
+      {
+        "kind": "framework_branch",
+        "entry": "branch",
+        "route": "tool-node-dispatch",
+        "requires": "exact BranchSpec whose path is an exact RunnableCallable; path.func is the pinned framework function (registry: langgraph.prebuilt.tool_node:tools_condition only); path.afunc is partial(run_in_executor, None, function) with empty keywords; path.kwargs empty; explode_args False; ends None or exact dict[str, str]",
+        "identity": "sha256 over registry id, loaded-code digest and sorted ends; source_sha256 is the loaded-code digest"
+      }
+    ],
+    "not_proved": [
+      "imports and module initialization",
+      "builder initialization (add_node naming, inspect.signature/get_type_hints, schema construction) before compile(security=...)",
+      "reducer, cache key_func and retry_on callbacks",
+      "checkpointers and store access",
+      "stream callbacks and RunnableCallable recursive invocation inside admitted primitives",
+      "module mutation beyond the links recheck re-reads",
+      "output publication (OutputMediator and raw debug/state/event APIs)",
+      "compiler, decoder and OS enforcement",
+      "security=None, precompiled graph and raw Pregel entry points without an installed RuntimeMAC"
+    ],
+    "sgv901_closed": false,
+    "sgv902_closed": false,
+    "sgv903_closed": false
+  },
+  "notes": [
+    "2026-10-27: ungated items of unsupported routes were moved under those routes' exclusions with gate_code null; they must be gated before the route can be promoted. The raw-publication-API item became an output-publication premise backed by SGV109/SGV110 regressions."
+  ]
+}

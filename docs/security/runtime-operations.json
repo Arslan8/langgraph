@@ -1,0 +1,701 @@
+{
+  "schema_version": 1,
+  "kind": "slanggraph-runtime-operations",
+  "generated": "2026-10-27",
+  "application": "pandas",
+  "decisions": {
+    "D8": "The runtime exposes a finite set of well-defined operations bounded by what the evaluation needs; everything else is refused.",
+    "D9": "LLM calls are a hook point only: the hook asks policy before the call; content sent to or returned by the model is not guaranteed.",
+    "D10": "This catalog covers the pandas application only.",
+    "D11": "Application graph code and the framework are trusted; only tool implementations and generated code are contained."
+  },
+  "source_root": "libs/prebuilt/langgraph/prebuilt",
+  "surface": "docs/security/supported-surface.json",
+  "pandas_steps_source": "eval/scope/pandas-route-design.md section 1",
+  "citation_format": "<path under source_root>::<Qualified.name>; request_classes name classes in security/objects.py; router_methods name methods of security/host_router.py HostRouter; refusal kind registered means a key of security/unsupported.py REGISTRY or a code starting with a PREFIXES key, kind literal means a string constant in the cited source file",
+  "operations": [
+    {
+      "id": "compute",
+      "purpose": "Run model-generated Python over the granted dataframe inside the isolated Linux worker and return inert JSON.",
+      "status": "implemented",
+      "trust": "contained",
+      "trust_note": "Generated code is untrusted (D11). It runs only in the bubblewrap worker with the granted authority; the lifecycle is checked by the Lean receipt checker before GO and before result release.",
+      "routes": [
+        "linux-worker-compute"
+      ],
+      "framework_operations": [
+        "Principal.bind",
+        "ToolCall.prepare",
+        "ToolCall.invoke",
+        "ToolCall.post",
+        "HostResource.file",
+        "HostResource.socket",
+        "HostResource.exec",
+        "HostResource.syscalls",
+        "HostResource.limits"
+      ],
+      "request_classes": [],
+      "request_shape": {
+        "type": "security/types.py::ToolCall",
+        "input": "one ToolCall to the single `compute` tool with args {code, function_name, data (JSON of DataFrame.to_dict), memory_limit_mb, data_format, sandbox_serialization, computation_api} (eval/apps/pandas/integration.py bridge; codec eval/apps/pandas/sandbox_codec.py)",
+        "output": "security/execution.py::HostExecutionResult carrying {result, error} JSON; result is decoded by the recursive-json-v2 codec, never executed"
+      },
+      "router_methods": [
+        "invoke",
+        "ainvoke"
+      ],
+      "functions": [
+        "security/host_router.py::HostRouter.invoke",
+        "security/linux.py::LinuxSandboxExecutor.invoke",
+        "security/linux.py::_LinuxBubblewrapAdapter.activate",
+        "security/lean_lifecycle.py::LeanLifecycleChecker",
+        "security/_linux_worker.py::main",
+        "tool_node.py::ToolNode._func"
+      ],
+      "policy_hook": "HostRouter.invoke: policy tool permission and DAC/MAC grant, then EnforcementCoordinator obligation negotiation (lean_grant bounded native grant) before the worker is activated",
+      "effect": "One sandboxed process: read access to the granted dataset bytes only, no network, no process creation, rlimits, seccomp, Landlock; confirmed cleanup; returns a HostExecutionResult",
+      "refusals": [
+        {
+          "code": "admission:unsupported_node_body",
+          "kind": "registered"
+        },
+        {
+          "code": "admission:closed_admission_required",
+          "kind": "registered"
+        },
+        {
+          "code": "host:unsupported_rule",
+          "kind": "registered"
+        },
+        {
+          "code": "host:special_resource_unsupported",
+          "kind": "registered"
+        },
+        {
+          "code": "host:artifact_changed",
+          "kind": "registered"
+        },
+        {
+          "code": "host:lean_async_route_unavailable",
+          "kind": "registered"
+        },
+        {
+          "code": "adapter_rule_unsupported:",
+          "kind": "registered"
+        }
+      ],
+      "proof": {
+        "status": "proved",
+        "route": "linux-worker-compute",
+        "checks": [
+          "admission-surface",
+          "router-source-proof",
+          "lean-audit:proofs/worker-route",
+          "host-route:linux-sandbox"
+        ],
+        "note": "Premises of linux-worker-compute (OS, bubblewrap, interpreter, policy authorization) remain premises."
+      },
+      "needed_by": [
+        "W3",
+        "V4",
+        "P5"
+      ]
+    },
+    {
+      "id": "output_publish",
+      "purpose": "Release the final answer (table, plot, routing, state) to a destination with an exact label and clearance check.",
+      "status": "implemented",
+      "trust": "proved-egress",
+      "trust_note": "Model-influenced content leaves only through OutputMediator; the caller gets exactly the authorized content within clearance.",
+      "routes": [
+        "output-publication"
+      ],
+      "framework_operations": [
+        "Principal.bind",
+        "Output.emit"
+      ],
+      "request_classes": [
+        "OutputRequest",
+        "SecurityLabels"
+      ],
+      "request_shape": {
+        "type": "security/objects.py::OutputRequest",
+        "input": "OutputRequest(destination, content, labels, clearance, output_id); content must pass output_data.validate_output_request (finite JSON-like data, bounded depth and budget)",
+        "output": "the identical request.content when labels.confidentiality is a subset of clearance"
+      },
+      "router_methods": [
+        "output_emit",
+        "aoutput_emit"
+      ],
+      "functions": [
+        "security/placement.py::OutputMediator._emit",
+        "security/placement.py::OutputMediator._aemit",
+        "security/host_router.py::HostRouter.output_emit",
+        "security/object_manager.py::ObjectManagerHost.dispatch",
+        "security/output_data.py::validate_output_request"
+      ],
+      "policy_hook": "HostRouter.route -> policy.object_permission(principal, OutputRequest); ESCALATE withholds the output as OutputApprovalRequired",
+      "effect": "Returns the authorized content to the mediated publication API; nothing else is written",
+      "refusals": [
+        {
+          "code": "output:unsupported_mediator",
+          "kind": "registered"
+        },
+        {
+          "code": "output:unsupported_router",
+          "kind": "registered"
+        },
+        {
+          "code": "output:unsupported_host",
+          "kind": "registered"
+        },
+        {
+          "code": "output_data:payload_confidentiality",
+          "kind": "registered"
+        },
+        {
+          "code": "output_data:payload_integrity",
+          "kind": "registered"
+        },
+        {
+          "code": "output_data:unsupported_type",
+          "kind": "registered"
+        },
+        {
+          "code": "output_data:request_required",
+          "kind": "registered"
+        },
+        {
+          "code": "unsupported:output:unknown",
+          "kind": "registered"
+        },
+        {
+          "code": "output:clearance",
+          "kind": "literal",
+          "source": "security/object_manager.py"
+        },
+        {
+          "code": "output:approval_required",
+          "kind": "literal",
+          "source": "security/placement.py"
+        }
+      ],
+      "proof": {
+        "status": "proved",
+        "route": "output-publication",
+        "checks": [
+          "router-source-proof",
+          "host-output-correspondence",
+          "output-validator-contract",
+          "output-mediator-correspondence"
+        ],
+        "note": "That every framework publication API routes through OutputMediator is a regression-backed premise (SGV109/SGV110)."
+      },
+      "needed_by": [
+        "P3"
+      ]
+    },
+    {
+      "id": "model_invoke",
+      "purpose": "Hook point before an LLM call made through the runtime's model operation (D9).",
+      "status": "implemented",
+      "trust": "hooked",
+      "trust_note": "Only the capability decision is enforced; the allowlisted model client runs in the trusted controller. Under D11 trusted application code may also call the LLM directly, as pandas does inside its node functions; those calls are not policed by this hook.",
+      "routes": [
+        "model-invoke-hook"
+      ],
+      "framework_operations": [
+        "Principal.bind",
+        "ModelInvocation.invoke",
+        "State.model_read"
+      ],
+      "request_classes": [
+        "ModelInvocationRequest",
+        "LabeledValue"
+      ],
+      "request_shape": {
+        "type": "security/objects.py::ModelInvocationRequest",
+        "input": "ModelInvocationRequest(model, context: tuple[LabeledValue, ...], invocation_id) built from MODEL_READ state reads",
+        "output": "the authorized context tuple; the model call itself is made by the admitted MODEL_CALL node only after allow"
+      },
+      "router_methods": [
+        "model_invoke",
+        "amodel_invoke"
+      ],
+      "functions": [
+        "security/host_router.py::HostRouter.model_invoke",
+        "security/placement.py::MediatedNode._model_input",
+        "security/placement.py::MediatedNode._amodel_input",
+        "security/admission.py::admit_node"
+      ],
+      "policy_hook": "HostRouter.route -> policy.object_permission(principal, ModelInvocationRequest); deny means the LLM is never invoked",
+      "effect": "None by the runtime; on allow the admitted MODEL_CALL node (exact allowlisted chat-model class) performs the provider call",
+      "refusals": [
+        {
+          "code": "admission:unsupported_node_body",
+          "kind": "registered"
+        },
+        {
+          "code": "admission:unsupported_callback",
+          "kind": "registered"
+        },
+        {
+          "code": "admission:closed_admission_required",
+          "kind": "registered"
+        }
+      ],
+      "proof": {
+        "status": "proved",
+        "route": "model-invoke-hook",
+        "checks": [
+          "admission-surface",
+          "router-source-proof"
+        ],
+        "note": "Proves the hook placement and router return protocol, not model content."
+      },
+      "needed_by": [],
+      "may_use": [
+        "O2",
+        "W2",
+        "W5",
+        "V2",
+        "V3",
+        "V6"
+      ],
+      "pandas_note": "Pandas calls ChatOpenAI directly inside trusted node functions (D11); routing those calls through the hook is a deployer choice."
+    },
+    {
+      "id": "tool_dispatch",
+      "purpose": "Dispatch a model-requested call to an untrusted tool implementation through an exact ToolNode and HostRouter.",
+      "status": "implemented",
+      "trust": "contained",
+      "trust_note": "Tool bodies are untrusted (D11) and run in the language sandbox or an isolated host executor.",
+      "routes": [
+        "tool-node-dispatch",
+        "language-sandbox-tool"
+      ],
+      "framework_operations": [
+        "Principal.bind",
+        "ToolCall.prepare",
+        "ToolCall.invoke",
+        "ToolCall.post"
+      ],
+      "request_classes": [],
+      "request_shape": {
+        "type": "security/types.py::ToolCall",
+        "input": "one ToolCall to an admitted tool name with JSON arguments",
+        "output": "security/execution.py::HostExecutionResult wrapped as a ToolMessage"
+      },
+      "router_methods": [
+        "invoke",
+        "ainvoke",
+        "dispatch"
+      ],
+      "functions": [
+        "tool_node.py::ToolNode._func",
+        "tool_node.py::ToolNode._afunc",
+        "security/host_router.py::HostRouter.invoke",
+        "security/placement.py::MediatedNode._invoke_admitted",
+        "security/object_policy.py::_LanguageSandboxDispatcher.invoke",
+        "security/_language_sandbox.py::LanguageProgram.invoke"
+      ],
+      "policy_hook": "HostRouter.invoke: policy tool permission; admission.recheck re-reads the captured executor/dispatcher/authorizer identity before each dispatch",
+      "effect": "The admitted tool body runs under the selected executor; its result is returned as data",
+      "refusals": [
+        {
+          "code": "admission:unsupported_node_body",
+          "kind": "registered"
+        },
+        {
+          "code": "admission:unsupported_branch",
+          "kind": "registered"
+        },
+        {
+          "code": "admission:descriptor_changed",
+          "kind": "registered"
+        },
+        {
+          "code": "admission:unsupported_async",
+          "kind": "registered"
+        },
+        {
+          "code": "mac:unsupported_dispatcher",
+          "kind": "registered"
+        },
+        {
+          "code": "mac:unsupported_authorizer",
+          "kind": "registered"
+        },
+        {
+          "code": "mac:unsupported_execution_boundary",
+          "kind": "registered"
+        },
+        {
+          "code": "host:missing_security_context",
+          "kind": "registered"
+        },
+        {
+          "code": "host:missing_router",
+          "kind": "registered"
+        },
+        {
+          "code": "language_sandbox:unsupported_expression",
+          "kind": "registered"
+        },
+        {
+          "code": "language_sandbox:unsupported_statement",
+          "kind": "registered"
+        }
+      ],
+      "proof": {
+        "status": "proved",
+        "route": "tool-node-dispatch",
+        "checks": [
+          "admission-surface",
+          "router-source-proof"
+        ],
+        "note": "language-sandbox-tool additionally names lean-audit:proofs/language-route and language-derivation; its SGV903 runtime evidence is pending in supported-surface.json."
+      },
+      "needed_by": [],
+      "pandas_note": "Pandas has no third-party tools. Its compute call reaches the worker through ToolNode([compute]) and HostRouter.invoke, which the compute route covers."
+    },
+    {
+      "id": "state_read",
+      "purpose": "Expose only profile-declared graph channels to a secured tool or mediated model node.",
+      "status": "implemented",
+      "trust": "trusted-runtime",
+      "trust_note": "Runtime machinery (D11, threat model TCB); authorized by HostRouter.state but its effect is not proved.",
+      "routes": [],
+      "framework_operations": [
+        "Principal.bind",
+        "State.tool_read",
+        "State.model_read"
+      ],
+      "request_classes": [
+        "StateRequest",
+        "StateOperation"
+      ],
+      "request_shape": {
+        "type": "security/objects.py::StateRequest",
+        "input": "StateRequest(TOOL_READ or MODEL_READ, resource=channel, owner_id, tool_name, value)",
+        "output": "the stored value (TOOL_READ) or LabeledValue (MODEL_READ) for that principal and channel"
+      },
+      "router_methods": [
+        "state",
+        "astate"
+      ],
+      "functions": [
+        "security/host_router.py::HostRouter.state",
+        "security/object_manager.py::ObjectManagerHost._state_operation",
+        "tool_node.py::ToolNode._func"
+      ],
+      "policy_hook": "HostRouter.route -> policy.object_permission(principal, StateRequest); ToolObjectDac.readable_channels limits channels",
+      "effect": "Reads the in-memory channel value held by ObjectManagerHost",
+      "refusals": [
+        {
+          "code": "state:unsupported_operation",
+          "kind": "registered"
+        }
+      ],
+      "proof": {
+        "status": "premise",
+        "route": null,
+        "checks": [],
+        "note": "router-source-proof fixes HostRouter.state's return protocol; ObjectManagerHost._state_operation correctness is a trusted-runtime premise."
+      },
+      "needed_by": [
+        "W3",
+        "V4"
+      ]
+    },
+    {
+      "id": "state_write",
+      "purpose": "Write a mediated node's output channels through the router.",
+      "status": "implemented",
+      "trust": "trusted-runtime",
+      "trust_note": "Runtime machinery (D11). Trusted application nodes write graph channels through Pregel directly and do not use this operation.",
+      "routes": [],
+      "framework_operations": [
+        "State.write"
+      ],
+      "request_classes": [
+        "StateRequest",
+        "StateOperation"
+      ],
+      "request_shape": {
+        "type": "security/objects.py::StateRequest",
+        "input": "StateRequest(WRITE, resource=channel, owner_id, labels, value)",
+        "output": "the written value"
+      },
+      "router_methods": [
+        "state",
+        "astate"
+      ],
+      "functions": [
+        "security/host_router.py::HostRouter.state",
+        "security/object_manager.py::ObjectManagerHost._state_operation",
+        "security/placement.py::MediatedNode._invoke_admitted"
+      ],
+      "policy_hook": "HostRouter.route -> policy.object_permission(principal, StateRequest)",
+      "effect": "Stores a LabeledValue keyed by principal and channel in ObjectManagerHost",
+      "refusals": [
+        {
+          "code": "state:unsupported_operation",
+          "kind": "registered"
+        }
+      ],
+      "proof": {
+        "status": "premise",
+        "route": null,
+        "checks": [],
+        "note": "Trusted-runtime premise."
+      },
+      "needed_by": []
+    },
+    {
+      "id": "checkpoint",
+      "purpose": "Authenticated checkpoint read, write and restore through MediatedCheckpointer.",
+      "status": "implemented",
+      "trust": "trusted-runtime",
+      "trust_note": "Runtime machinery (D11); checkpoints are sealed and authenticated with the configured checkpoint key.",
+      "routes": [],
+      "framework_operations": [
+        "State.checkpoint_read",
+        "State.checkpoint_write",
+        "State.restore"
+      ],
+      "request_classes": [
+        "StateRequest",
+        "StateOperation"
+      ],
+      "request_shape": {
+        "type": "security/objects.py::StateRequest",
+        "input": "StateRequest(CHECKPOINT_READ, CHECKPOINT_WRITE or RESTORE); RESTORE carries a CheckpointEnvelope",
+        "output": "the checkpoint value, or the verified envelope payload on RESTORE"
+      },
+      "router_methods": [
+        "state",
+        "astate"
+      ],
+      "functions": [
+        "security/checkpoint_security.py::MediatedCheckpointer.get_tuple",
+        "security/checkpoint_security.py::MediatedCheckpointer.put",
+        "security/object_manager.py::ObjectManagerHost._verify_checkpoint",
+        "security/object_manager.py::seal_checkpoint"
+      ],
+      "policy_hook": "HostRouter.route -> policy.object_permission(principal, StateRequest)",
+      "effect": "Passes checkpoint data to the underlying saver; RESTORE verifies the envelope digest first",
+      "refusals": [
+        {
+          "code": "state:unsupported_operation",
+          "kind": "registered"
+        },
+        {
+          "code": "checkpoint:malformed",
+          "kind": "literal",
+          "source": "security/object_manager.py"
+        }
+      ],
+      "proof": {
+        "status": "premise",
+        "route": null,
+        "checks": [],
+        "note": "Trusted-runtime premise."
+      },
+      "needed_by": [],
+      "pandas_note": "Pandas sets checkpointer=None (design row P4)."
+    },
+    {
+      "id": "approval_resume",
+      "purpose": "Release a withheld (ESCALATE) request after a bound human approval.",
+      "status": "implemented",
+      "trust": "trusted-runtime",
+      "trust_note": "Runtime machinery (D11); resume reruns resume permission and the complete hook chain.",
+      "routes": [],
+      "framework_operations": [
+        "Approval.resume"
+      ],
+      "request_classes": [
+        "ObjectAuthorization"
+      ],
+      "request_shape": {
+        "type": "security/types.py::Approval",
+        "input": "the original framework request plus one Approval",
+        "output": "the authorized effect of the original request"
+      },
+      "router_methods": [
+        "resume",
+        "aresume"
+      ],
+      "functions": [
+        "security/host_router.py::HostRouter.resume",
+        "security/object_manager.py::ObjectManagerPolicy.object_resume_permission",
+        "security/placement.py::OutputApprovalRequired.resume"
+      ],
+      "policy_hook": "policy.object_resume_permission(principal, request, approval); anything but ALLOW raises",
+      "effect": "Dispatches the original request once to ObjectManagerHost",
+      "refusals": [
+        {
+          "code": "output:approval_required",
+          "kind": "literal",
+          "source": "security/placement.py"
+        }
+      ],
+      "proof": {
+        "status": "premise",
+        "route": null,
+        "checks": [],
+        "note": "Trusted-runtime premise."
+      },
+      "needed_by": []
+    },
+    {
+      "id": "dataset_read",
+      "purpose": "Pinned, authorized, bounded read of a registered dataset for the computation (replaces pd.read_csv in the parent).",
+      "status": "implemented",
+      "trust": "trusted-runtime",
+      "trust_note": "Performed by trusted runtime code after authorization; the bytes become inert input to compute.",
+      "routes": [
+        "dataset-read"
+      ],
+      "framework_operations": [
+        "HostResource.file"
+      ],
+      "request_classes": [],
+      "request_shape": {
+        "type": "security/dataset_operation.py::DatasetReadRequest",
+        "input": "read_dataset(principal, dataset_id, *, registry: DatasetRegistry, authorize) or aread_dataset(...); the caller names an id only; path, sha256, max_bytes and format come from the operator DatasetEntry; policy sees DatasetReadRequest(dataset_id, principal_id)",
+        "output": "inert bytes of the pinned file, at most DatasetEntry.max_bytes, whose sha256 equals the pin"
+      },
+      "router_methods": [],
+      "functions": [
+        "security/dataset_operation.py::read_dataset",
+        "security/dataset_operation.py::aread_dataset",
+        "security/dataset_operation.py::DatasetRegistry",
+        "security/dataset_operation.py::DatasetEntry"
+      ],
+      "policy_hook": "authorize(principal, DatasetReadRequest) must return an exact Decision with Verdict.ALLOW and no constraints, before any open",
+      "effect": "One openat2 (no symlinks) pinned read of a registered regular file, bounded by max_bytes and checked against the pinned sha256",
+      "refusals": [
+        {
+          "code": "dataset:unknown",
+          "kind": "registered"
+        },
+        {
+          "code": "dataset:denied",
+          "kind": "registered"
+        },
+        {
+          "code": "dataset:too_large",
+          "kind": "registered"
+        },
+        {
+          "code": "dataset:changed",
+          "kind": "registered"
+        },
+        {
+          "code": "dataset:unavailable",
+          "kind": "registered"
+        }
+      ],
+      "proof": {
+        "status": "proved",
+        "route": "dataset-read",
+        "checks": [
+          "dataset-read"
+        ],
+        "note": "Ordering derived from source (policy allow before any open, pinned no-symlink open, digest of the returned bytes) plus fixed controls; premises: kernel openat2, operator registry, trusted caller (D11)."
+      },
+      "needed_by": [
+        "D1"
+      ]
+    }
+  ],
+  "route_operations": {
+    "language-sandbox-tool": [
+      "tool_dispatch"
+    ],
+    "tool-node-dispatch": [
+      "tool_dispatch"
+    ],
+    "linux-worker-compute": [
+      "compute"
+    ],
+    "output-publication": [
+      "output_publish"
+    ],
+    "model-invoke-hook": [
+      "model_invoke"
+    ],
+    "dataset-read": [
+      "dataset_read"
+    ]
+  },
+  "unmapped_routes": {
+    "sql-bounded-select": "unsupported route of the SQL cohort; outside the pandas catalog (D10)"
+  },
+  "excluded": [
+    {
+      "operation": "Principal.transfer",
+      "refusal": null,
+      "reason": "Pandas issues no DispatchRequest; its nested agents run inside trusted application nodes (D11)."
+    },
+    {
+      "operation": "Principal.attenuate",
+      "refusal": null,
+      "reason": "No child principal is derived by pandas."
+    },
+    {
+      "operation": "Dispatch.subgraph",
+      "refusal": "admission:unsupported_node_body",
+      "reason": "Under closed admission a subgraph node body is not an admitted kind."
+    },
+    {
+      "operation": "Dispatch.send",
+      "refusal": "admission:unsupported_branch",
+      "reason": "Send fan-out is not an admitted framework branch."
+    },
+    {
+      "operation": "Dispatch.parallel_branch",
+      "refusal": "admission:unsupported_branch",
+      "reason": "Pandas branches are sequential conditionals."
+    },
+    {
+      "operation": "Dispatch.subagent",
+      "refusal": "admission:unsupported_node_body",
+      "reason": "No subagent dispatch in pandas."
+    },
+    {
+      "operation": "Dispatch.nested_agent",
+      "refusal": "admission:unsupported_node_body",
+      "reason": "Nested agents run as trusted application code, not as a mediated dispatch."
+    },
+    {
+      "operation": "ToolRegistry.register",
+      "refusal": "registry:dynamic_registration_denied",
+      "refusal_source": "tool_node.py",
+      "reason": "Pandas registers its single compute tool statically at ToolNode construction."
+    },
+    {
+      "operation": "ToolRegistry.override",
+      "refusal": "registry:dynamic_registration_denied",
+      "refusal_source": "tool_node.py",
+      "reason": "No tool override."
+    },
+    {
+      "operation": "State.store_read",
+      "refusal": null,
+      "reason": "Pandas configures no store, so MediatedStore is never installed."
+    },
+    {
+      "operation": "State.store_write",
+      "refusal": null,
+      "reason": "Pandas configures no store."
+    },
+    {
+      "operation": "FrameworkOp.guard_operation",
+      "refusal": null,
+      "reason": "SessionFlowPolicy.guard_operation is not used by pandas."
+    }
+  ]
+}

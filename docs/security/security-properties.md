@@ -48,7 +48,7 @@ is released or repaired by the operator.
 The implemented reservation lasts through the mediated physical call, post
 hooks, and outcome audit. The Linux reference worker cannot create descendants
 or background processes under its default-deny syscall policy and is killed at
-call completion. The trusted in-process path does not supervise descendants or
+call completion. The language-sandbox path does not supervise descendants or
 background work; such work is forbidden in that protected model. A future
 adapter that permits descendants must retain both reservation and confinement
 lease until every descendant exits.
@@ -60,9 +60,10 @@ the protected model. Only trusted application code may create security sessions
 or authorize deliberate declassification.
 
 This is a scheduling guarantee over operator classifications, not by itself
-proof of noninterference against hostile tool implementations. In the trusted
-in-process path, a falsely public tool may read confidential ambient data or
-transmit internally despite its declaration. For the Linux executor's supported
+proof of noninterference against hostile tool implementations. Source-admitted
+language programs can call only modeled, mediated terminals; correctness of
+those terminals and their declared information-flow contracts remains required.
+General Python in the coordinator is outside this language-sandbox guarantee. For the Linux executor's supported
 subset, the effective filesystem inputs, no-network/no-process baseline, and
 runtime roots are kernel-bounded and must conservatively validate the configured
 label. Unsupported outward authority denies. Model requests, tracing, telemetry,
@@ -129,7 +130,7 @@ complete effective grant, including baseline authority and authenticated
 channels. Native confinement, not an author declaration, establishes that
 unlisted effects are unavailable.
 
-For the restricted in-process Cedar path, [source admission](manifest-consistency.md)
+For the source-admitted language-sandbox Cedar path, [source admission](manifest-consistency.md)
 separately requires statically resolved monitored APIs and `inferred effects ⊆ manifest`. Inference overapproximates possible effects; it never grants them.
 Every attempted resource effect must still pass its monitor against the final
 grant. Unmonitored libraries, reflection, and dynamic code are rejected rather

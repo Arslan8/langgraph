@@ -16,7 +16,6 @@ from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass, replace
 from pathlib import Path
 from threading import RLock
-from types import MappingProxyType
 from typing import Any
 
 from langgraph.prebuilt.security.enforcement import (
@@ -38,6 +37,7 @@ from langgraph.prebuilt.security.enforcement import (
 from langgraph.prebuilt.security.execution import HostExecutionDenied
 from langgraph.prebuilt.security.object_policy import ObjectGrantLine
 from langgraph.prebuilt.security.profile import Requirement
+from langgraph.prebuilt.security.types import _DecisionArguments
 
 
 @dataclass(frozen=True, slots=True)
@@ -427,9 +427,7 @@ class _BoundMediator(_LocalEvidence):
         try:
             if self.assess_line(line) != self.assessments[line.line_id]:
                 raise PermissionError("resource support changed")
-            return self.mediator.invoke(
-                line, MappingProxyType(dict(payload)), invocation
-            )
+            return self.mediator.invoke(line, _DecisionArguments(payload), invocation)
         finally:
             with self._lock:
                 self._active -= 1

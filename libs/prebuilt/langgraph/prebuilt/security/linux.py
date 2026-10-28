@@ -42,6 +42,7 @@ from langgraph.prebuilt.security.enforcement import (
     AdapterPlan,
     AuthorityDomain,
     EnforcementCoordinator,
+    EnforcementMode,
     EnforcementObligation,
     EnforcementPlan,
     ExecutionContext,
@@ -59,6 +60,16 @@ from langgraph.prebuilt.security.execution import (
     HostExecutionError,
     HostExecutionResult,
     TerminationRecovery,
+)
+from langgraph.prebuilt.security.landlock import open_path_descriptor
+from langgraph.prebuilt.security.lean_grant import (
+    _capture_filtered_grant,
+    _capture_obligations,
+)
+from langgraph.prebuilt.security.lean_lifecycle import (
+    LeanLifecycleChecker,
+    LeanLifecycleSession,
+    _capture_receipt_certificate,
 )
 from langgraph.prebuilt.security.policy import MandatoryPolicyBackend
 from langgraph.prebuilt.security.profile import ProfileDocument
@@ -194,6 +205,8 @@ class LinuxSandboxExecutor:
     broker or a more capable Linux adapter owns their exact obligations.
     """
 
+    _lifecycle_checker: LeanLifecycleChecker | None = None
+
     def __init__(
         self,
         profiles: ProfileDocument,
@@ -211,7 +224,14 @@ class LinuxSandboxExecutor:
         runtime_deployment: RuntimeDeployment | None = None,
         runtime_manager: OstreeDeploymentManager | None = None,
         runtime_selection: str | None = None,
+        lifecycle_checker: LeanLifecycleChecker | None = None,
     ) -> None:
+        if (
+            lifecycle_checker is not None
+            and type(lifecycle_checker) is not LeanLifecycleChecker
+        ):
+            raise HostExecutionDenied("host:lean_binary_configuration")
+        self._lifecycle_checker = lifecycle_checker
         if platform.system() != "Linux":
             raise RuntimeError("LinuxSandboxExecutor requires Linux")
         try:
@@ -433,6 +453,8 @@ class LinuxSandboxExecutor:
         constraints: Sequence[PolicyConstraint],
     ) -> HostExecutionResult:
         """Compile, activate, and execute one async call off the event loop."""
+        if self._lifecycle_checker is not None:
+            raise HostExecutionDenied("host:lean_async_route_unavailable")
         execution = asyncio.create_task(
             asyncio.to_thread(
                 self._invoke,
@@ -445,11 +467,21 @@ class LinuxSandboxExecutor:
         try:
             return await asyncio.shield(execution)
         except asyncio.CancelledError:
+            # The worker's finally block owns termination and resource release.
+            # Every repeated cancellation must leave that work running and wait
+            # for its result before the caller can release its flow reservation.
+            while not execution.done():
+                try:
+                    await asyncio.shield(execution)
+                except asyncio.CancelledError:
+                    continue
+                except Exception:
+                    break
             try:
-                await execution
+                execution.result()
             except HostExecutionError as exc:
                 if not exc.termination_confirmed:
-                    raise exc
+                    raise
             except Exception:
                 pass
             raise
@@ -479,6 +511,11 @@ class LinuxSandboxExecutor:
         *,
         asynchronous: bool,
     ) -> HostExecutionResult:
+        checker = self._lifecycle_checker
+        if checker is not None and (
+            type(checker) is not LeanLifecycleChecker or asynchronous
+        ):
+            raise HostExecutionDenied("host:lean_route_configuration")
         configured = self.tools.get(call.tool.name)
         if configured is None:
             raise HostExecutionDenied("host:tool_manifest_missing")
@@ -486,10 +523,28 @@ class LinuxSandboxExecutor:
         runtime = self._bound_runtime(principal, call)
         grant, ledger = self._compile_grant(principal, call, spec, runtime)
         filtered = self.policy_backend.filter(grant, ledger, constraints)
+        grant_projection: bytes | None = None
+        obligation_projection: bytes | None = None
+        if checker is not None:
+            # Admit raw filter/record storage before calling generic conversion
+            # or digest helpers on it. Subsequent compilation and lowering use
+            # the detached native reconstruction, not mutable original aliases.
+            captured_grant = _capture_filtered_grant(filtered)
+            filtered = captured_grant.filtered
+            grant_projection = captured_grant.projection
         if not filtered.allowed or filtered.grant is None:
             raise HostExecutionDenied(f"host:{filtered.reason}")
         grant = filtered.grant
         obligations = compile_obligations(grant)
+        if checker is not None:
+            captured_obligations = _capture_obligations(obligations)
+            obligations = captured_obligations.obligations
+            obligation_projection = captured_obligations.projection
+            if grant_projection is None:
+                raise HostExecutionDenied("host:lean_grant_missing")
+            checker.require_grant(
+                json.loads(grant_projection), json.loads(obligation_projection)
+            )
         challenge = secrets.token_hex(16)
         adapter = self._adapter_for_runtime(runtime)
         coordinator = EnforcementCoordinator([adapter], adapter)
@@ -519,6 +574,8 @@ class LinuxSandboxExecutor:
                 coordinator,
                 leases,
                 asynchronous=asynchronous,
+                grant_projection=grant_projection,
+                obligation_projection=obligation_projection,
             )
         except BaseException:
             self._release_unretained_deployment_leases(leases)
@@ -988,7 +1045,37 @@ class LinuxSandboxExecutor:
         leases: tuple[tuple[OstreeDeploymentManager, DeploymentLease], ...],
         *,
         asynchronous: bool,
+        grant_projection: bytes | None = None,
+        obligation_projection: bytes | None = None,
     ) -> HostExecutionResult:
+        checker = self._lifecycle_checker
+        if checker is not None and (
+            type(checker) is not LeanLifecycleChecker or asynchronous
+        ):
+            raise HostExecutionDenied("host:lean_route_configuration")
+        if checker is not None:
+            if (
+                type(grant_projection) is not bytes
+                or type(obligation_projection) is not bytes
+                or len(grant_projection) > _MAX_FRAME
+                or len(obligation_projection) > _MAX_FRAME
+            ):
+                raise HostExecutionDenied("host:lean_grant_missing")
+            try:
+                grant_data = json.loads(grant_projection)
+                obligation_data = json.loads(obligation_projection)
+            except (UnicodeError, ValueError, RecursionError):
+                raise HostExecutionDenied("host:lean_grant_shape") from None
+            # Recheck at the worker boundary before command setup or process
+            # creation. _invoke also checks before attestation and lowering.
+            checker.require_grant(grant_data, obligation_data)
+        # Only these immutable snapshots are reused after activation. Local
+        # checker arguments may be observed by instrumentation and are not a
+        # source of authority for a later gate.
+        captured_grant_bytes = grant_projection if grant_projection is not None else b""
+        captured_obligation_bytes = (
+            obligation_projection if obligation_projection is not None else b""
+        )
         adapter_plan = next(
             item for item in plan.adapter_plans if item.adapter_id == _ADAPTER_ID
         )
@@ -1037,101 +1124,176 @@ class LinuxSandboxExecutor:
         released = False
         child_pid: int | None = None
         child_start_time: str | None = None
+        lifecycle: LeanLifecycleSession | None = None
+        lifecycle_observed: dict | None = None
+        result: HostExecutionResult | None = None
+        # Exception state inherited from a caller's except block does not belong
+        # to this worker. Capture only an exception escaping this invocation,
+        # including translated errors and BaseException cancellation paths.
+        active_error: BaseException | None = None
         try:
-            process = subprocess.Popen(
-                command,
-                stdin=subprocess.PIPE,
-                stdout=subprocess.PIPE,
-                stderr=subprocess.PIPE,
-                bufsize=0,
-                close_fds=True,
-                pass_fds=(*inherited_fds, status_write),
-            )
-            os.close(status_write)
-            status_write = -1
-            for descriptor in inherited_fds:
-                os.close(descriptor)
-            inherited_fds = ()
-            if process.stdin is None or process.stdout is None:
-                raise HostExecutionDenied("host:worker_pipe_failed")
-            process.stdin.write(encoded_request)
-            process.stdin.flush()
-            status = _read_fd_json(status_read, self.startup_timeout_s)
-            sandbox_init_pid = int(status["child-pid"])
-            ready = _readline_json(process, self.startup_timeout_s)
-            _remove_private_artifact(artifact_directory)
-            artifact_directory = None
-            if ready != {
-                "plan_digest": adapter_plan.native_plan_digest,
-                "startup_challenge": startup_challenge,
-                "status": "ready",
-            }:
-                raise HostExecutionDenied("host:worker_startup_protocol")
-            child_pid = _sandbox_payload_pid(
-                sandbox_init_pid, timeout_s=self.startup_timeout_s
-            )
-            context = _execution_context(child_pid)
-            child_start_time = context.process_identity.rpartition(":")[2]
-            adapter.register_pending(adapter_plan, context)
-            activation_nonce = secrets.token_hex(16)
-            receipt = coordinator.activate(
-                grant,
-                plan,
-                host,
-                context,
-                nonce=activation_nonce,
-            )
-            if not coordinator.validate_receipt(receipt, grant, plan, host, context):
-                raise HostExecutionDenied("host:activation_receipt_invalid")
-            with self._receipt_lock:
-                self._receipts.append(receipt)
-            process.stdin.write(b"GO\n")
-            process.stdin.flush()
-            released = True
-            wall_timeout = _wall_timeout(
-                adapter_plan.payload, self.default_wall_timeout_s
-            )
-            response = _readline_json(process, wall_timeout)
-            return_code = process.wait(timeout=1.0)
-            if response.get("status") == "ok" and "result" in response:
-                if return_code != 0:
+            try:
+                process = subprocess.Popen(
+                    command,
+                    stdin=subprocess.PIPE,
+                    stdout=subprocess.PIPE,
+                    stderr=subprocess.PIPE,
+                    bufsize=0,
+                    close_fds=True,
+                    pass_fds=(*inherited_fds, status_write),
+                )
+                os.close(status_write)
+                status_write = -1
+                for descriptor in inherited_fds:
+                    os.close(descriptor)
+                inherited_fds = ()
+                if process.stdin is None or process.stdout is None:
+                    raise HostExecutionDenied("host:worker_pipe_failed")
+                process.stdin.write(encoded_request)
+                process.stdin.flush()
+                status = _read_fd_json(status_read, self.startup_timeout_s)
+                sandbox_init_pid = int(status["child-pid"])
+                ready = _readline_json(process, self.startup_timeout_s)
+                _remove_private_artifact(artifact_directory)
+                artifact_directory = None
+                if ready != {
+                    "plan_digest": adapter_plan.native_plan_digest,
+                    "startup_challenge": startup_challenge,
+                    "status": "ready",
+                }:
+                    raise HostExecutionDenied("host:worker_startup_protocol")
+                child_pid = _sandbox_payload_pid(
+                    sandbox_init_pid, timeout_s=self.startup_timeout_s
+                )
+                context = _execution_context(child_pid)
+                child_start_time = context.process_identity.rpartition(":")[2]
+                adapter.register_pending(adapter_plan, context)
+                activation_nonce = secrets.token_hex(16)
+                receipt = coordinator.activate(
+                    grant,
+                    plan,
+                    host,
+                    context,
+                    nonce=activation_nonce,
+                )
+                if not coordinator.validate_receipt(
+                    receipt, grant, plan, host, context
+                ):
+                    raise HostExecutionDenied("host:activation_receipt_invalid")
+                with self._receipt_lock:
+                    self._receipts.append(receipt)
+                if checker is not None:
+                    expected = {
+                        "principal": principal.user_id,
+                        "session": principal.session_id,
+                        "call": call.call_id,
+                        "tool": call.tool.name,
+                        "artifact": spec.artifact_digest,
+                        "intent": json.loads(captured_grant_bytes)["intent"],
+                        "policy": json.loads(captured_grant_bytes)["policy"],
+                        "deployment": grant.deployment_digest,
+                        "runtime": grant.runtime_digest,
+                        "grant": grant.digest,
+                        "plan": plan.digest,
+                        "nonce": activation_nonce,
+                        "host": host.digest,
+                        "context": context.digest,
+                        "worker": {
+                            "pid": str(child_pid),
+                            "startTime": child_start_time,
+                            "bootId": host.boot_id,
+                        },
+                    }
+                    lifecycle_observed = {
+                        "principal": grant.principal_id,
+                        "session": grant.session_id,
+                        "call": grant.call_id,
+                        "tool": grant.tool_name,
+                        "artifact": receipt.artifact_digest,
+                        "intent": grant.normalized_intent_digest,
+                        "policy": grant.policy_digest,
+                        "deployment": receipt.deployment_digest,
+                        "runtime": receipt.runtime_digest,
+                        "grant": receipt.grant_digest,
+                        "plan": receipt.plan_digest,
+                        "nonce": receipt.nonce,
+                        "host": receipt.host_digest,
+                        "context": receipt.context_digest,
+                        "worker": {
+                            "pid": str(child_pid),
+                            "startTime": child_start_time,
+                            "bootId": context.boot_id,
+                        },
+                    }
+                    certificate = _capture_receipt_certificate(
+                        plan,
+                        receipt,
+                        plan_digest=expected["plan"],
+                        grant=json.loads(captured_grant_bytes),
+                        obligations=json.loads(captured_obligation_bytes),
+                    )
+                    lifecycle = LeanLifecycleSession(
+                        checker, expected, certificate=certificate
+                    )
+                    lifecycle.permit_go(
+                        lifecycle_observed,
+                        supported=plan.mode is EnforcementMode.ENFORCED
+                        and receipt.mode is EnforcementMode.ENFORCED
+                        and not plan.waived_obligations,
+                    )
+                process.stdin.write(b"GO\n")
+                process.stdin.flush()
+                released = True
+                wall_timeout = _wall_timeout(
+                    adapter_plan.payload, self.default_wall_timeout_s
+                )
+                response = _readline_json(process, wall_timeout)
+                return_code = process.wait(timeout=1.0)
+                if response.get("status") == "ok" and "result" in response:
+                    if return_code != 0:
+                        raise HostExecutionError(
+                            "sandboxed tool outcome is indeterminate",
+                            receipt,
+                            ExecutionOutcome.INDETERMINATE,
+                        )
+                    result = HostExecutionResult(response["result"], receipt)
+                else:
+                    error_type = str(response.get("error_type", "Exception"))
+                    raise HostExecutionError(
+                        f"sandboxed tool failed:{error_type}",
+                        receipt,
+                        ExecutionOutcome.FAILED,
+                    )
+            except HostExecutionError:
+                raise
+            except HostExecutionDenied:
+                raise
+            except TimeoutError as exc:
+                reason = (
+                    "host:worker_startup_timeout" if not released else "tool_timeout"
+                )
+                if released and receipt is not None:
+                    raise HostExecutionError(
+                        reason, receipt, ExecutionOutcome.INDETERMINATE
+                    ) from exc
+                raise HostExecutionDenied(reason) from exc
+            except (
+                KeyError,
+                OSError,
+                RecursionError,
+                ValueError,
+                subprocess.SubprocessError,
+            ) as exc:
+                if receipt is not None:
                     raise HostExecutionError(
                         "sandboxed tool outcome is indeterminate",
                         receipt,
                         ExecutionOutcome.INDETERMINATE,
-                    )
-                return HostExecutionResult(response["result"], receipt)
-            error_type = str(response.get("error_type", "Exception"))
-            raise HostExecutionError(
-                f"sandboxed tool failed:{error_type}",
-                receipt,
-                ExecutionOutcome.FAILED,
-            )
-        except HostExecutionError:
+                    ) from exc
+                raise HostExecutionDenied("host:worker_activation_failed") from exc
+        except BaseException as exc:
+            active_error = exc
             raise
-        except HostExecutionDenied:
-            raise
-        except TimeoutError as exc:
-            reason = "host:worker_startup_timeout" if not released else "tool_timeout"
-            if released and receipt is not None:
-                raise HostExecutionError(
-                    reason, receipt, ExecutionOutcome.INDETERMINATE
-                ) from exc
-            raise HostExecutionDenied(reason) from exc
-        except (
-            KeyError,
-            OSError,
-            RecursionError,
-            ValueError,
-            subprocess.SubprocessError,
-        ) as exc:
-            if receipt is not None:
-                raise HostExecutionError(
-                    "sandboxed tool outcome is indeterminate",
-                    receipt,
-                    ExecutionOutcome.INDETERMINATE,
-                ) from exc
-            raise HostExecutionDenied("host:worker_activation_failed") from exc
         finally:
             self._cleanup_worker(
                 status_read=status_read,
@@ -1144,8 +1306,26 @@ class LinuxSandboxExecutor:
                 host=host,
                 receipt=receipt,
                 leases=leases,
-                active_error=sys.exc_info()[1],
+                active_error=active_error,
             )
+        # Reaching here means this invocation's cleanup returned normally after
+        # a valid result. Unknown termination raises; no success check precedes it.
+        if result is None:
+            raise HostExecutionDenied("host:worker_result_missing")
+        if lifecycle is not None:
+            assert lifecycle_observed is not None
+            try:
+                lifecycle.permit_success(lifecycle_observed)
+            except HostExecutionDenied as exc:
+                # The worker already ran. Blocking release is not a pre-effect
+                # refusal, even though termination has now been confirmed.
+                raise HostExecutionError(
+                    "host:lean_result_release_failed",
+                    result.receipt,
+                    ExecutionOutcome.INDETERMINATE,
+                    termination_confirmed=True,
+                ) from exc
+        return result
 
     def _cleanup_worker(
         self,
@@ -1267,142 +1447,176 @@ class LinuxSandboxExecutor:
         descriptors: list[int] = []
         mount_args: list[str] = []
         destinations: set[str] = set()
-        artifact_descriptor, artifact_directory = _verified_artifact_fd(spec)
-        if runtime is not None:
-            runtime_root = runtime.checkout_path
-            for child in sorted(runtime_root.iterdir(), key=lambda item: item.name):
-                if child.name == "runtime.json":
+        owned_fds: set[int] = set()
+        artifact_directory: Path | None = None
+        try:
+            artifact_descriptor, artifact_directory = _verified_artifact_fd(spec)
+            owned_fds.add(artifact_descriptor)
+            if runtime is not None:
+                runtime_root = runtime.checkout_path
+                for child in sorted(runtime_root.iterdir(), key=lambda item: item.name):
+                    if child.name == "runtime.json":
+                        continue
+                    if child.name in {"dev", "proc", "sys", "tmp"}:
+                        raise HostExecutionDenied("host:reserved_runtime_root")
+                    if not child.is_dir() or child.is_symlink():
+                        raise HostExecutionDenied("host:invalid_runtime_root")
+                    descriptor = _verified_resource_fd(child)
+                    owned_fds.add(descriptor)
+                    descriptors.append(descriptor)
+                    destination = f"/{child.name}"
+                    destinations.add(destination)
+                    mount_args.extend(["--ro-bind-fd", str(descriptor), destination])
+            ordered_mounts = sorted(
+                mounts,
+                key=lambda item: (
+                    os.fspath(item.get("path", "")).count("/")
+                    if isinstance(item, Mapping)
+                    else 0,
+                    os.fspath(item.get("path", ""))
+                    if isinstance(item, Mapping)
+                    else "",
+                ),
+            )
+            for raw in ordered_mounts:
+                if not isinstance(raw, Mapping):
+                    raise HostExecutionDenied("host:invalid_native_plan")
+                path = os.fspath(raw.get("path", ""))
+                mode = str(raw.get("mode", ""))
+                if mode not in {"ro", "rw"}:
+                    raise HostExecutionDenied("host:invalid_native_plan")
+                if path == "/tmp":
                     continue
-                if child.name in {"dev", "proc", "sys", "tmp"}:
-                    raise HostExecutionDenied("host:reserved_runtime_root")
-                if not child.is_dir() or child.is_symlink():
-                    raise HostExecutionDenied("host:invalid_runtime_root")
-                descriptor = _verified_resource_fd(child)
-                descriptors.append(descriptor)
-                destination = f"/{child.name}"
-                destinations.add(destination)
-                mount_args.extend(["--ro-bind-fd", str(descriptor), destination])
-        ordered_mounts = sorted(
-            mounts,
-            key=lambda item: (
-                os.fspath(item.get("path", "")).count("/")
-                if isinstance(item, Mapping)
-                else 0,
-                os.fspath(item.get("path", "")) if isinstance(item, Mapping) else "",
-            ),
-        )
-        for raw in ordered_mounts:
-            if not isinstance(raw, Mapping):
-                raise HostExecutionDenied("host:invalid_native_plan")
-            path = os.fspath(raw.get("path", ""))
-            mode = str(raw.get("mode", ""))
-            if mode not in {"ro", "rw"}:
-                raise HostExecutionDenied("host:invalid_native_plan")
-            if path == "/tmp":
-                continue
-            canonical = _canonical_existing_path(path)
-            if os.fspath(canonical) != path:
-                raise HostExecutionDenied("host:noncanonical_mount")
-            if canonical.is_dir() and _nested_mount_points(canonical):
-                raise HostExecutionDenied("host:nested_mount_changed")
-            if path == "/dev/urandom":
+                canonical = _canonical_existing_path(path)
+                if os.fspath(canonical) != path:
+                    raise HostExecutionDenied("host:noncanonical_mount")
+                if canonical.is_dir() and _nested_mount_points(canonical):
+                    raise HostExecutionDenied("host:nested_mount_changed")
+                if path == "/dev/urandom":
+                    destinations.add(path)
+                    mount_args.extend(["--dev-bind", path, path])
+                    continue
+                if runtime is not None and (
+                    canonical == runtime.checkout_path
+                    or runtime.checkout_path in canonical.parents
+                ):
+                    continue
+                descriptor = (
+                    artifact_descriptor
+                    if canonical == spec.artifact_path
+                    else _verified_resource_fd(canonical)
+                )
+                owned_fds.add(descriptor)
+                if descriptor not in descriptors:
+                    descriptors.append(descriptor)
                 destinations.add(path)
-                mount_args.extend(["--dev-bind", path, path])
-                continue
-            if runtime is not None and (
-                canonical == runtime.checkout_path
-                or runtime.checkout_path in canonical.parents
-            ):
-                continue
-            descriptor = (
-                artifact_descriptor
-                if canonical == spec.artifact_path
-                else _verified_resource_fd(canonical)
+                mount_args.extend(
+                    [
+                        "--bind-fd" if mode == "rw" else "--ro-bind-fd",
+                        str(descriptor),
+                        path,
+                    ]
+                )
+            directories = sorted(
+                {
+                    parent
+                    for destination in destinations
+                    for parent in _missing_parent_directories(destination)
+                },
+                key=lambda value: (value.count("/"), value),
             )
-            descriptors.append(descriptor)
-            destinations.add(path)
-            mount_args.extend(
-                ["--bind-fd" if mode == "rw" else "--ro-bind-fd", str(descriptor), path]
-            )
-        directories = sorted(
-            {
-                parent
-                for destination in destinations
-                for parent in _missing_parent_directories(destination)
-            },
-            key=lambda value: (value.count("/"), value),
-        )
-        status_read, status_write = os.pipe2(os.O_CLOEXEC)
-        command = [
-            self.bubblewrap_path,
-            "--unshare-all",
-            "--unshare-user",
-            "--die-with-parent",
-            "--new-session",
-            "--disable-userns",
-            "--assert-userns-disabled",
-            "--clearenv",
-            "--cap-drop",
-            "ALL",
-        ]
-        if runtime is None:
+            status_read, status_write = os.pipe2(os.O_CLOEXEC)
+            owned_fds.update((status_read, status_write))
+            command = [
+                self.bubblewrap_path,
+                "--unshare-all",
+                "--unshare-user",
+                "--die-with-parent",
+                "--new-session",
+                "--disable-userns",
+                "--assert-userns-disabled",
+                "--clearenv",
+                "--cap-drop",
+                "ALL",
+            ]
+            if runtime is None:
+                command.extend(
+                    [
+                        "--ro-bind",
+                        "/usr",
+                        "/usr",
+                        "--symlink",
+                        "usr/bin",
+                        "/bin",
+                        "--symlink",
+                        "usr/lib",
+                        "/lib",
+                        "--symlink",
+                        "usr/lib64",
+                        "/lib64",
+                    ]
+                )
             command.extend(
                 [
-                    "--ro-bind",
-                    "/usr",
-                    "/usr",
-                    "--symlink",
-                    "usr/bin",
-                    "/bin",
-                    "--symlink",
-                    "usr/lib",
-                    "/lib",
-                    "--symlink",
-                    "usr/lib64",
-                    "/lib64",
+                    "--size",
+                    str(limits["tmpfs_bytes"]),
+                    "--tmpfs",
+                    "/tmp",
                 ]
             )
-        command.extend(
-            [
-                "--size",
-                str(limits["tmpfs_bytes"]),
-                "--tmpfs",
-                "/tmp",
-            ]
-        )
-        for directory in directories:
-            command.extend(["--dir", directory])
-        command.extend(mount_args)
-        for name, value in sorted(environment.items()):
-            command.extend(["--setenv", name, str(value)])
-        command.extend(
-            [
-                "--chdir",
-                "/tmp",
-                "--json-status-fd",
-                str(status_write),
-                "--",
-                os.fspath(
-                    runtime.guest_interpreter_path
-                    if runtime is not None
-                    else self.python_executable
-                ),
-                "-I",
-                "-S",
-                "-B",
-                "-u",
-                "-X",
-                "utf8",
-                os.fspath(self._worker_script),
-            ]
-        )
-        return (
-            command,
-            tuple(descriptors),
-            status_read,
-            status_write,
-            artifact_directory,
-        )
+            for directory in directories:
+                command.extend(["--dir", directory])
+            command.extend(mount_args)
+            for name, value in sorted(environment.items()):
+                command.extend(["--setenv", name, str(value)])
+            command.extend(
+                [
+                    "--chdir",
+                    "/tmp",
+                    "--json-status-fd",
+                    str(status_write),
+                    "--",
+                    os.fspath(
+                        runtime.guest_interpreter_path
+                        if runtime is not None
+                        else self.python_executable
+                    ),
+                    "-I",
+                    "-S",
+                    "-B",
+                    "-u",
+                    "-X",
+                    "utf8",
+                    os.fspath(self._worker_script),
+                ]
+            )
+            if artifact_descriptor not in descriptors:
+                # Unused copies must not become unnecessary inherited authority.
+                owned_fds.remove(artifact_descriptor)
+                os.close(artifact_descriptor)
+            return (
+                command,
+                tuple(descriptors),
+                status_read,
+                status_write,
+                artifact_directory,
+            )
+        except BaseException:
+            # Setup has not transferred ownership to _run_worker. Close each
+            # acquired handle once, then remove the private copy; an individual
+            # cleanup failure must not skip the remaining resources or replace
+            # the original setup exception. Never retry a Linux close by number.
+            for descriptor in owned_fds:
+                try:
+                    os.close(descriptor)
+                except BaseException:
+                    pass
+            if artifact_directory is not None:
+                try:
+                    _remove_private_artifact(artifact_directory)
+                except BaseException:
+                    pass
+            raise
 
 
 class _LinuxBubblewrapAdapter:
@@ -1720,10 +1934,10 @@ def _assess_limit_obligation(
 def _verified_artifact_fd(spec: LinuxToolSpec) -> tuple[int, Path]:
     """Copy verified artifact bytes into a sealed, worker-bound file."""
     directory = Path(tempfile.mkdtemp(prefix="slanggraph-artifact-"))
-    directory.chmod(0o700)
-    artifact = directory / "artifact.py"
-    digest = hashlib.sha256()
     try:
+        directory.chmod(0o700)
+        artifact = directory / "artifact.py"
+        digest = hashlib.sha256()
         with spec.artifact_path.open("rb") as source, artifact.open("xb") as target:
             for chunk in iter(lambda: source.read(1024 * 1024), b""):
                 digest.update(chunk)
@@ -1738,13 +1952,18 @@ def _verified_artifact_fd(spec: LinuxToolSpec) -> tuple[int, Path]:
             directory,
         )
     except BaseException:
-        _remove_private_artifact(directory)
+        try:
+            _remove_private_artifact(directory)
+        except BaseException:
+            pass
         raise
 
 
 def _verified_resource_fd(path: Path) -> int:
     """Open and identity-bind one canonical host resource for a worker mount."""
-    descriptor = os.open(path, os.O_PATH | os.O_CLOEXEC | os.O_NOFOLLOW)
+    # O_NOFOLLOW alone protects only the final component. Resolve every
+    # component without symlinks, including after the earlier canonical check.
+    descriptor = open_path_descriptor(os.fspath(path), no_symlinks=True)
     try:
         opened = os.fstat(descriptor)
         current = os.stat(path, follow_symlinks=False)
@@ -1762,7 +1981,10 @@ def _verified_resource_fd(path: Path) -> int:
             raise HostExecutionDenied("host:special_resource_unsupported")
         return descriptor
     except BaseException:
-        os.close(descriptor)
+        try:
+            os.close(descriptor)
+        except BaseException:
+            pass
         raise
 
 
@@ -1807,7 +2029,7 @@ def _execution_context(pid: int) -> ExecutionContext:
             ("Uid:", "Gid:", "Cap", "NoNewPrivs:", "Seccomp:", "Threads:")
         )
     ]
-    stat = Path(f"/proc/{pid}/stat").read_text().split()
+    start_time = _process_start_time(pid)
     cgroup = Path(f"/proc/{pid}/cgroup").read_text().strip() or "isolated"
     boot_id = Path("/proc/sys/kernel/random/boot_id").read_text().strip()
     namespaces = _namespace_links(pid)
@@ -1818,8 +2040,8 @@ def _execution_context(pid: int) -> ExecutionContext:
         Path(f"/proc/{pid}/mountinfo").read_bytes()
     ).hexdigest()
     return ExecutionContext(
-        worker_id=f"linux-worker:{pid}:{stat[21]}",
-        process_identity=f"pid:{pid}:start:{stat[21]}",
+        worker_id=f"linux-worker:{pid}:{start_time}",
+        process_identity=f"pid:{pid}:start:{start_time}",
         boot_id=boot_id,
         namespaces=namespaces,
         credential_digest=_digest(
@@ -1879,10 +2101,24 @@ def _readline_json(
 ) -> Mapping[str, Any]:
     if process.stdout is None:
         raise ValueError("worker stdout is unavailable")
-    ready, _, _ = select.select([process.stdout.fileno()], [], [], timeout)
-    if not ready:
-        raise TimeoutError
-    line = process.stdout.readline(_MAX_FRAME + 1)
+    # A readable pipe may contain only part of a frame. Keep the deadline
+    # across reads so a worker cannot defeat its timeout by sending one byte.
+    deadline = time.monotonic() + timeout
+    line = bytearray()
+    descriptor = process.stdout.fileno()
+    while b"\n" not in line and len(line) <= _MAX_FRAME:
+        remaining = deadline - time.monotonic()
+        if remaining <= 0:
+            raise TimeoutError
+        ready, _, _ = select.select([descriptor], [], [], remaining)
+        if not ready:
+            raise TimeoutError
+        # Each phase permits one frame; coalesced extra frames fail JSON
+        # validation. stdout is an unbuffered pipe created by _run_worker.
+        chunk = os.read(descriptor, min(65536, _MAX_FRAME + 1 - len(line)))
+        if not chunk:
+            break
+        line.extend(chunk)
     if not line or len(line) > _MAX_FRAME or not line.endswith(b"\n"):
         raise ValueError("invalid worker protocol frame")
     value = json.loads(line)
@@ -1915,22 +2151,85 @@ def _validate_protocol_shape(value: object) -> None:
             stack.extend((child, depth + 1) for child in item)
 
 
+def _process_start_time(pid: int) -> str:
+    # /proc/PID/stat's comm field is parenthesized but may itself contain spaces,
+    # newlines or ')'. The fields after its final ')' have fixed numeric offsets.
+    record = Path(f"/proc/{pid}/stat").read_text()
+    prefix, separator, tail = record.rpartition(")")
+    fields = tail.split()
+    if (
+        not separator
+        or not prefix.startswith(f"{pid} (")
+        or len(fields) < 20
+        or not fields[19].isascii()
+        or not fields[19].isdigit()
+    ):
+        raise ValueError("host:invalid_process_identity")
+    return fields[19]
+
+
+def _open_worker_pidfd(pid: int) -> int:
+    # Some CPython builds omit pidfd wrappers; use the same Linux libc API.
+    operation = ctypes.CDLL(None, use_errno=True).pidfd_open
+    operation.argtypes = [ctypes.c_int, ctypes.c_uint]
+    operation.restype = ctypes.c_int
+    descriptor = operation(pid, 0)
+    if descriptor < 0:
+        error = ctypes.get_errno()
+        raise OSError(error, os.strerror(error))
+    return descriptor
+
+
+def _kill_worker_pidfd(descriptor: int) -> None:
+    operation = ctypes.CDLL(None, use_errno=True).pidfd_send_signal
+    operation.argtypes = [
+        ctypes.c_int,
+        ctypes.c_int,
+        ctypes.c_void_p,
+        ctypes.c_uint,
+    ]
+    operation.restype = ctypes.c_int
+    if operation(descriptor, 9, None, 0) < 0:
+        error = ctypes.get_errno()
+        raise OSError(error, os.strerror(error))
+
+
 def _confirm_worker_terminated(pid: int, start_time: str, *, timeout_s: float) -> bool:
+    """Confirm the observed worker's exit without signaling a reusable PID.
+
+    Acquire a kernel process handle before rechecking the recorded start time.
+    A replacement identity is never signaled. After the check, even an exit and
+    PID reuse cannot retarget a signal sent through the acquired handle. This
+    still relies on the controller's original PID/start-time observation.
+    """
+    descriptor = None
     deadline = time.monotonic() + timeout_s
-    while time.monotonic() < deadline:
-        stat_path = Path(f"/proc/{pid}/stat")
-        try:
-            current = stat_path.read_text().split()[21]
-        except (FileNotFoundError, ProcessLookupError):
+    try:
+        descriptor = _open_worker_pidfd(pid)
+        if _process_start_time(pid) != start_time:
             return True
-        if current != start_time:
-            return True
-        try:
-            os.kill(pid, 9)
-        except ProcessLookupError:
-            return True
-        time.sleep(0.01)
-    return False
+        _kill_worker_pidfd(descriptor)
+        poller = select.poll()
+        poller.register(descriptor, select.POLLIN)
+        while True:
+            remaining = max(0.0, deadline - time.monotonic())
+            events = poller.poll(int(remaining * 1000))
+            if events:
+                # POLLNVAL/POLLERR alone cannot certify process exit.
+                return any(
+                    fd == descriptor and flags & select.POLLIN for fd, flags in events
+                )
+            if time.monotonic() >= deadline:
+                return False
+    except (FileNotFoundError, ProcessLookupError):
+        return True
+    except (AttributeError, OSError, ValueError):
+        # No numeric-PID fallback: missing APIs or uncertain identity/exit retain
+        # the caller's recovery lease instead of certifying cleanup.
+        return False
+    finally:
+        if descriptor is not None:
+            os.close(descriptor)
 
 
 def _sandbox_payload_pid(init_pid: int, *, timeout_s: float) -> int:

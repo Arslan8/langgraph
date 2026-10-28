@@ -2,7 +2,12 @@ from __future__ import annotations
 
 from collections import Counter
 from collections.abc import Iterator, Mapping, Sequence
+from copy import deepcopy
+from dataclasses import dataclass
 from typing import Any, Literal
+from uuid import uuid4
+
+from langchain_core.tracers.log_stream import RunLog, RunLogPatch
 
 from langgraph._internal._constants import (
     ERROR,
@@ -17,7 +22,109 @@ from langgraph.channels.base import BaseChannel, EmptyChannelError
 from langgraph.constants import START, TAG_HIDDEN
 from langgraph.errors import InvalidUpdateError
 from langgraph.pregel._log import logger
-from langgraph.types import Command, PregelExecutableTask, Send
+from langgraph.types import Command, PregelExecutableTask, Send, StateSnapshot
+
+
+@dataclass(frozen=True, slots=True)
+class _OutputEnvelope:
+    """Framework-created stream framing, distinct from application values."""
+
+    content: Any
+    format: str
+    namespace: tuple[str, ...]
+    mode: str
+
+    def rebuild(self, content: Any) -> Any:
+        if self.format == "state-snapshot":
+            if type(content) is StateSnapshot:
+                return content
+            # A replaced snapshot contains only the effective value. In
+            # particular, do not copy task results, interrupts or checkpoint
+            # metadata from the original snapshot after policy redaction.
+            return StateSnapshot(content, (), {}, None, None, None, (), ())
+        if self.format in {"legacy-log", "legacy-log-patch"}:
+            # Rebuild from the effective state, never the producer's raw patch
+            # history. Root replacement stays applicable after any redaction.
+            state = deepcopy(content)
+            if not (
+                isinstance(state, dict)
+                and all(
+                    key in state
+                    for key in (
+                        "id",
+                        "name",
+                        "type",
+                        "logs",
+                        "streamed_output",
+                        "final_output",
+                    )
+                )
+            ):
+                state = {
+                    "id": str(uuid4()),
+                    "name": "security_output",
+                    "type": "chain",
+                    "logs": {},
+                    "streamed_output": [],
+                    "final_output": state,
+                }
+            operation = {"op": "replace", "path": "", "value": state}
+            if self.format == "legacy-log-patch":
+                return RunLogPatch(operation)
+            return RunLog(operation, state=state)
+        if self.format == "legacy-event":
+            # Validate only the already-authorized result. Never retain fields
+            # from the original event when a policy replaced that event.
+            if (
+                isinstance(content, dict)
+                and all(
+                    isinstance(content.get(key), str)
+                    for key in ("event", "name", "run_id")
+                )
+                and "data" in content
+                and isinstance(content.get("parent_ids"), (list, tuple))
+                and all(isinstance(parent, str) for parent in content["parent_ids"])
+            ):
+                return content
+            return {
+                "event": "on_custom_event",
+                "name": "security_output",
+                "run_id": str(uuid4()),
+                "parent_ids": [],
+                "tags": [],
+                "metadata": {},
+                "data": content,
+            }
+        if self.format == "v2-values-interrupts":
+            # Both data and interrupt values passed through the same output hook.
+            if isinstance(content, dict) and set(content) == {"data", "interrupts"}:
+                data, interrupts = content["data"], content["interrupts"]
+            else:
+                data, interrupts = content, ()
+            return {
+                "type": self.mode,
+                "ns": self.namespace,
+                "data": data,
+                "interrupts": interrupts,
+            }
+        if self.format == "v2-values":
+            return {
+                "type": self.mode,
+                "ns": self.namespace,
+                "data": content,
+                "interrupts": (),
+            }
+        if self.format == "v2":
+            return {"type": self.mode, "ns": self.namespace, "data": content}
+        if self.format == "namespace-mode":
+            return self.namespace, self.mode, content
+        if self.format == "mode":
+            return self.mode, content
+        if self.format == "namespace":
+            return self.namespace, content
+        if self.format == "plain":
+            return content
+        raise ValueError("unknown stream envelope format")
 
 
 def read_channel(

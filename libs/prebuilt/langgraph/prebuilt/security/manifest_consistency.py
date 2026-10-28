@@ -271,7 +271,7 @@ def check_manifest_consistency(
                                 declared_class.lowering != model.lowering
                                 or declared_class.enforced_by.value
                                 not in (
-                                    {"broker", "trusted_tool"}
+                                    {"broker", "language_sandbox"}
                                     if model.fixed_resource is not None
                                     else {"broker"}
                                 )

@@ -1,0 +1,311 @@
+{
+  "id": "research",
+  "repository": "langchain-ai/open_deep_research",
+  "subdirectory": ".",
+  "entrypoint": "langgraph.json -> src/open_deep_research/deep_researcher.py: deep_researcher",
+  "graph_files": [
+    "langgraph.json",
+    "src/open_deep_research/deep_researcher.py",
+    "src/open_deep_research/utils.py",
+    "src/open_deep_research/configuration.py",
+    "tests/run_evaluate.py"
+  ],
+  "effects": "Supervisor/researcher StateGraphs; tool.ainvoke in researcher_tools; search provider and remote MCP effects in utils.py; model calls and report synthesis. Local request mediation does not confine remote services.",
+  "next_action": "Configure dedicated search service or frozen contract-preserving corpus double and supported local structured-output model. Existing benchmark requires LangSmith; label any subset.",
+  "sha": "1b7d2e80db9faa586165c60e09096dbbfd483a64",
+  "license": "MIT (see captured LICENSE text)",
+  "retrieved_at": "2026-10-26T00:31:38.372515+00:00",
+  "checkout": "/data/slanggraph-eval-upstreams/open_deep_research",
+  "archive": {
+    "archived": true,
+    "pushed_at": "2026-08-10T18:13:37Z",
+    "html_url": "https://github.com/langchain-ai/open_deep_research"
+  },
+  "source_evidence": [
+    {
+      "path": "langgraph.json",
+      "sha256": "3696f8a4c5f5473368fff624954670c89ca0a1de8a94523c2dce4f761fcf8aca",
+      "url": "https://github.com/langchain-ai/open_deep_research/blob/1b7d2e80db9faa586165c60e09096dbbfd483a64/langgraph.json",
+      "matches": []
+    },
+    {
+      "path": "src/open_deep_research/deep_researcher.py",
+      "sha256": "af128d5d8773008d021b6ef7562e9fb90a45f7eb5e886483d1e6e835223275e0",
+      "url": "https://github.com/langchain-ai/open_deep_research/blob/1b7d2e80db9faa586165c60e09096dbbfd483a64/src/open_deep_research/deep_researcher.py",
+      "matches": [
+        {
+          "line": 16,
+          "text": "from langgraph.graph import END, START, StateGraph"
+        },
+        {
+          "line": 60,
+          "text": "async def clarify_with_user(state: AgentState, config: RunnableConfig) -> Command[Literal[\"write_research_brief\", \"__end__\"]]:"
+        },
+        {
+          "line": 101,
+          "text": "response = await clarification_model.ainvoke([HumanMessage(content=prompt_content)])"
+        },
+        {
+          "line": 118,
+          "text": "async def write_research_brief(state: AgentState, config: RunnableConfig) -> Command[Literal[\"research_supervisor\"]]:"
+        },
+        {
+          "line": 154,
+          "text": "response = await research_model.ainvoke([HumanMessage(content=prompt_content)])"
+        },
+        {
+          "line": 178,
+          "text": "async def supervisor(state: SupervisorState, config: RunnableConfig) -> Command[Literal[\"supervisor_tools\"]]:"
+        },
+        {
+          "line": 214,
+          "text": "response = await research_model.ainvoke(supervisor_messages)"
+        },
+        {
+          "line": 225,
+          "text": "async def supervisor_tools(state: SupervisorState, config: RunnableConfig) -> Command[Literal[\"supervisor\", \"__end__\"]]:"
+        },
+        {
+          "line": 296,
+          "text": "researcher_subgraph.ainvoke({"
+        },
+        {
+          "line": 353,
+          "text": "supervisor_builder = StateGraph(SupervisorState, config_schema=Configuration)"
+        },
+        {
+          "line": 363,
+          "text": "supervisor_subgraph = supervisor_builder.compile()"
+        },
+        {
+          "line": 365,
+          "text": "async def researcher(state: ResearcherState, config: RunnableConfig) -> Command[Literal[\"researcher_tools\"]]:"
+        },
+        {
+          "line": 415,
+          "text": "response = await research_model.ainvoke(messages)"
+        },
+        {
+          "line": 427,
+          "text": "async def execute_tool_safely(tool, args, config):"
+        },
+        {
+          "line": 430,
+          "text": "return await tool.ainvoke(args, config)"
+        },
+        {
+          "line": 435,
+          "text": "async def researcher_tools(state: ResearcherState, config: RunnableConfig) -> Command[Literal[\"researcher\", \"compress_research\"]]:"
+        },
+        {
+          "line": 511,
+          "text": "async def compress_research(state: ResearcherState, config: RunnableConfig):"
+        },
+        {
+          "line": 551,
+          "text": "response = await synthesizer_model.ainvoke(messages)"
+        },
+        {
+          "line": 589,
+          "text": "researcher_builder = StateGraph("
+        },
+        {
+          "line": 605,
+          "text": "researcher_subgraph = researcher_builder.compile()"
+        },
+        {
+          "line": 607,
+          "text": "async def final_report_generation(state: AgentState, config: RunnableConfig):"
+        },
+        {
+          "line": 650,
+          "text": "final_report = await configurable_model.with_config(writer_model_config).ainvoke(["
+        },
+        {
+          "line": 701,
+          "text": "deep_researcher_builder = StateGraph("
+        },
+        {
+          "line": 719,
+          "text": "deep_researcher = deep_researcher_builder.compile()"
+        }
+      ]
+    },
+    {
+      "path": "src/open_deep_research/utils.py",
+      "sha256": "1536ea25de5210d7b37f8c81ade3348a000f43a814d4e853e1e12b3ae1de0812",
+      "url": "https://github.com/langchain-ai/open_deep_research/blob/1b7d2e80db9faa586165c60e09096dbbfd483a64/src/open_deep_research/utils.py",
+      "matches": [
+        {
+          "line": 44,
+          "text": "async def tavily_search("
+        },
+        {
+          "line": 96,
+          "text": "async def noop():"
+        },
+        {
+          "line": 138,
+          "text": "async def tavily_search_async("
+        },
+        {
+          "line": 175,
+          "text": "async def summarize_webpage(model: BaseChatModel, webpage_content: str) -> str:"
+        },
+        {
+          "line": 194,
+          "text": "model.ainvoke([HumanMessage(content=prompt_content)]),"
+        },
+        {
+          "line": 220,
+          "text": "def think_tool(reflection: str) -> str:"
+        },
+        {
+          "line": 250,
+          "text": "async def get_mcp_access_token("
+        },
+        {
+          "line": 293,
+          "text": "async def get_tokens(config: RunnableConfig):"
+        },
+        {
+          "line": 331,
+          "text": "async def set_tokens(config: RunnableConfig, tokens: dict[str, Any]):"
+        },
+        {
+          "line": 352,
+          "text": "async def fetch_tokens(config: RunnableConfig) -> dict[str, Any]:"
+        },
+        {
+          "line": 385,
+          "text": "def wrap_mcp_authenticate_tool(tool: StructuredTool) -> StructuredTool:"
+        },
+        {
+          "line": 396,
+          "text": "async def authentication_wrapper(**kwargs):"
+        },
+        {
+          "line": 399,
+          "text": "def _find_mcp_error_in_exception_chain(exc: BaseException) -> McpError | None:"
+        },
+        {
+          "line": 449,
+          "text": "async def load_mcp_tools("
+        },
+        {
+          "line": 531,
+          "text": "async def get_search_tool(search_api: SearchAPI):"
+        },
+        {
+          "line": 569,
+          "text": "async def get_all_tools(config: RunnableConfig):"
+        },
+        {
+          "line": 599,
+          "text": "def get_notes_from_tool_calls(messages: list[MessageLikeRepresentation]):"
+        },
+        {
+          "line": 607,
+          "text": "def anthropic_websearch_called(response):"
+        },
+        {
+          "line": 639,
+          "text": "def openai_websearch_called(response):"
+        },
+        {
+          "line": 665,
+          "text": "def is_token_limit_exceeded(exception: Exception, model_name: str = None) -> bool:"
+        },
+        {
+          "line": 703,
+          "text": "def _check_openai_token_limit(exception: Exception, error_str: str) -> bool:"
+        },
+        {
+          "line": 736,
+          "text": "def _check_anthropic_token_limit(exception: Exception, error_str: str) -> bool:"
+        },
+        {
+          "line": 759,
+          "text": "def _check_gemini_token_limit(exception: Exception, error_str: str) -> bool:"
+        },
+        {
+          "line": 831,
+          "text": "def get_model_token_limit(model_string):"
+        },
+        {
+          "line": 848,
+          "text": "def remove_up_to_last_ai_message(messages: list[MessageLikeRepresentation]) -> list[MessageLikeRepresentation]:"
+        },
+        {
+          "line": 872,
+          "text": "def get_today_str() -> str:"
+        },
+        {
+          "line": 881,
+          "text": "def get_config_value(value):"
+        },
+        {
+          "line": 892,
+          "text": "def get_api_key_for_model(model_name: str, config: RunnableConfig):"
+        },
+        {
+          "line": 916,
+          "text": "def get_tavily_api_key(config: RunnableConfig):"
+        }
+      ]
+    },
+    {
+      "path": "src/open_deep_research/configuration.py",
+      "sha256": "61e1a62ada20d16cb7b876c10b15a3ddb71f61248a53a05d7511ca6930af98da",
+      "url": "https://github.com/langchain-ai/open_deep_research/blob/1b7d2e80db9faa586165c60e09096dbbfd483a64/src/open_deep_research/configuration.py",
+      "matches": [
+        {
+          "line": 237,
+          "text": "def from_runnable_config("
+        }
+      ]
+    },
+    {
+      "path": "tests/run_evaluate.py",
+      "sha256": "23abd8f026985fbab4ccac78cc95d24c7e5730e568f5904634a40d64e8843d62",
+      "url": "https://github.com/langchain-ai/open_deep_research/blob/1b7d2e80db9faa586165c60e09096dbbfd483a64/tests/run_evaluate.py",
+      "matches": [
+        {
+          "line": 32,
+          "text": "async def target("
+        },
+        {
+          "line": 35,
+          "text": "graph = deep_researcher_builder.compile(checkpointer=MemorySaver())"
+        },
+        {
+          "line": 57,
+          "text": "final_state = await graph.ainvoke("
+        },
+        {
+          "line": 63,
+          "text": "async def main():"
+        }
+      ]
+    }
+  ],
+  "dependency_inputs": {
+    "uv.lock": "ca1d96c3e7e9ed95e231773361a94a400a1942b725f1ab875c7c354795800791",
+    "pyproject.toml": "57454bd01a58641b931f6879aa13030e798cfcdffe06c46ea22d606d4b667f6a"
+  },
+  "python": {
+    "argv": [
+      "/data/slanggraph-eval-upstreams/open_deep_research/.venv/bin/python",
+      "--version"
+    ],
+    "returncode": 0,
+    "stdout": "Python 3.13.11\n",
+    "stderr": ""
+  },
+  "license_sha256": "3404cb66935968edefe1149c9bfcb44bd8532c437c01ac095ec53b6e195ce110",
+  "license_text": "MIT License\n\nCopyright (c) 2025 LangChain\n\nPermission is hereby granted, free of charge, to any person obtaining a copy\nof this software and associated documentation files (the \"Software\"), to deal\nin the Software without restriction, including without limitation the rights\nto use, copy, modify, merge, publish, distribute, sublicense, and/or sell\ncopies of the Software, and to permit persons to whom the Software is\nfurnished to do so, subject to the following conditions:\n\nThe above copyright notice and this permission notice shall be included in all\ncopies or substantial portions of the Software.\n\nTHE SOFTWARE IS PROVIDED \"AS IS\", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR\nIMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,\nFITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE\nAUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER\nLIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,\nOUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE\nSOFTWARE.",
+  "intake_status": "blocked",
+  "baseline_run": null,
+  "effect_inventory_kind": "source inspection; not a runtime trace",
+  "environment_freeze_returncode": 0
+}

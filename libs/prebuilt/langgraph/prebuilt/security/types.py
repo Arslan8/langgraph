@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from _thread import RLock as _NativeRLock
 from collections.abc import Iterator, Mapping, MutableMapping, Sequence
 from dataclasses import dataclass, field
 from enum import Enum
@@ -111,6 +112,61 @@ class Principal:
             raise ValueError("principal user_id and session_id must be non-empty")
         object.__setattr__(self, "roles", frozenset(self.roles))
         object.__setattr__(self, "scopes", frozenset(self.scopes))
+
+
+def _validate_principal(principal: Principal) -> None:
+    """Admit native identity/credential containers without running user protocols.
+
+    Slot payload values belong to policy modules and remain opaque and mutable.
+    This checks their native containers, not policy semantics or their contents.
+    The control plane must preserve these shapes across later policy operations;
+    validation is not a seal against concurrent mutation or class monkeypatching.
+    """
+    if type(principal) is not Principal:
+        raise TypeError("invalid principal type")
+    try:
+        if (
+            type(principal.user_id) is not str
+            or type(principal.session_id) is not str
+            or (
+                principal.delegated_by is not None
+                and type(principal.delegated_by) is not str
+            )
+        ):
+            raise TypeError("invalid principal identity fields")
+        if not principal.user_id or not principal.session_id:
+            raise TypeError("invalid empty principal identity")
+        for values in (principal.roles, principal.scopes):
+            if type(values) is not frozenset:
+                raise TypeError("invalid principal authority container")
+            for value in values:
+                if type(value) is not str:
+                    raise TypeError("invalid principal authority value")
+
+        security = principal.security
+        if type(security) is not Blobs:
+            raise TypeError("invalid principal credential container")
+        if type(security._lock) is not _NativeRLock:
+            raise TypeError("invalid principal credential lock")
+        slots = security._slots
+        if type(slots) is not dict:
+            raise TypeError("invalid principal credential mapping")
+        for name, slot in tuple(slots.items()):
+            if type(name) is not str or type(slot) is not Slot:
+                raise TypeError("invalid principal credential slot")
+            if type(slot._lock) is not _NativeRLock:
+                raise TypeError("invalid principal slot lock")
+            contents = slot._values
+            if type(contents) is not dict:
+                raise TypeError("invalid principal slot mapping")
+            for key, _ in tuple(contents.items()):
+                if type(key) is not str:
+                    raise TypeError("invalid principal slot key")
+        return
+    except AttributeError:
+        pass
+    # `from None` hides display but retains __context__ and its receiver.
+    raise TypeError("invalid missing principal fields")
 
 
 @dataclass(frozen=True, slots=True)
@@ -287,6 +343,68 @@ class Approval:
             raise ValueError("approval request_id and approver must be non-empty")
 
 
+@dataclass(frozen=True, slots=True, init=False, eq=False)
+class _DecisionArguments(Mapping[str, Any]):
+    """Read-only native-key snapshot; policy payload values remain opaque.
+
+    The tuple representation makes backing storage inspectable without invoking
+    a caller-supplied mapping. Admission rechecks it because frozen records can
+    still be forged or changed through privileged Python operations.
+    """
+
+    _items: tuple[tuple[str, Any], ...]
+
+    def __init__(self, value: Mapping[str, Any]) -> None:
+        copied = _decision_arguments(value)
+        object.__setattr__(self, "_items", tuple(copied.items()))
+
+    def __getitem__(self, key: str) -> Any:
+        if type(key) is not str:
+            raise TypeError("decision argument keys must be plain strings")
+        return _decision_arguments(self)[key]
+
+    def __iter__(self) -> Iterator[str]:
+        return iter(_decision_arguments(self))
+
+    def __len__(self) -> int:
+        return len(_decision_arguments(self))
+
+
+def _decision_arguments(value: Any) -> dict[str, Any]:
+    """Return native argument storage without executing mapping/key protocols.
+
+    Only exact dictionaries or this module's exact tuple-backed record are
+    admitted. A mapping proxy alone cannot establish its backing mapping's type.
+    Values are neither interpreted nor copied; their later use needs its own
+    policy and data admission. Stable module bindings remain a control-plane
+    premise, independently of these checked transport shapes.
+    """
+    if type(value) is dict:
+        pairs = tuple(value.items())
+    elif type(value) is _DecisionArguments:
+        try:
+            pairs = value._items
+        except AttributeError:
+            raise TypeError("decision argument storage is missing") from None
+    else:
+        raise TypeError(
+            "decision arguments require a plain dictionary or native record"
+        )
+    if type(pairs) is not tuple:
+        raise TypeError("decision argument storage must be a plain tuple")
+    copied = {}
+    for pair in pairs:
+        if type(pair) is not tuple or len(pair) != 2:
+            raise TypeError("decision argument entries must be plain pairs")
+        key, item = pair
+        if type(key) is not str:
+            raise TypeError("decision argument keys must be plain strings")
+        if key in copied:
+            raise TypeError("decision argument keys must be unique")
+        copied[key] = item
+    return copied
+
+
 @dataclass(frozen=True, slots=True)
 class Decision:
     """One policy hook's verdict and optional transform or escalation."""
@@ -307,13 +425,13 @@ class Decision:
                 raise ValueError(
                     "TRANSFORM requires new_args and forbids escalation or constraints"
                 )
-            object.__setattr__(self, "new_args", MappingProxyType(dict(self.new_args)))
+            object.__setattr__(self, "new_args", _DecisionArguments(self.new_args))
         elif self.verdict is Verdict.REDACT:
             if self.new_args is None or self.escalation is not None or constraints:
                 raise ValueError(
                     "REDACT requires new_args and forbids escalation or constraints"
                 )
-            object.__setattr__(self, "new_args", MappingProxyType(dict(self.new_args)))
+            object.__setattr__(self, "new_args", _DecisionArguments(self.new_args))
         elif self.verdict is Verdict.ESCALATE:
             if self.escalation is None or self.new_args is not None or constraints:
                 raise ValueError(

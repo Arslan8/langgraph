@@ -34,6 +34,7 @@ def test_standard_type_relationships_match_the_running_python_runtime():
             "PermissionError",
             "TimeoutError",
             "ValueError",
+            "AttributeError",
             "RuntimeError",
             "NotImplementedError",
             "TypeError",

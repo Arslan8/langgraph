@@ -1,0 +1,2 @@
+No integration or controlled-implementation patch has been applied.
+`compatibility-requirements.txt` adds the exact missing IPython version to the documented requirements. Apply the same dependency to A/B/C. No upstream source or lockfile was edited. Local provider selection and fixture wiring live in the headless adapter, not an integration patch. Manifest v2 records a CPU-affinity compatibility setting; the upstream subprocess, timeout and resource limits are preserved.

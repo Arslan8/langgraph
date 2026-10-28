@@ -34,6 +34,12 @@ from langgraph.prebuilt.security.observability import (
     compose_observer,
     hash_args,
 )
+from langgraph.prebuilt.security.output_data import (
+    OutputDataError,
+    output_data_digest,
+    validate_output_request,
+    validate_security_labels,
+)
 from langgraph.prebuilt.security.types import (
     Approval,
     AuditSink,
@@ -47,7 +53,10 @@ from langgraph.prebuilt.security.types import (
     Slot,
     ToolCall,
     Verdict,
+    _decision_arguments,
+    _validate_principal,
 )
+from langgraph.prebuilt.security.unsupported import output_refusal_reason
 
 
 class CapModule(SecurityModule):
@@ -360,6 +369,10 @@ class SecurityStack:
         self, principal: Principal, request: FrameworkRequest
     ) -> ObjectAuthorization:
         """Authorize and monotonically narrow one framework-object operation."""
+        if not _native_framework_request(request):
+            return ObjectAuthorization(
+                Decision(Verdict.DENY, "object:unsupported_request"), request
+            )
         if isinstance(request, DispatchRequest):
             if principal is not request.parent:
                 return ObjectAuthorization(
@@ -381,6 +394,10 @@ class SecurityStack:
         self, principal: Principal, request: FrameworkRequest
     ) -> ObjectAuthorization:
         """Asynchronously authorize one framework-object operation."""
+        if not _native_framework_request(request):
+            return ObjectAuthorization(
+                Decision(Verdict.DENY, "object:unsupported_request"), request
+            )
         if isinstance(request, DispatchRequest):
             if principal is not request.parent:
                 return ObjectAuthorization(
@@ -405,6 +422,10 @@ class SecurityStack:
         approval: Approval,
     ) -> ObjectAuthorization:
         """Consume one approval and run the complete object hook chain again."""
+        if not _native_framework_request(request):
+            return ObjectAuthorization(
+                Decision(Verdict.DENY, "object:unsupported_request"), request
+            )
         if not record_approval(principal, approval):
             return ObjectAuthorization(
                 Decision(Verdict.DENY, "approval_replay"), request
@@ -423,6 +444,10 @@ class SecurityStack:
         approval: Approval,
     ) -> ObjectAuthorization:
         """Asynchronously consume approval and rerun the object hook chain."""
+        if not _native_framework_request(request):
+            return ObjectAuthorization(
+                Decision(Verdict.DENY, "object:unsupported_request"), request
+            )
         if not record_approval(principal, approval):
             return ObjectAuthorization(
                 Decision(Verdict.DENY, "approval_replay"), request
@@ -441,6 +466,13 @@ class SecurityStack:
         *,
         approval: Approval | None = None,
     ) -> ObjectAuthorization:
+        if type(request) is OutputRequest:
+            try:
+                _validate_principal(principal)
+                validate_output_request(request)
+            except (OutputDataError, TypeError) as exc:
+                reason = output_refusal_reason(exc, OutputDataError)
+                return ObjectAuthorization(Decision(Verdict.DENY, reason), request)
         if self.analysis is not None:
             from langgraph.prebuilt.analysis.adapters.objects import ObjectAdapter
 
@@ -500,6 +532,13 @@ class SecurityStack:
         *,
         approval: Approval | None = None,
     ) -> ObjectAuthorization:
+        if type(request) is OutputRequest:
+            try:
+                _validate_principal(principal)
+                validate_output_request(request)
+            except (OutputDataError, TypeError) as exc:
+                reason = output_refusal_reason(exc, OutputDataError)
+                return ObjectAuthorization(Decision(Verdict.DENY, reason), request)
         if self.analysis is not None:
             from langgraph.prebuilt.analysis.adapters.objects import ObjectAdapter
 
@@ -877,11 +916,31 @@ class SecurityStack:
         escalation = decision.escalation
         if decision.verdict is not Verdict.ESCALATE or escalation is None:
             return decision
+        if type(request) is OutputRequest:
+            try:
+                validate_output_request(request)
+                subject = {
+                    "kind": "output-v1",
+                    "destination": request.destination,
+                    "output_id": request.output_id,
+                    "content": output_data_digest(request.content),
+                    "confidentiality": sorted(request.labels.confidentiality),
+                    "integrity": request.labels.integrity,
+                    "clearance": sorted(request.clearance),
+                    "roles": sorted(principal.roles),
+                    "scopes": sorted(principal.scopes),
+                    "delegated_by": principal.delegated_by,
+                }
+            except OutputDataError as exc:
+                reason = output_refusal_reason(exc, OutputDataError)
+                return Decision(Verdict.DENY, reason)
+        else:
+            subject = repr(request)
         encoded = json.dumps(
             {
                 "module": module.name,
                 "principal": principal.user_id,
-                "request": repr(request),
+                "request": subject,
                 "session": principal.session_id,
             },
             sort_keys=True,
@@ -1141,12 +1200,27 @@ def _object_stage(
     return "output_emit"
 
 
+def _native_framework_request(request: object) -> bool:
+    """Classify native records without consulting candidate object protocols."""
+    return (
+        type(request) is DispatchRequest
+        or type(request) is ToolRegistryRequest
+        or type(request) is StateRequest
+        or type(request) is ModelInvocationRequest
+        or type(request) is OutputRequest
+    )
+
+
 def _narrow_object_request(
     request: StateRequest | ModelInvocationRequest | OutputRequest,
     decision: Decision,
 ) -> StateRequest | ModelInvocationRequest | OutputRequest | None:
     values = decision.new_args
     if values is None:
+        return None
+    try:
+        values = _decision_arguments(values)
+    except TypeError:
         return None
     if isinstance(request, StateRequest):
         if set(values) != {"value"}:
@@ -1161,13 +1235,25 @@ def _narrow_object_request(
         ):
             return None
         return replace(request, context=tuple(proposed))
-    if set(values) not in ({"content"}, {"content", "labels"}):
+    if type(request) is not OutputRequest or set(values) not in (
+        {"content"},
+        {"content", "labels"},
+    ):
         return None
     labels = values.get("labels", request.labels)
+    try:
+        validate_security_labels(labels)
+        validate_security_labels(request.labels)
+    except OutputDataError:
+        return None
     if (
-        not isinstance(labels, type(request.labels))
-        or not labels.confidentiality.issubset(request.labels.confidentiality)
+        not labels.confidentiality.issubset(request.labels.confidentiality)
         or labels.integrity != request.labels.integrity
     ):
         return None
-    return replace(request, content=values["content"], labels=labels)
+    effective = replace(request, content=values["content"], labels=labels)
+    try:
+        validate_output_request(effective)
+    except OutputDataError:
+        return None
+    return effective

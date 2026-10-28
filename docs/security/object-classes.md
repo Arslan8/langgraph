@@ -23,7 +23,7 @@ manifest body nor the Cedar policy needs to repeat it. It also generates the
 tool-owner ceiling internally. A resource-free tool needs no host dispatcher,
 receipt, class, or normalizer.
 
-The same helper accepts resource operations for explicitly trusted in-process
+The same helper accepts resource operations for source-admitted language-sandbox
 tools:
 
 ```python
@@ -40,7 +40,7 @@ security = cedar_security(
 
 `fs read` is built into `cedar_security`; ordinary users do not declare it.
 The helper supplies its `FsPath` Cedar entity, `fs.realpath` normalizer, and
-trusted-tool enforcement binding.
+language-sandbox enforcement binding.
 
 The helper expands and normalizes the invocation, evaluates every operation in
 Cedar, constructs an exact `ObjectGrant`, canonicalizes descriptor-declared
@@ -48,7 +48,7 @@ resource arguments before dispatch, and records enforcement evidence. Call
 `security.host_executor.authorization_grants()` to review the issued grants.
 Call `security.host_executor.authorizer.authorization_artifacts()` to locate
 the retained Cedar schema, entity set, policies, and requests for each decision.
-Only classes declared with `enforced_by trusted_tool` use this convenience path;
+Only classes declared with `enforced_by language_sandbox` use this convenience path;
 other enforcement loci require an explicit dispatcher.
 
 ### Isolated tools
@@ -255,15 +255,15 @@ real Cedar permissions through a ToolNode: Alice may manage her record, Bob
 may only read his, and cross-record requests are denied. The untrusted
 [worker](../../workspace/06_database/worker.py) receives only record selectors.
 
-### Trusted in-process resources
+### Language-sandbox resources
 
-The effective permission of trusted in-process execution is the
+The effective permission of language-sandbox execution is the
 intersection of slangGraph authorization and the coordinator's existing host
 permission. A host allow does not grant an operation denied by slangGraph, and
 a slangGraph allow does not overcome a host denial. The tool runs under the
-coordinator's host identity, so honoring the slangGraph side of the intersection
-is a TCB obligation enforced by operator trust or an enabled language sandbox,
-not by a per-call kernel sandbox. The operating system independently enforces
+coordinator's host identity. The interpreter and mediated terminals enforce the
+slangGraph side of the intersection; the tool body is not trusted to honor it.
+This is not a per-call kernel sandbox. The operating system independently enforces
 the host side of the intersection.
 
 The object-policy API lets a tool plugin add resources such as database tables,
@@ -272,7 +272,7 @@ grammar. A class declares its operations, canonicalizer, Cedar attributes, and
 enforcement locus. A tool manifest then enumerates the objects it needs or
 wants.
 
-For a trusted in-process tool, a power user can add a class directly through
+For a language-sandbox tool, a power user can add a class directly through
 the same helper:
 
 ```python
@@ -284,7 +284,7 @@ security = cedar_security(
           object item
           normalizer identity
           attrs owner
-          enforced_by trusted_tool
+          enforced_by language_sandbox
         }
     """,
     manifest="record read @{record_id} need",
@@ -406,7 +406,7 @@ The bound mediator receives only requests for its own object after grant checks.
 
 Register `resources=(resource,)` on `ObjectBrokerDispatcher` and declare access
 with `resource.permission("increment")`. `cedar_security` derives compatible
-class declarations from the registered objects. For admitted in-process tools,
+class declarations from the registered objects. For admitted language-sandbox tools,
 register resources directly on `cedar_security`. Multiple instances can share the
 same class while retaining distinct identities and grants. Constructor binding
 and deferred `.bind(...)` are both supported.

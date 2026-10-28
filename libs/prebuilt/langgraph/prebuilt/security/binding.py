@@ -7,10 +7,16 @@ from threading import Lock
 from typing import Any, cast
 
 from langchain_core.runnables import RunnableConfig
+from langgraph.runtime import Runtime
 
 from langgraph.prebuilt.security.hooks import SecurityModule
 from langgraph.prebuilt.security.stack import CapModule
-from langgraph.prebuilt.security.types import AuditRecord, AuditSink, Principal
+from langgraph.prebuilt.security.types import (
+    AuditRecord,
+    AuditSink,
+    Principal,
+    _validate_principal,
+)
 
 PRINCIPAL_CONFIG_KEY = "__principal__"
 _CALL_COUNTER_CONFIG_KEY = "__security_call_counter__"
@@ -19,6 +25,8 @@ _COUNTER_INIT_LOCK = Lock()
 
 class _CallCounter:
     """Allocate monotonically increasing indexes across one bound session."""
+
+    __slots__ = ("_value", "_lock")
 
     def __init__(self) -> None:
         self._value = 0
@@ -48,34 +56,56 @@ def with_principal(
     only its named slot during credential preparation.
     """
 
-    if not isinstance(principal, Principal):
+    copied = _configuration_copy(config)
+    if type(principal) is not Principal:
         raise TypeError("principal must be a Principal")
+    _validate_principal(principal)
     configured_modules = (CapModule(), *modules)
     names = [module.name for module in configured_modules]
     if len(names) != len(set(names)):
         raise ValueError("security module names must be unique")
     for module in configured_modules:
+        _validate_principal(principal)
         slot = principal.security.allocate(module.name)
         try:
             module.cred_prepare(principal, slot)
         except BaseException as exc:
             raise SecurityBindingError(f"cred_prepare failed:{module.name}") from exc
 
-    return _bind_principal(config, principal)
+    return _bind_principal(copied, principal)
+
+
+def _plain_dictionary(value: Any) -> dict[str, Any]:
+    """Snapshot native dictionaries before key lookup can invoke user equality."""
+    if type(value) is not dict:
+        raise TypeError("security configuration requires a plain dictionary")
+    copied = {}
+    for key, item in tuple(value.items()):
+        if type(key) is not str:
+            raise TypeError("security configuration keys must be plain strings")
+        copied[key] = item
+    return copied
+
+
+def _configuration_copy(config: Mapping[str, Any] | None) -> dict[str, Any]:
+    """Admit only native dictionary shapes; values are still opaque."""
+    copied = {} if config is None else _plain_dictionary(config)
+    configurable = copied.get("configurable")
+    copied["configurable"] = (
+        {} if configurable is None else _plain_dictionary(configurable)
+    )
+    return copied
 
 
 def _bind_principal(
     config: RunnableConfig | None, principal: Principal
 ) -> RunnableConfig:
     """Bind an already-prepared principal without rerunning credential hooks."""
-    copied = dict(config or {})
-    raw_configurable = copied.get("configurable")
-    if raw_configurable is None:
-        configurable: dict[str, Any] = {}
-    elif isinstance(raw_configurable, Mapping):
-        configurable = dict(raw_configurable)
-    else:
-        raise TypeError("configurable config must be a mapping")
+    if type(principal) is not Principal:
+        raise TypeError("principal must be a Principal")
+    _validate_principal(principal)
+    copied = _configuration_copy(config)
+    configurable = copied["configurable"]
     configurable[PRINCIPAL_CONFIG_KEY] = principal
     configurable.setdefault(_CALL_COUNTER_CONFIG_KEY, _CallCounter())
     copied["configurable"] = configurable
@@ -85,14 +115,16 @@ def _bind_principal(
 
 def next_call_index(config: Mapping[str, Any]) -> int:
     """Return the next framework-owned call index for a bound configuration."""
-    configurable = config.get("configurable")
-    if not isinstance(configurable, MutableMapping):
+    copied = _plain_dictionary(config)
+    configurable = copied.get("configurable")
+    if configurable is None:
         raise SecurityBindingError("security call counter requires configurable config")
-    counter = configurable.get(_CALL_COUNTER_CONFIG_KEY)
+    admitted = _plain_dictionary(configurable)
+    counter = admitted.get(_CALL_COUNTER_CONFIG_KEY)
     if counter is None:
         with _COUNTER_INIT_LOCK:
             counter = configurable.setdefault(_CALL_COUNTER_CONFIG_KEY, _CallCounter())
-    if not isinstance(counter, _CallCounter):
+    if type(counter) is not _CallCounter:
         raise SecurityBindingError("security call counter is missing or invalid")
     return counter.next()
 
@@ -111,33 +143,76 @@ def history_for(
     )
 
 
-def principal_from(config: Mapping[str, Any] | None) -> Principal | None:
-    """Read a bound principal from the reserved config or runtime context."""
+def principal_from(
+    config: Mapping[str, Any] | None, *, include_runtime_context: bool = True
+) -> Principal | None:
+    """Read identity from native config dictionaries or an exact Runtime.
 
-    if not config:
-        return None
-    configurable = config.get("configurable")
-    if not isinstance(configurable, Mapping):
-        return None
+    Attribute-based contexts, custom mappings, subclasses and non-string keys
+    cannot establish identity. An unrelated runtime is not consulted when the
+    principal is already present in the authoritative configurable dictionary.
+    With `include_runtime_context=False`, an absent direct binding returns None
+    without consulting a runtime. This supports optional identity on unsecured
+    request hooks without interpreting arbitrary application contexts.
+    """
+
+    if type(include_runtime_context) is not bool:
+        raise TypeError("include_runtime_context must be a boolean")
+    copied = _configuration_copy(config)
+    configurable = copied["configurable"]
     candidate = configurable.get(PRINCIPAL_CONFIG_KEY)
     if candidate is None:
+        if not include_runtime_context:
+            return None
         runtime = configurable.get("__pregel_runtime")
-        context = getattr(runtime, "context", None)
-        if isinstance(context, Mapping):
-            candidate = context.get(PRINCIPAL_CONFIG_KEY)
-        else:
-            candidate = getattr(context, PRINCIPAL_CONFIG_KEY, None)
+        if runtime is None:
+            return None
+        if type(runtime) is not Runtime:
+            raise TypeError("principal context requires an exact Runtime")
+        context = _runtime_context(runtime)
+        if context is None:
+            return None
+        candidate = _plain_dictionary(context).get(PRINCIPAL_CONFIG_KEY)
     if candidate is None:
         return None
-    if not isinstance(candidate, Principal):
+    if type(candidate) is not Principal:
         raise TypeError("reserved principal config contains an invalid value")
+    _validate_principal(candidate)
     return candidate
+
+
+def _runtime_context(runtime: Runtime) -> Any:
+    """Read exact native runtime context without retaining a missing-slot error."""
+    if type(runtime) is not Runtime:
+        raise TypeError("principal context requires an exact Runtime")
+    try:
+        return runtime.context
+    except AttributeError:
+        pass
+    raise TypeError("principal context requires an initialized Runtime")
 
 
 def _bind_runtime_context(
     configurable: MutableMapping[str, Any], principal: Principal
 ) -> None:
-    runtime = configurable.get("__pregel_runtime")
-    context = getattr(runtime, "context", None)
-    if isinstance(context, MutableMapping):
-        context[PRINCIPAL_CONFIG_KEY] = principal
+    """Copy a supported native context; opaque runtimes stay untouched.
+
+    The configurable principal is authoritative independently of this optional
+    context mirror. No attributes or mapping protocols of opaque values run.
+    A child binding never changes the parent's Runtime or shared context. Runtime
+    is exact, frozen and slotted; use its source method directly rather than an
+    instance-selected method when constructing the replacement.
+    """
+    runtime = _plain_dictionary(configurable).get("__pregel_runtime")
+    if type(runtime) is not Runtime:
+        return
+    context = _runtime_context(runtime)
+    if type(context) is dict:
+        copied = _plain_dictionary(context)
+        copied[PRINCIPAL_CONFIG_KEY] = principal
+        try:
+            configurable["__pregel_runtime"] = Runtime.override(runtime, context=copied)
+            return
+        except AttributeError:
+            pass
+        raise TypeError("principal context requires an initialized Runtime")

@@ -21,21 +21,23 @@ policies, simulators, and app-owned mediators live beside the demo that uses the
 | [08_custom_mediator](08_custom_mediator/README.md) | Extending the framework: custom mediator |
 | [09_no_internet](09_no_internet/README.md) | Mandatory access control: no internet |
 | [10_repeat_after_me](10_repeat_after_me/README.md) | Analysis and provenance block detected Repeat-After-Me tool calls |
-| [11_analysis_plugin](11_analysis_plugin/README.md) | Register one analyzer and return a finding |
-| [12_analysis_boundaries](12_analysis_boundaries/README.md) | Observe request / execution / response order |
+| [11_analysis_plugin](11_analysis_plugin/README.md) | Run a real tool and log its result in a callback |
+| [12_analysis_boundaries](12_analysis_boundaries/README.md) | Extend demo 11 to observe the tool lifecycle and error path |
+| [12b_all_analysis_events](12b_all_analysis_events/README.md) | Observe all 25 event types through real local operations, including llama.cpp |
 | [13_provenance](13_provenance/README.md) | Preserve source ancestry through transformations |
 | [14_information_flow](14_information_flow/README.md) | Propagate confidentiality and check destination clearance |
-| [15_analysis_enforcement](15_analysis_enforcement/README.md) | Block a tool when required analysis is unavailable |
-| [16_analysis_inspection](16_analysis_inspection/README.md) | Query findings and match completion notifications |
-| [17_analysis_checkpoints](17_analysis_checkpoints/README.md) | Restore metadata and reject a changed policy |
-| [18_analysis_evaluation](18_analysis_evaluation/README.md) | Count classifier errors and measure processing time |
+| [14b_static_information_flow](14b_static_information_flow/README.md) | Reject incompatible information-flow bounds at manifest admission |
+| [15_analysis_logging](15_analysis_logging/README.md) | Keep tool execution unchanged when analysis logging fails |
+| [16_analysis_inspection](16_analysis_inspection/README.md) | Inspect stored findings without rerunning the analyzer |
+| [17_analysis_checkpoints](17_analysis_checkpoints/README.md) | Restore metadata with a local checkpoint handle |
+| [18_analysis_evaluation](18_analysis_evaluation/README.md) | Evaluate an ordinary analyzer function offline |
 
 Demo 10 also supports a [real local LLM mode](10_repeat_after_me/README.md#run-with-a-real-local-llm) with llama.cpp or Ollama.
 
 ## Focused analysis lessons
 
-Demos 11–18 each teach one analysis capability independently of the combined
-Repeat-After-Me scenario. Start with 11 for the plugin contract; each subsequent
+Numbered demos 11–18 each teach one analysis capability independently of the combined
+Repeat-After-Me scenario. Start with 11 for plain event callbacks; each subsequent
 folder has a self-contained `demo.py`, expected behavior, and a small edit to try.
 The setup is intentionally visible in each script instead of hidden in a shared
 helper. No demo imports another demo or requires a previous run.
@@ -47,17 +49,21 @@ libs/prebuilt/.venv/bin/python workspace/11_analysis_plugin/demo.py
 libs/prebuilt/.venv/bin/python workspace/12_analysis_boundaries/demo.py
 libs/prebuilt/.venv/bin/python workspace/13_provenance/demo.py
 libs/prebuilt/.venv/bin/python workspace/14_information_flow/demo.py
-libs/prebuilt/.venv/bin/python workspace/15_analysis_enforcement/demo.py
+libs/prebuilt/.venv/bin/python workspace/15_analysis_logging/demo.py
 libs/prebuilt/.venv/bin/python workspace/16_analysis_inspection/demo.py
 libs/prebuilt/.venv/bin/python workspace/17_analysis_checkpoints/demo.py
 libs/prebuilt/.venv/bin/python workspace/18_analysis_evaluation/demo.py
 ```
 
-These lessons run offline without credentials, models, Cedar, or a Linux sandbox.
-Effects stay in local lists or temporary databases. Each script asserts its expected
-outcome. Timing in demo 18 varies by machine; its tiny keyword fixture teaches
+The commands above run offline without credentials, models, Cedar, or a Linux sandbox.
+Effects stay in local lists or local stores. Each script asserts its expected
+outcome where applicable. Timing in demo 18 varies by machine; its tiny keyword fixture teaches
 metrics, not real-world detection quality. These focused lessons demonstrate the
 named behavior, not coverage of every adapter or a complete security proof.
+
+The optional [12b companion](12b_all_analysis_events/README.md) combines real operations
+to cover all 25 event types and checks their effects. It requires a running local
+model server and has separate setup instructions.
 
 ## Run the examples
 
@@ -488,3 +494,5 @@ Changing the environment afterward cannot replace the loaded policy, and
 `install_mac_policy` cannot override it. Restart controllers after policy changes.
 This trusts the deployment launcher and controller account; untrusted code must
 run behind an OS boundary. Each container needs access to the configured directory.
+
+Demo 12b needs a running local model server; see its [setup and coverage notes](12b_all_analysis_events/README.md).

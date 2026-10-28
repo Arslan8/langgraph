@@ -1,0 +1,1 @@
+{"id": "smoke", "kind": "clean", "task": "Freeze financial-provider responses and local model settings; run historical analysis only. Reproducibility of selected historical revision remains unverified.", "status": "not_frozen"}

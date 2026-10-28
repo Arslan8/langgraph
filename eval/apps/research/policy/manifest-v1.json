@@ -1,0 +1,21 @@
+{
+  "version": 1,
+  "status": "planned",
+  "model": {
+    "name": "qwen3:8b",
+    "base_url": "http://localhost:11434/v1",
+    "temperature": 0,
+    "seed": 20261005,
+    "digest": "500a1f067a9f782620b40bee6f7b0c89e17ae61f686b92c24933e4ca4b2b8b41",
+    "timeout_seconds": 120,
+    "max_retries": 0
+  },
+  "configurations": {
+    "A": "Baseline adapter not yet validated.",
+    "B": "Boundary inventory required before implementation.",
+    "C": "No integration validated; do not infer service or remote-host confinement."
+  },
+  "analysis": null,
+  "upstream_protections": "Preserved. See intake.json effect inventory.",
+  "ui_scope": "Backend only. UI authentication, file upload, rendering and session history excluded."
+}

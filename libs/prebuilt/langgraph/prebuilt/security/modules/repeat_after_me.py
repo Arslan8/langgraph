@@ -35,7 +35,7 @@ class RepeatAfterMePolicy(AnalysisGate):
             for item in runtime.registry.analyzers
             if item.analyzer_id == "example.repeat_after_me"
             and item.mode == "required"
-            and expected.issubset(item.events)
+            and expected.issubset(item.event_names)
         ]
         report = {item.boundary: item.status for item in runtime.config.coverage}
         if not candidates or any(

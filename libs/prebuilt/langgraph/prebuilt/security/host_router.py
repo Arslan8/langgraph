@@ -27,6 +27,8 @@ from langgraph.prebuilt.security.types import Approval, Principal, ToolCall, Ver
 class HostRouter:
     """Mediate root and cross-tool calls without an in-process execution path."""
 
+    __slots__ = ("policy", "host")
+
     policy: BoundaryPolicy
     host: BoundaryHost
 

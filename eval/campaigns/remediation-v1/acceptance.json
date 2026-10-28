@@ -1,0 +1,75 @@
+{
+  "complete": false,
+  "dispositions": [
+    {
+      "item": 1,
+      "status": "historical-gap",
+      "detail": "Contemporaneous v2 provenance cannot be reconstructed. Original artifacts unchanged."
+    },
+    {
+      "item": 2,
+      "status": "open",
+      "detail": "Both verification gates still fail with 40 SGV301 findings, 34 stale waivers and SGV901\u2013903 proof gaps. No waiver was refreshed."
+    },
+    {
+      "item": 3,
+      "status": "open",
+      "detail": "No production persistent-container integration was added. Recreation tests remain evaluation-adapter evidence."
+    },
+    {
+      "item": 4,
+      "status": "unchanged-scope",
+      "detail": "No independent VM was available or introduced. Same-host capability evidence remains labeled as such."
+    },
+    {
+      "item": 5,
+      "status": "open",
+      "detail": "Notebook server boundary remains incomplete; C remains unsupported."
+    },
+    {
+      "item": 6,
+      "status": "partial",
+      "detail": "Recursive serialization is repaired consistently across A/B/C in new manifest v10. Original failures remain; new utility cohort is separately evaluated. New one-repetition cohort retains 4/10 A, 7/10 B and 5/10 C failures; no overall utility improvement is claimed."
+    },
+    {
+      "item": 7,
+      "status": "partial",
+      "detail": "Profiler globals isolated, timeout rows retained, Python venv path preserved and CPU affinity aligned with workflow runs. One new full C workflow succeeds with policy/audit spans and expected result; coverage is one workload, not the whole task distribution."
+    },
+    {
+      "item": 8,
+      "status": "open",
+      "detail": "OpenShell runtime integration remains absent. No native canary comparison was fabricated."
+    },
+    {
+      "item": 9,
+      "status": "unchanged-scope",
+      "detail": "SQLite still requires the trusted private namespace assumption. No general runtime alias discovery guarantee added."
+    },
+    {
+      "item": 10,
+      "status": "unchanged-scope",
+      "detail": "Landlock content policies still do not provide metadata secrecy or Docker-equivalent process ceilings."
+    },
+    {
+      "item": 11,
+      "status": "preserved",
+      "detail": "Original pilots and cohorts untouched. New failed profile attempts and serialization development cohorts retained separately."
+    },
+    {
+      "item": 12,
+      "status": "partial",
+      "detail": "New application rows include model/source/policy identity, timestamps, timing scope and explicit missing policy/audit phases. No retrospective labor estimates or universal schema claim."
+    },
+    {
+      "item": 13,
+      "status": "unchanged-scope",
+      "detail": "All new evidence is from the same shared host. No idle-host or comparative performance claim."
+    },
+    {
+      "item": 14,
+      "status": "open",
+      "detail": "No separate unbrokered native filesystem matrix added. Zero-attempt injections remain no evidence."
+    }
+  ]
+}

@@ -1,0 +1,2 @@
+principal,action,resource,legitimate_example,denied_example,authorization_point,mechanism,bypass_paths,host_support,status
+synthetic-user,workflow,application,documented smoke task,proposed forbidden effect,not yet validated,none claimed,see intake effect inventory,not yet negotiated,untested

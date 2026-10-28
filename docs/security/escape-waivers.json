@@ -1,225 +1,310 @@
 {
-  "version": 1,
+  "version": 2,
   "waivers": [
     {
       "fingerprint": "langgraph/langgraph/graph/state.py:1071:33:<module>:unknown_callback:node",
-      "reason": "Secured compilation classifies this unresolved imported callback as untrusted and rejects it unless a separate-process node host is configured."
+      "reason": "Secured compilation classifies this unresolved imported callback as untrusted and rejects it unless a separate-process node host is configured.",
+      "source_sha256": "787712579dd335cd16deabfa462bcebdedc5954c09f84420f64cd147b3b6543b"
     },
     {
       "fingerprint": "langgraph/langgraph/graph/state.py:1071:33:<module>:unmediated_node:node",
-      "reason": "Secured StateGraph compilation replaces this registered node or branch with the HostRouter placement wrapper; completeness tests cover sync and async denial."
+      "reason": "Secured StateGraph compilation replaces this registered node or branch with the HostRouter placement wrapper; completeness tests cover sync and async denial.",
+      "source_sha256": "787712579dd335cd16deabfa462bcebdedc5954c09f84420f64cd147b3b6543b"
     },
     {
       "fingerprint": "langgraph/langgraph/graph/state.py:1114:50:<module>:unknown_callback:path",
-      "reason": "Secured compilation classifies this unresolved imported callback as untrusted and rejects it unless a separate-process node host is configured."
+      "reason": "Secured compilation classifies this unresolved imported callback as untrusted and rejects it unless a separate-process node host is configured.",
+      "source_sha256": "787712579dd335cd16deabfa462bcebdedc5954c09f84420f64cd147b3b6543b"
     },
     {
       "fingerprint": "langgraph/langgraph/graph/state.py:1114:50:<module>:unmediated_node:path",
-      "reason": "Secured StateGraph compilation replaces this registered node or branch with the HostRouter placement wrapper; completeness tests cover sync and async denial."
+      "reason": "Secured StateGraph compilation replaces this registered node or branch with the HostRouter placement wrapper; completeness tests cover sync and async denial.",
+      "source_sha256": "787712579dd335cd16deabfa462bcebdedc5954c09f84420f64cd147b3b6543b"
+    },
+    {
+      "fingerprint": "prebuilt/langgraph/prebuilt/chat_agent_executor.py:1013:31:post_model_hook_router:unknown_call:next",
+      "reason": "Reviewed coordinator construction/selection of exception or message data at this exact site. It does not release a tool or execute a worker. Model/branch placement still applies; arbitrary user-defined object methods are outside this local source-review claim.",
+      "source_sha256": "f400f47b82fe82f76d5a3605be454594bd885b5e9e98bfa031c4336a4af9acc6"
+    },
+    {
+      "fingerprint": "prebuilt/langgraph/prebuilt/chat_agent_executor.py:1022:21:post_model_hook_router:unknown_call:langgraph.types.Send",
+      "reason": "Reviewed construction of Send/ToolCallWithContext data only. MediatedBranch routes resulting sends through dispatch authorization before the scheduler releases children; tests cover denied sync/async sends. This local review does not close all scheduler publication obligations.",
+      "source_sha256": "f400f47b82fe82f76d5a3605be454594bd885b5e9e98bfa031c4336a4af9acc6"
+    },
+    {
+      "fingerprint": "prebuilt/langgraph/prebuilt/chat_agent_executor.py:1024:25:post_model_hook_router:unknown_call:langgraph.prebuilt.tool_node.ToolCallWithContext",
+      "reason": "Reviewed construction of Send/ToolCallWithContext data only. MediatedBranch routes resulting sends through dispatch authorization before the scheduler releases children; tests cover denied sync/async sends. This local review does not close all scheduler publication obligations.",
+      "source_sha256": "f400f47b82fe82f76d5a3605be454594bd885b5e9e98bfa031c4336a4af9acc6"
+    },
+    {
+      "fingerprint": "prebuilt/langgraph/prebuilt/chat_agent_executor.py:1041:13:<module>:unmediated_node:post_model_hook_router",
+      "reason": "Reviewed branch registration: the returned compiled graph wraps conditional paths with MediatedBranch. The local branch only selects destinations or constructs sends; send dispatch is checked before child release. This source review does not establish system-wide path coverage.",
+      "source_sha256": "f400f47b82fe82f76d5a3605be454594bd885b5e9e98bfa031c4336a4af9acc6"
+    },
+    {
+      "fingerprint": "prebuilt/langgraph/prebuilt/chat_agent_executor.py:1047:9:<module>:unmediated_node:should_continue",
+      "reason": "Reviewed branch registration: the returned compiled graph wraps conditional paths with MediatedBranch. The local branch only selects destinations or constructs sends; send dispatch is checked before child release. This source review does not establish system-wide path coverage.",
+      "source_sha256": "f400f47b82fe82f76d5a3605be454594bd885b5e9e98bfa031c4336a4af9acc6"
+    },
+    {
+      "fingerprint": "prebuilt/langgraph/prebuilt/chat_agent_executor.py:1068:22:<module>:unmediated_node:route_tool_responses",
+      "reason": "Reviewed branch registration: the returned compiled graph wraps conditional paths with MediatedBranch. The local branch only selects destinations or constructs sends; send dispatch is checked before child release. This source review does not establish system-wide path coverage.",
+      "source_sha256": "f400f47b82fe82f76d5a3605be454594bd885b5e9e98bfa031c4336a4af9acc6"
     },
     {
       "fingerprint": "prebuilt/langgraph/prebuilt/chat_agent_executor.py:133:14:_get_state_value:dynamic_dispatch:builtins.getattr",
-      "reason": "This getattr is a state-field read helper, not callable dispatch; model and output effects remain behind their compile-placed HostRouter operations."
+      "reason": "This getattr is a state-field read helper, not callable dispatch; model and output effects remain behind their compile-placed HostRouter operations.",
+      "source_sha256": "f400f47b82fe82f76d5a3605be454594bd885b5e9e98bfa031c4336a4af9acc6"
     },
     {
       "fingerprint": "prebuilt/langgraph/prebuilt/chat_agent_executor.py:133:14:_get_state_value:unknown_call:builtins.getattr",
-      "reason": "The analyzer lacks a primitive model for this coordinator-only operation; it has no direct host effect and remains inside a compile-placed trusted node."
+      "reason": "The analyzer lacks a primitive model for this coordinator-only operation; it has no direct host effect and remains inside a compile-placed trusted node.",
+      "source_sha256": "f400f47b82fe82f76d5a3605be454594bd885b5e9e98bfa031c4336a4af9acc6"
     },
     {
       "fingerprint": "prebuilt/langgraph/prebuilt/chat_agent_executor.py:144:40:_get_prompt_runnable:unknown_call:langchain_core.messages.SystemMessage",
-      "reason": "The analyzer lacks a primitive model for this coordinator-only operation; it has no direct host effect and remains inside a compile-placed trusted node."
+      "reason": "The analyzer lacks a primitive model for this coordinator-only operation; it has no direct host effect and remains inside a compile-placed trusted node.",
+      "source_sha256": "f400f47b82fe82f76d5a3605be454594bd885b5e9e98bfa031c4336a4af9acc6"
     },
     {
       "fingerprint": "prebuilt/langgraph/prebuilt/chat_agent_executor.py:145:27:_get_prompt_runnable:unknown_call:langgraph._internal._runnable.RunnableCallable",
-      "reason": "This constructs a framework runnable; secured compilation subsequently assigns trust and wraps it before the runtime can schedule execution."
+      "reason": "This constructs a framework runnable; secured compilation subsequently assigns trust and wraps it before the runtime can schedule execution.",
+      "source_sha256": "f400f47b82fe82f76d5a3605be454594bd885b5e9e98bfa031c4336a4af9acc6"
     },
     {
       "fingerprint": "prebuilt/langgraph/prebuilt/chat_agent_executor.py:150:27:_get_prompt_runnable:unknown_call:langgraph._internal._runnable.RunnableCallable",
-      "reason": "This constructs a framework runnable; secured compilation subsequently assigns trust and wraps it before the runtime can schedule execution."
+      "reason": "This constructs a framework runnable; secured compilation subsequently assigns trust and wraps it before the runtime can schedule execution.",
+      "source_sha256": "f400f47b82fe82f76d5a3605be454594bd885b5e9e98bfa031c4336a4af9acc6"
     },
     {
       "fingerprint": "prebuilt/langgraph/prebuilt/chat_agent_executor.py:154:10:_get_prompt_runnable:unknown_call:inspect.iscoroutinefunction",
-      "reason": "The analyzer lacks a primitive model for this coordinator-only operation; it has no direct host effect and remains inside a compile-placed trusted node."
+      "reason": "The analyzer lacks a primitive model for this coordinator-only operation; it has no direct host effect and remains inside a compile-placed trusted node.",
+      "source_sha256": "f400f47b82fe82f76d5a3605be454594bd885b5e9e98bfa031c4336a4af9acc6"
     },
     {
       "fingerprint": "prebuilt/langgraph/prebuilt/chat_agent_executor.py:155:27:_get_prompt_runnable:unknown_call:langgraph._internal._runnable.RunnableCallable",
-      "reason": "This constructs a framework runnable; secured compilation subsequently assigns trust and wraps it before the runtime can schedule execution."
+      "reason": "This constructs a framework runnable; secured compilation subsequently assigns trust and wraps it before the runtime can schedule execution.",
+      "source_sha256": "f400f47b82fe82f76d5a3605be454594bd885b5e9e98bfa031c4336a4af9acc6"
     },
     {
       "fingerprint": "prebuilt/langgraph/prebuilt/chat_agent_executor.py:160:10:_get_prompt_runnable:unknown_call:callable",
-      "reason": "The analyzer lacks a primitive model for this coordinator-only operation; it has no direct host effect and remains inside a compile-placed trusted node."
+      "reason": "The analyzer lacks a primitive model for this coordinator-only operation; it has no direct host effect and remains inside a compile-placed trusted node.",
+      "source_sha256": "f400f47b82fe82f76d5a3605be454594bd885b5e9e98bfa031c4336a4af9acc6"
     },
     {
       "fingerprint": "prebuilt/langgraph/prebuilt/chat_agent_executor.py:161:27:_get_prompt_runnable:unknown_call:langgraph._internal._runnable.RunnableCallable",
-      "reason": "This constructs a framework runnable; secured compilation subsequently assigns trust and wraps it before the runtime can schedule execution."
+      "reason": "This constructs a framework runnable; secured compilation subsequently assigns trust and wraps it before the runtime can schedule execution.",
+      "source_sha256": "f400f47b82fe82f76d5a3605be454594bd885b5e9e98bfa031c4336a4af9acc6"
     },
     {
       "fingerprint": "prebuilt/langgraph/prebuilt/chat_agent_executor.py:168:15:_get_prompt_runnable:unknown_call:ValueError",
-      "reason": "The analyzer lacks a primitive model for this coordinator-only operation; it has no direct host effect and remains inside a compile-placed trusted node."
+      "reason": "The analyzer lacks a primitive model for this coordinator-only operation; it has no direct host effect and remains inside a compile-placed trusted node.",
+      "source_sha256": "f400f47b82fe82f76d5a3605be454594bd885b5e9e98bfa031c4336a4af9acc6"
     },
     {
       "fingerprint": "prebuilt/langgraph/prebuilt/chat_agent_executor.py:168:63:_get_prompt_runnable:unknown_call:type",
-      "reason": "The analyzer lacks a primitive model for this coordinator-only operation; it has no direct host effect and remains inside a compile-placed trusted node."
+      "reason": "The analyzer lacks a primitive model for this coordinator-only operation; it has no direct host effect and remains inside a compile-placed trusted node.",
+      "source_sha256": "f400f47b82fe82f76d5a3605be454594bd885b5e9e98bfa031c4336a4af9acc6"
     },
     {
       "fingerprint": "prebuilt/langgraph/prebuilt/chat_agent_executor.py:223:17:_get_model:unknown_call:next",
-      "reason": "This model-selection helper executes inside an explicitly placed ModelInvocation node; imported model nodes otherwise require isolation or audited promotion."
+      "reason": "This model-selection helper executes inside an explicitly placed ModelInvocation node; imported model nodes otherwise require isolation or audited promotion.",
+      "source_sha256": "f400f47b82fe82f76d5a3605be454594bd885b5e9e98bfa031c4336a4af9acc6"
     },
     {
       "fingerprint": "prebuilt/langgraph/prebuilt/chat_agent_executor.py:236:15:_get_model:unknown_call:TypeError",
-      "reason": "This model-selection helper executes inside an explicitly placed ModelInvocation node; imported model nodes otherwise require isolation or audited promotion."
+      "reason": "This model-selection helper executes inside an explicitly placed ModelInvocation node; imported model nodes otherwise require isolation or audited promotion.",
+      "source_sha256": "f400f47b82fe82f76d5a3605be454594bd885b5e9e98bfa031c4336a4af9acc6"
     },
     {
       "fingerprint": "prebuilt/langgraph/prebuilt/chat_agent_executor.py:237:104:_get_model:unknown_call:type",
-      "reason": "This model-selection helper executes inside an explicitly placed ModelInvocation node; imported model nodes otherwise require isolation or audited promotion."
+      "reason": "This model-selection helper executes inside an explicitly placed ModelInvocation node; imported model nodes otherwise require isolation or audited promotion.",
+      "source_sha256": "f400f47b82fe82f76d5a3605be454594bd885b5e9e98bfa031c4336a4af9acc6"
     },
     {
       "fingerprint": "prebuilt/langgraph/prebuilt/chat_agent_executor.py:264:21:_validate_chat_history:unknown_call:langgraph.errors.create_error_message",
-      "reason": "The analyzer lacks a primitive model for this coordinator-only operation; it has no direct host effect and remains inside a compile-placed trusted node."
+      "reason": "The analyzer lacks a primitive model for this coordinator-only operation; it has no direct host effect and remains inside a compile-placed trusted node.",
+      "source_sha256": "f400f47b82fe82f76d5a3605be454594bd885b5e9e98bfa031c4336a4af9acc6"
     },
     {
       "fingerprint": "prebuilt/langgraph/prebuilt/chat_agent_executor.py:271:11:_validate_chat_history:unknown_call:ValueError",
-      "reason": "The analyzer lacks a primitive model for this coordinator-only operation; it has no direct host effect and remains inside a compile-placed trusted node."
+      "reason": "The analyzer lacks a primitive model for this coordinator-only operation; it has no direct host effect and remains inside a compile-placed trusted node.",
+      "source_sha256": "f400f47b82fe82f76d5a3605be454594bd885b5e9e98bfa031c4336a4af9acc6"
     },
     {
-      "fingerprint": "prebuilt/langgraph/prebuilt/chat_agent_executor.py:608:51:_resolve_model:unknown_call:model",
-      "reason": "This model-selection helper executes inside an explicitly placed ModelInvocation node; imported model nodes otherwise require isolation or audited promotion."
+      "fingerprint": "prebuilt/langgraph/prebuilt/chat_agent_executor.py:581:16:analyzed_model:unknown_call:analysis_adapter.wrap",
+      "reason": "Reviewed AgentAdapter.wrap/admit/aadmit: wrap constructs before/after analysis hooks; admission runs within the compile-placed trusted model coordinator. Runtime analysis callbacks are trusted configured code, not isolated worker code. This review does not prove their arbitrary effects are confined.",
+      "source_sha256": "f400f47b82fe82f76d5a3605be454594bd885b5e9e98bfa031c4336a4af9acc6"
     },
     {
-      "fingerprint": "prebuilt/langgraph/prebuilt/chat_agent_executor.py:617:36:_aresolve_model:unknown_call:model",
-      "reason": "This model-selection helper executes inside an explicitly placed ModelInvocation node; imported model nodes otherwise require isolation or audited promotion."
+      "fingerprint": "prebuilt/langgraph/prebuilt/chat_agent_executor.py:634:66:_resolve_model:unknown_call:model",
+      "reason": "Reviewed trusted model-selection/invocation path inside the agent or structured-response ModelInvocation node. MediatedNode authorizes dispatch, MODEL_READ and model_invoke before calling the coordinator in sync and async paths. The configured model/prompt implementations remain trusted; this is not a proof of arbitrary callback confinement.",
+      "source_sha256": "f400f47b82fe82f76d5a3605be454594bd885b5e9e98bfa031c4336a4af9acc6"
     },
     {
-      "fingerprint": "prebuilt/langgraph/prebuilt/chat_agent_executor.py:620:51:_aresolve_model:unknown_call:model",
-      "reason": "This model-selection helper executes inside an explicitly placed ModelInvocation node; imported model nodes otherwise require isolation or audited promotion."
+      "fingerprint": "prebuilt/langgraph/prebuilt/chat_agent_executor.py:643:36:_aresolve_model:unknown_call:model",
+      "reason": "Reviewed trusted model-selection/invocation path inside the agent or structured-response ModelInvocation node. MediatedNode authorizes dispatch, MODEL_READ and model_invoke before calling the coordinator in sync and async paths. The configured model/prompt implementations remain trusted; this is not a proof of arbitrary callback confinement.",
+      "source_sha256": "f400f47b82fe82f76d5a3605be454594bd885b5e9e98bfa031c4336a4af9acc6"
     },
     {
-      "fingerprint": "prebuilt/langgraph/prebuilt/chat_agent_executor.py:653:19:_get_model_input_state:unknown_call:ValueError",
-      "reason": "This model-selection helper executes inside an explicitly placed ModelInvocation node; imported model nodes otherwise require isolation or audited promotion."
+      "fingerprint": "prebuilt/langgraph/prebuilt/chat_agent_executor.py:646:66:_aresolve_model:unknown_call:model",
+      "reason": "Reviewed trusted model-selection/invocation path inside the agent or structured-response ModelInvocation node. MediatedNode authorizes dispatch, MODEL_READ and model_invoke before calling the coordinator in sync and async paths. The configured model/prompt implementations remain trusted; this is not a proof of arbitrary callback confinement.",
+      "source_sha256": "f400f47b82fe82f76d5a3605be454594bd885b5e9e98bfa031c4336a4af9acc6"
     },
     {
-      "fingerprint": "prebuilt/langgraph/prebuilt/chat_agent_executor.py:681:40:call_model:direct_invoke:dynamic_model.invoke",
-      "reason": "The call is inside an agent node explicitly placed as ModelInvocation; sync and async placement tests prove model_invoke runs before prompt assembly."
+      "fingerprint": "prebuilt/langgraph/prebuilt/chat_agent_executor.py:679:19:_get_model_input_state:unknown_call:ValueError",
+      "reason": "Reviewed coordinator construction/selection of exception or message data at this exact site. It does not release a tool or execute a worker. Model/branch placement still applies; arbitrary user-defined object methods are outside this local source-review claim.",
+      "source_sha256": "f400f47b82fe82f76d5a3605be454594bd885b5e9e98bfa031c4336a4af9acc6"
     },
     {
-      "fingerprint": "prebuilt/langgraph/prebuilt/chat_agent_executor.py:683:40:call_model:direct_invoke:static_model.invoke",
-      "reason": "The call is inside an agent node explicitly placed as ModelInvocation; sync and async placement tests prove model_invoke runs before prompt assembly."
+      "fingerprint": "prebuilt/langgraph/prebuilt/chat_agent_executor.py:704:13:call_model:unknown_call:analysis_adapter.admit",
+      "reason": "Reviewed AgentAdapter.wrap/admit/aadmit: wrap constructs before/after analysis hooks; admission runs within the compile-placed trusted model coordinator. Runtime analysis callbacks are trusted configured code, not isolated worker code. This review does not prove their arbitrary effects are confined.",
+      "source_sha256": "f400f47b82fe82f76d5a3605be454594bd885b5e9e98bfa031c4336a4af9acc6"
     },
     {
-      "fingerprint": "prebuilt/langgraph/prebuilt/chat_agent_executor.py:691:21:call_model:unknown_call:langchain_core.messages.AIMessage",
-      "reason": "This model-selection helper executes inside an explicitly placed ModelInvocation node; imported model nodes otherwise require isolation or audited promotion."
+      "fingerprint": "prebuilt/langgraph/prebuilt/chat_agent_executor.py:709:40:call_model:direct_invoke:dynamic_model.invoke",
+      "reason": "Reviewed trusted model-selection/invocation path inside the agent or structured-response ModelInvocation node. MediatedNode authorizes dispatch, MODEL_READ and model_invoke before calling the coordinator in sync and async paths. The configured model/prompt implementations remain trusted; this is not a proof of arbitrary callback confinement.",
+      "source_sha256": "f400f47b82fe82f76d5a3605be454594bd885b5e9e98bfa031c4336a4af9acc6"
     },
     {
-      "fingerprint": "prebuilt/langgraph/prebuilt/chat_agent_executor.py:709:46:acall_model:direct_invoke:dynamic_model.ainvoke",
-      "reason": "The call is inside an agent node explicitly placed as ModelInvocation; sync and async placement tests prove model_invoke runs before prompt assembly."
+      "fingerprint": "prebuilt/langgraph/prebuilt/chat_agent_executor.py:711:40:call_model:direct_invoke:static_model.invoke",
+      "reason": "Reviewed trusted model-selection/invocation path inside the agent or structured-response ModelInvocation node. MediatedNode authorizes dispatch, MODEL_READ and model_invoke before calling the coordinator in sync and async paths. The configured model/prompt implementations remain trusted; this is not a proof of arbitrary callback confinement.",
+      "source_sha256": "f400f47b82fe82f76d5a3605be454594bd885b5e9e98bfa031c4336a4af9acc6"
     },
     {
-      "fingerprint": "prebuilt/langgraph/prebuilt/chat_agent_executor.py:711:46:acall_model:direct_invoke:static_model.ainvoke",
-      "reason": "The call is inside an agent node explicitly placed as ModelInvocation; sync and async placement tests prove model_invoke runs before prompt assembly."
+      "fingerprint": "prebuilt/langgraph/prebuilt/chat_agent_executor.py:719:21:call_model:unknown_call:langchain_core.messages.AIMessage",
+      "reason": "Reviewed coordinator construction/selection of exception or message data at this exact site. It does not release a tool or execute a worker. Model/branch placement still applies; arbitrary user-defined object methods are outside this local source-review claim.",
+      "source_sha256": "f400f47b82fe82f76d5a3605be454594bd885b5e9e98bfa031c4336a4af9acc6"
     },
     {
-      "fingerprint": "prebuilt/langgraph/prebuilt/chat_agent_executor.py:718:21:acall_model:unknown_call:langchain_core.messages.AIMessage",
-      "reason": "This model-selection helper executes inside an explicitly placed ModelInvocation node; imported model nodes otherwise require isolation or audited promotion."
+      "fingerprint": "prebuilt/langgraph/prebuilt/chat_agent_executor.py:733:19:acall_model:unknown_call:analysis_adapter.aadmit",
+      "reason": "Reviewed AgentAdapter.wrap/admit/aadmit: wrap constructs before/after analysis hooks; admission runs within the compile-placed trusted model coordinator. Runtime analysis callbacks are trusted configured code, not isolated worker code. This review does not prove their arbitrary effects are confined.",
+      "source_sha256": "f400f47b82fe82f76d5a3605be454594bd885b5e9e98bfa031c4336a4af9acc6"
     },
     {
-      "fingerprint": "prebuilt/langgraph/prebuilt/chat_agent_executor.py:765:40:generate_structured_response:unknown_call:_get_model(...).with_structured_output",
-      "reason": "This model-selection helper executes inside an explicitly placed ModelInvocation node; imported model nodes otherwise require isolation or audited promotion."
+      "fingerprint": "prebuilt/langgraph/prebuilt/chat_agent_executor.py:739:46:acall_model:direct_invoke:dynamic_model.ainvoke",
+      "reason": "Reviewed trusted model-selection/invocation path inside the agent or structured-response ModelInvocation node. MediatedNode authorizes dispatch, MODEL_READ and model_invoke before calling the coordinator in sync and async paths. The configured model/prompt implementations remain trusted; this is not a proof of arbitrary callback confinement.",
+      "source_sha256": "f400f47b82fe82f76d5a3605be454594bd885b5e9e98bfa031c4336a4af9acc6"
     },
     {
-      "fingerprint": "prebuilt/langgraph/prebuilt/chat_agent_executor.py:770:20:generate_structured_response:direct_invoke:model_with_structured_output.invoke",
-      "reason": "The call is inside an agent node explicitly placed as ModelInvocation; sync and async placement tests prove model_invoke runs before prompt assembly."
+      "fingerprint": "prebuilt/langgraph/prebuilt/chat_agent_executor.py:741:46:acall_model:direct_invoke:static_model.ainvoke",
+      "reason": "Reviewed trusted model-selection/invocation path inside the agent or structured-response ModelInvocation node. MediatedNode authorizes dispatch, MODEL_READ and model_invoke before calling the coordinator in sync and async paths. The configured model/prompt implementations remain trusted; this is not a proof of arbitrary callback confinement.",
+      "source_sha256": "f400f47b82fe82f76d5a3605be454594bd885b5e9e98bfa031c4336a4af9acc6"
     },
     {
-      "fingerprint": "prebuilt/langgraph/prebuilt/chat_agent_executor.py:783:40:agenerate_structured_response:unknown_call:_get_model(...).with_structured_output",
-      "reason": "This model-selection helper executes inside an explicitly placed ModelInvocation node; imported model nodes otherwise require isolation or audited promotion."
+      "fingerprint": "prebuilt/langgraph/prebuilt/chat_agent_executor.py:748:21:acall_model:unknown_call:langchain_core.messages.AIMessage",
+      "reason": "Reviewed coordinator construction/selection of exception or message data at this exact site. It does not release a tool or execute a worker. Model/branch placement still applies; arbitrary user-defined object methods are outside this local source-review claim.",
+      "source_sha256": "f400f47b82fe82f76d5a3605be454594bd885b5e9e98bfa031c4336a4af9acc6"
     },
     {
-      "fingerprint": "prebuilt/langgraph/prebuilt/chat_agent_executor.py:788:26:agenerate_structured_response:direct_invoke:model_with_structured_output.ainvoke",
-      "reason": "The call is inside an agent node explicitly placed as ModelInvocation; sync and async placement tests prove model_invoke runs before prompt assembly."
+      "fingerprint": "prebuilt/langgraph/prebuilt/chat_agent_executor.py:794:26:generate_structured_response:unknown_call:model",
+      "reason": "Reviewed trusted model-selection/invocation path inside the agent or structured-response ModelInvocation node. MediatedNode authorizes dispatch, MODEL_READ and model_invoke before calling the coordinator in sync and async paths. The configured model/prompt implementations remain trusted; this is not a proof of arbitrary callback confinement.",
+      "source_sha256": "f400f47b82fe82f76d5a3605be454594bd885b5e9e98bfa031c4336a4af9acc6"
     },
     {
-      "fingerprint": "prebuilt/langgraph/prebuilt/chat_agent_executor.py:796:13:<module>:unmediated_node:RunnableCallable(...)",
-      "reason": "Secured StateGraph compilation replaces this registered node or branch with the HostRouter placement wrapper; completeness tests cover sync and async denial."
+      "fingerprint": "prebuilt/langgraph/prebuilt/chat_agent_executor.py:795:40:generate_structured_response:unknown_call:_get_model(...).with_structured_output",
+      "reason": "Reviewed trusted model-selection/invocation path inside the agent or structured-response ModelInvocation node. MediatedNode authorizes dispatch, MODEL_READ and model_invoke before calling the coordinator in sync and async paths. The configured model/prompt implementations remain trusted; this is not a proof of arbitrary callback confinement.",
+      "source_sha256": "f400f47b82fe82f76d5a3605be454594bd885b5e9e98bfa031c4336a4af9acc6"
     },
     {
-      "fingerprint": "prebuilt/langgraph/prebuilt/chat_agent_executor.py:807:49:<module>:unknown_callback:pre_model_hook",
-      "reason": "Secured compilation classifies this unresolved imported callback as untrusted and rejects it unless a separate-process node host is configured."
+      "fingerprint": "prebuilt/langgraph/prebuilt/chat_agent_executor.py:800:20:generate_structured_response:direct_invoke:analyzed_model(...).invoke",
+      "reason": "Reviewed trusted model-selection/invocation path inside the agent or structured-response ModelInvocation node. MediatedNode authorizes dispatch, MODEL_READ and model_invoke before calling the coordinator in sync and async paths. The configured model/prompt implementations remain trusted; this is not a proof of arbitrary callback confinement.",
+      "source_sha256": "f400f47b82fe82f76d5a3605be454594bd885b5e9e98bfa031c4336a4af9acc6"
     },
     {
-      "fingerprint": "prebuilt/langgraph/prebuilt/chat_agent_executor.py:807:49:<module>:unmediated_node:pre_model_hook",
-      "reason": "Secured StateGraph compilation replaces this registered node or branch with the HostRouter placement wrapper; completeness tests cover sync and async denial."
+      "fingerprint": "prebuilt/langgraph/prebuilt/chat_agent_executor.py:813:19:agenerate_structured_response:unknown_call:model",
+      "reason": "Reviewed trusted model-selection/invocation path inside the agent or structured-response ModelInvocation node. MediatedNode authorizes dispatch, MODEL_READ and model_invoke before calling the coordinator in sync and async paths. The configured model/prompt implementations remain trusted; this is not a proof of arbitrary callback confinement.",
+      "source_sha256": "f400f47b82fe82f76d5a3605be454594bd885b5e9e98bfa031c4336a4af9acc6"
     },
     {
-      "fingerprint": "prebuilt/langgraph/prebuilt/chat_agent_executor.py:816:50:<module>:unknown_callback:post_model_hook",
-      "reason": "Secured compilation classifies this unresolved imported callback as untrusted and rejects it unless a separate-process node host is configured."
+      "fingerprint": "prebuilt/langgraph/prebuilt/chat_agent_executor.py:815:18:agenerate_structured_response:unknown_call:model",
+      "reason": "Reviewed trusted model-selection/invocation path inside the agent or structured-response ModelInvocation node. MediatedNode authorizes dispatch, MODEL_READ and model_invoke before calling the coordinator in sync and async paths. The configured model/prompt implementations remain trusted; this is not a proof of arbitrary callback confinement.",
+      "source_sha256": "f400f47b82fe82f76d5a3605be454594bd885b5e9e98bfa031c4336a4af9acc6"
     },
     {
-      "fingerprint": "prebuilt/langgraph/prebuilt/chat_agent_executor.py:816:50:<module>:unmediated_node:post_model_hook",
-      "reason": "Secured StateGraph compilation replaces this registered node or branch with the HostRouter placement wrapper; completeness tests cover sync and async denial."
+      "fingerprint": "prebuilt/langgraph/prebuilt/chat_agent_executor.py:819:40:agenerate_structured_response:unknown_call:_get_model(...).with_structured_output",
+      "reason": "Reviewed trusted model-selection/invocation path inside the agent or structured-response ModelInvocation node. MediatedNode authorizes dispatch, MODEL_READ and model_invoke before calling the coordinator in sync and async paths. The configured model/prompt implementations remain trusted; this is not a proof of arbitrary callback confinement.",
+      "source_sha256": "f400f47b82fe82f76d5a3605be454594bd885b5e9e98bfa031c4336a4af9acc6"
     },
     {
-      "fingerprint": "prebuilt/langgraph/prebuilt/chat_agent_executor.py:822:17:<module>:unmediated_node:RunnableCallable(...)",
-      "reason": "Secured StateGraph compilation replaces this registered node or branch with the HostRouter placement wrapper; completeness tests cover sync and async denial."
+      "fingerprint": "prebuilt/langgraph/prebuilt/chat_agent_executor.py:824:26:agenerate_structured_response:direct_invoke:analyzed_model(...).ainvoke",
+      "reason": "Reviewed trusted model-selection/invocation path inside the agent or structured-response ModelInvocation node. MediatedNode authorizes dispatch, MODEL_READ and model_invoke before calling the coordinator in sync and async paths. The configured model/prompt implementations remain trusted; this is not a proof of arbitrary callback confinement.",
+      "source_sha256": "f400f47b82fe82f76d5a3605be454594bd885b5e9e98bfa031c4336a4af9acc6"
     },
     {
-      "fingerprint": "prebuilt/langgraph/prebuilt/chat_agent_executor.py:871:21:should_continue:unknown_call:langgraph.types.Send",
-      "reason": "This constructs inert dispatch data; each resulting Send is authorized at the branch scheduling point before any child task is released."
+      "fingerprint": "prebuilt/langgraph/prebuilt/chat_agent_executor.py:834:13:<module>:unmediated_node:RunnableCallable(...)",
+      "reason": "Reviewed both tool-enabled and tool-free graph construction: this RunnableCallable is marked as a trusted model coordinator, and each return passes security to StateGraph.compile. place_graph replaces it with MediatedNode before execution. This is source review plus placement regression evidence, not a complete mediation proof.",
+      "source_sha256": "f400f47b82fe82f76d5a3605be454594bd885b5e9e98bfa031c4336a4af9acc6"
     },
     {
-      "fingerprint": "prebuilt/langgraph/prebuilt/chat_agent_executor.py:873:25:should_continue:unknown_call:langgraph.prebuilt.tool_node.ToolCallWithContext",
-      "reason": "This constructs inert dispatch data; each resulting Send is authorized at the branch scheduling point before any child task is released."
+      "fingerprint": "prebuilt/langgraph/prebuilt/chat_agent_executor.py:845:49:<module>:unknown_callback:pre_model_hook",
+      "reason": "Reviewed registration of the caller-supplied hook: no hook executes at registration. StateGraph.compile passes security into place_graph, which classifies unresolved callbacks as untrusted and requires an UntrustedNodeHost unless explicitly promoted. The host isolation composition obligation remains open.",
+      "source_sha256": "f400f47b82fe82f76d5a3605be454594bd885b5e9e98bfa031c4336a4af9acc6"
     },
     {
-      "fingerprint": "prebuilt/langgraph/prebuilt/chat_agent_executor.py:890:9:<module>:unmediated_node:RunnableCallable(...)",
-      "reason": "Secured StateGraph compilation replaces this registered node or branch with the HostRouter placement wrapper; completeness tests cover sync and async denial."
+      "fingerprint": "prebuilt/langgraph/prebuilt/chat_agent_executor.py:845:49:<module>:unmediated_node:pre_model_hook",
+      "reason": "Reviewed registration of the caller-supplied hook: no hook executes at registration. StateGraph.compile passes security into place_graph, which classifies unresolved callbacks as untrusted and requires an UntrustedNodeHost unless explicitly promoted. The host isolation composition obligation remains open.",
+      "source_sha256": "f400f47b82fe82f76d5a3605be454594bd885b5e9e98bfa031c4336a4af9acc6"
     },
     {
-      "fingerprint": "prebuilt/langgraph/prebuilt/chat_agent_executor.py:913:45:<module>:unknown_callback:pre_model_hook",
-      "reason": "Secured compilation classifies this unresolved imported callback as untrusted and rejects it unless a separate-process node host is configured."
+      "fingerprint": "prebuilt/langgraph/prebuilt/chat_agent_executor.py:854:50:<module>:unknown_callback:post_model_hook",
+      "reason": "Reviewed registration of the caller-supplied hook: no hook executes at registration. StateGraph.compile passes security into place_graph, which classifies unresolved callbacks as untrusted and requires an UntrustedNodeHost unless explicitly promoted. The host isolation composition obligation remains open.",
+      "source_sha256": "f400f47b82fe82f76d5a3605be454594bd885b5e9e98bfa031c4336a4af9acc6"
     },
     {
-      "fingerprint": "prebuilt/langgraph/prebuilt/chat_agent_executor.py:913:45:<module>:unmediated_node:pre_model_hook",
-      "reason": "Secured StateGraph compilation replaces this registered node or branch with the HostRouter placement wrapper; completeness tests cover sync and async denial."
+      "fingerprint": "prebuilt/langgraph/prebuilt/chat_agent_executor.py:854:50:<module>:unmediated_node:post_model_hook",
+      "reason": "Reviewed registration of the caller-supplied hook: no hook executes at registration. StateGraph.compile passes security into place_graph, which classifies unresolved callbacks as untrusted and requires an UntrustedNodeHost unless explicitly promoted. The host isolation composition obligation remains open.",
+      "source_sha256": "f400f47b82fe82f76d5a3605be454594bd885b5e9e98bfa031c4336a4af9acc6"
     },
     {
-      "fingerprint": "prebuilt/langgraph/prebuilt/chat_agent_executor.py:928:46:<module>:unknown_callback:post_model_hook",
-      "reason": "Secured compilation classifies this unresolved imported callback as untrusted and rejects it unless a separate-process node host is configured."
+      "fingerprint": "prebuilt/langgraph/prebuilt/chat_agent_executor.py:860:17:<module>:unmediated_node:RunnableCallable(...)",
+      "reason": "Reviewed both tool-enabled and tool-free graph construction: this RunnableCallable is marked as a trusted model coordinator, and each return passes security to StateGraph.compile. place_graph replaces it with MediatedNode before execution. This is source review plus placement regression evidence, not a complete mediation proof.",
+      "source_sha256": "f400f47b82fe82f76d5a3605be454594bd885b5e9e98bfa031c4336a4af9acc6"
     },
     {
-      "fingerprint": "prebuilt/langgraph/prebuilt/chat_agent_executor.py:928:46:<module>:unmediated_node:post_model_hook",
-      "reason": "Secured StateGraph compilation replaces this registered node or branch with the HostRouter placement wrapper; completeness tests cover sync and async denial."
+      "fingerprint": "prebuilt/langgraph/prebuilt/chat_agent_executor.py:909:21:should_continue:unknown_call:langgraph.types.Send",
+      "reason": "Reviewed construction of Send/ToolCallWithContext data only. MediatedBranch routes resulting sends through dispatch authorization before the scheduler releases children; tests cover denied sync/async sends. This local review does not close all scheduler publication obligations.",
+      "source_sha256": "f400f47b82fe82f76d5a3605be454594bd885b5e9e98bfa031c4336a4af9acc6"
     },
     {
-      "fingerprint": "prebuilt/langgraph/prebuilt/chat_agent_executor.py:938:13:<module>:unmediated_node:RunnableCallable(...)",
-      "reason": "Secured StateGraph compilation replaces this registered node or branch with the HostRouter placement wrapper; completeness tests cover sync and async denial."
+      "fingerprint": "prebuilt/langgraph/prebuilt/chat_agent_executor.py:911:25:should_continue:unknown_call:langgraph.prebuilt.tool_node.ToolCallWithContext",
+      "reason": "Reviewed construction of Send/ToolCallWithContext data only. MediatedBranch routes resulting sends through dispatch authorization before the scheduler releases children; tests cover denied sync/async sends. This local review does not close all scheduler publication obligations.",
+      "source_sha256": "f400f47b82fe82f76d5a3605be454594bd885b5e9e98bfa031c4336a4af9acc6"
     },
     {
-      "fingerprint": "prebuilt/langgraph/prebuilt/chat_agent_executor.py:975:31:post_model_hook_router:unknown_call:next",
-      "reason": "This model-selection helper executes inside an explicitly placed ModelInvocation node; imported model nodes otherwise require isolation or audited promotion."
+      "fingerprint": "prebuilt/langgraph/prebuilt/chat_agent_executor.py:928:9:<module>:unmediated_node:RunnableCallable(...)",
+      "reason": "Reviewed both tool-enabled and tool-free graph construction: this RunnableCallable is marked as a trusted model coordinator, and each return passes security to StateGraph.compile. place_graph replaces it with MediatedNode before execution. This is source review plus placement regression evidence, not a complete mediation proof.",
+      "source_sha256": "f400f47b82fe82f76d5a3605be454594bd885b5e9e98bfa031c4336a4af9acc6"
     },
     {
-      "fingerprint": "prebuilt/langgraph/prebuilt/chat_agent_executor.py:984:21:post_model_hook_router:unknown_call:langgraph.types.Send",
-      "reason": "This constructs inert dispatch data; each resulting Send is authorized at the branch scheduling point before any child task is released."
+      "fingerprint": "prebuilt/langgraph/prebuilt/chat_agent_executor.py:951:45:<module>:unknown_callback:pre_model_hook",
+      "reason": "Reviewed registration of the caller-supplied hook: no hook executes at registration. StateGraph.compile passes security into place_graph, which classifies unresolved callbacks as untrusted and requires an UntrustedNodeHost unless explicitly promoted. The host isolation composition obligation remains open.",
+      "source_sha256": "f400f47b82fe82f76d5a3605be454594bd885b5e9e98bfa031c4336a4af9acc6"
     },
     {
-      "fingerprint": "prebuilt/langgraph/prebuilt/chat_agent_executor.py:986:25:post_model_hook_router:unknown_call:langgraph.prebuilt.tool_node.ToolCallWithContext",
-      "reason": "This constructs inert dispatch data; each resulting Send is authorized at the branch scheduling point before any child task is released."
+      "fingerprint": "prebuilt/langgraph/prebuilt/chat_agent_executor.py:951:45:<module>:unmediated_node:pre_model_hook",
+      "reason": "Reviewed registration of the caller-supplied hook: no hook executes at registration. StateGraph.compile passes security into place_graph, which classifies unresolved callbacks as untrusted and requires an UntrustedNodeHost unless explicitly promoted. The host isolation composition obligation remains open.",
+      "source_sha256": "f400f47b82fe82f76d5a3605be454594bd885b5e9e98bfa031c4336a4af9acc6"
     },
     {
-      "fingerprint": "prebuilt/langgraph/prebuilt/chat_agent_executor.py:1003:13:<module>:unmediated_node:post_model_hook_router",
-      "reason": "Secured StateGraph compilation replaces this registered node or branch with the HostRouter placement wrapper; completeness tests cover sync and async denial."
+      "fingerprint": "prebuilt/langgraph/prebuilt/chat_agent_executor.py:966:46:<module>:unknown_callback:post_model_hook",
+      "reason": "Reviewed registration of the caller-supplied hook: no hook executes at registration. StateGraph.compile passes security into place_graph, which classifies unresolved callbacks as untrusted and requires an UntrustedNodeHost unless explicitly promoted. The host isolation composition obligation remains open.",
+      "source_sha256": "f400f47b82fe82f76d5a3605be454594bd885b5e9e98bfa031c4336a4af9acc6"
     },
     {
-      "fingerprint": "prebuilt/langgraph/prebuilt/chat_agent_executor.py:1009:9:<module>:unmediated_node:should_continue",
-      "reason": "Secured StateGraph compilation replaces this registered node or branch with the HostRouter placement wrapper; completeness tests cover sync and async denial."
+      "fingerprint": "prebuilt/langgraph/prebuilt/chat_agent_executor.py:966:46:<module>:unmediated_node:post_model_hook",
+      "reason": "Reviewed registration of the caller-supplied hook: no hook executes at registration. StateGraph.compile passes security into place_graph, which classifies unresolved callbacks as untrusted and requires an UntrustedNodeHost unless explicitly promoted. The host isolation composition obligation remains open.",
+      "source_sha256": "f400f47b82fe82f76d5a3605be454594bd885b5e9e98bfa031c4336a4af9acc6"
     },
     {
-      "fingerprint": "prebuilt/langgraph/prebuilt/chat_agent_executor.py:1030:22:<module>:unmediated_node:route_tool_responses",
-      "reason": "Secured StateGraph compilation replaces this registered node or branch with the HostRouter placement wrapper; completeness tests cover sync and async denial."
+      "fingerprint": "prebuilt/langgraph/prebuilt/chat_agent_executor.py:976:13:<module>:unmediated_node:RunnableCallable(...)",
+      "reason": "Reviewed both tool-enabled and tool-free graph construction: this RunnableCallable is marked as a trusted model coordinator, and each return passes security to StateGraph.compile. place_graph replaces it with MediatedNode before execution. This is source review plus placement regression evidence, not a complete mediation proof.",
+      "source_sha256": "f400f47b82fe82f76d5a3605be454594bd885b5e9e98bfa031c4336a4af9acc6"
     },
     {
       "fingerprint": "prebuilt/langgraph/prebuilt/security/tool_api_verifier.py:358:35:<module>:retained_capability:target",
-      "reason": "This reference exists only inside the API verification harness, which deliberately retains a target to test that bypass attempts are rejected."
+      "reason": "This reference exists only inside the API verification harness, which deliberately retains a target to test that bypass attempts are rejected.",
+      "source_sha256": "7a3379579e6549f49020e83810135d22d92e43ea8ad6851190d0f106aa4b53e8"
     }
   ]
 }

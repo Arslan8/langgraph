@@ -7,12 +7,17 @@ same architectural pattern used by SELinux-aware user-space object managers
 such as X, D-Bus, and sepgsql.
 
 The design is specified by [ADR 0007](adr/0007-kernel-enforced-confinement.md).
+The [threat model](threat-model.md) states the adversary, the trusted computing
+base (including the language-sandbox interpreter) and what "safe" means per route.
 The [implementation status](status.md) distinguishes that target from shipped
 coverage. Start with the [10-line HOWTO](HOWTO.md), then use the
 [behavior reference](reference.md), [public API reference](api.md), and
 [security-boundary guide](users/security-boundary.md). The
 [escape analysis](escape-analysis.md) documents placement checks and trust
 assumptions.
+The [Lean worker lifecycle guide](lean-worker-route.md) describes the optional
+synchronous decision core, its captured build workflow, and the remaining
+Python/OS correspondence obligations; it does not close SGV901–903.
 
 ## Scope
 
@@ -36,10 +41,11 @@ remain in scope even when their default policies attach labels without denying.
 
 Every framework operation crosses the hook stack through `HostRouter` as the
 single dispatch path. `ToolNode` and `guarded_tool` call the router; they are not
-independent boundaries. Untrusted nodes and tools run as separate-process units
-of work and use the same mediated channel for framework-object access. Trusted
-operator nodes may run in the coordinator, with placement analysis checking the
-trust assumption.
+independent boundaries. Tools outside the admitted language and isolated nodes
+run as separate-process units of work and use the mediated channel for framework
+objects. Language-sandbox tools execute admitted data programs. Operator-hosted
+graph nodes are a separate, legacy trust boundary; their classification alone
+does not imply source admission or language sandboxing.
 
 ## Policy and enforcement
 
@@ -56,7 +62,7 @@ implement each rule exactly or more tightly. A looser lowering denies;
 unsupported classes deny unless explicitly waived, and waived calls are stamped
 `unenforced`. Runtime baseline authority is visible in every grant.
 
-For a trusted tool declared with `runs inprocess`, effective permission is the
+For a language-sandbox tool declared with `runs inprocess`, effective permission is the
 intersection of the surviving slangGraph authorization and the coordinator's
 existing host permission:
 
@@ -65,10 +71,11 @@ existing host permission:
 A slangGraph allow cannot override a Unix mode, ACL, credential, database role,
 or other host denial. A host allow cannot override a slangGraph denial. The host
 normally sees the coordinator's service identity rather than the application
-`Principal`; the trusted tool is part of the TCB and must exercise ambient host
-authority only through operations allowed by slangGraph. A language sandbox may
-enforce that obligation in process. This mode does not claim per-call kernel
-confinement.
+`Principal`. The source-admitted tool runs as a restricted data program whose
+only effectful operations are mediated framework terminals. The interpreter and
+terminals belong to the TCB; the tool body is not exempt from enforcement.
+`inprocess` names execution location, not a trust level. This mode does not
+claim per-call kernel confinement.
 
 `model_invoke` and `output_emit` ship label-only. Reference
 non-exfiltration, integrity, and compartmentalization policies ship off by

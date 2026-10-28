@@ -1,0 +1,244 @@
+{
+  "id": "newspaper",
+  "repository": "rotemweiss57/gpt-newspaper",
+  "subdirectory": ".",
+  "entrypoint": "app.py -> backend/graph.py:stream_newspaper / graph",
+  "graph_files": [
+    "app.py",
+    "backend/graph.py",
+    "backend/config.py",
+    "backend/agents/search.py",
+    "backend/agents/publisher.py",
+    "backend/agents/common.py",
+    "backend/agents/illustrator.py"
+  ],
+  "effects": "StateGraph Send fans out article subgraphs; search and model SDK calls in nodes; publisher writes outputs; source photos or optional provider illustrations. Preserve source-as-untrusted prompts and retries.",
+  "next_action": "Configure local model and dedicated Tavily access or labeled contract-preserving search double; reproduce edition and verify citations/output files.",
+  "sha": "1c447b5672dd5ca8cd91a18bfa6daefe257c4fbe",
+  "license": "MIT (see captured LICENSE text)",
+  "retrieved_at": "2026-10-26T00:31:38.372515+00:00",
+  "checkout": "/data/slanggraph-eval-upstreams/gpt-newspaper",
+  "archive": {},
+  "source_evidence": [
+    {
+      "path": "app.py",
+      "sha256": "d81d19f449af08bc90c2c4426e73ec722e9026a207e3c1f8a7c39f20630454b6",
+      "url": "https://github.com/rotemweiss57/gpt-newspaper/blob/1c447b5672dd5ca8cd91a18bfa6daefe257c4fbe/app.py",
+      "matches": []
+    },
+    {
+      "path": "backend/graph.py",
+      "sha256": "5f14a647dd8a2b62c002be18cc37da569890cfe238972d26bedcb0044b34b8be",
+      "url": "https://github.com/rotemweiss57/gpt-newspaper/blob/1c447b5672dd5ca8cd91a18bfa6daefe257c4fbe/backend/graph.py",
+      "matches": [
+        {
+          "line": 19,
+          "text": "from langgraph.graph import END, START, StateGraph"
+        },
+        {
+          "line": 44,
+          "text": "def route_after_search(state: ArticleState) -> str:"
+        },
+        {
+          "line": 50,
+          "text": "def route_after_curator(state: ArticleState) -> str:"
+        },
+        {
+          "line": 56,
+          "text": "def build_article_graph():"
+        },
+        {
+          "line": 57,
+          "text": "builder = StateGraph(ArticleState, context_schema=NewspaperContext)"
+        },
+        {
+          "line": 74,
+          "text": "return builder.compile(name=\"article\")"
+        },
+        {
+          "line": 80,
+          "text": "async def reporter_node(state: ArticleState, runtime: Runtime[NewspaperContext]) -> dict:"
+        },
+        {
+          "line": 83,
+          "text": "result = await article_graph.ainvoke(state, context=runtime.context)"
+        },
+        {
+          "line": 99,
+          "text": "def assign_reporters(state: NewspaperState) -> list[Send]:"
+        },
+        {
+          "line": 107,
+          "text": "def build_newspaper_graph():"
+        },
+        {
+          "line": 108,
+          "text": "builder = StateGraph(NewspaperState, context_schema=NewspaperContext)"
+        },
+        {
+          "line": 117,
+          "text": "return builder.compile(name=\"gpt-newspaper\")"
+        },
+        {
+          "line": 124,
+          "text": "async def stream_newspaper("
+        }
+      ]
+    },
+    {
+      "path": "backend/config.py",
+      "sha256": "65cbd6af16c925d997230b46d06bda8b4ac3596aba4d8b1aa2de9d46fe18766d",
+      "url": "https://github.com/rotemweiss57/gpt-newspaper/blob/1c447b5672dd5ca8cd91a18bfa6daefe257c4fbe/backend/config.py",
+      "matches": [
+        {
+          "line": 41,
+          "text": "def _env_bool(name: str, default: bool) -> bool:"
+        },
+        {
+          "line": 48,
+          "text": "def _env_float(name: str) -> float | None:"
+        },
+        {
+          "line": 71,
+          "text": "def get_settings() -> Settings:"
+        },
+        {
+          "line": 87,
+          "text": "def new_run_dir() -> str:"
+        },
+        {
+          "line": 91,
+          "text": "def public_url(path: str | Path) -> str:"
+        },
+        {
+          "line": 118,
+          "text": "def language(self) -> str:"
+        },
+        {
+          "line": 122,
+          "text": "def page(self) -> dict:"
+        }
+      ]
+    },
+    {
+      "path": "backend/agents/search.py",
+      "sha256": "a67d4ae6e2cc0cdf0410108696992025b1bcb12a199f0e1e4fbcec8e611144df",
+      "url": "https://github.com/rotemweiss57/gpt-newspaper/blob/1c447b5672dd5ca8cd91a18bfa6daefe257c4fbe/backend/agents/search.py",
+      "matches": [
+        {
+          "line": 16,
+          "text": "def get_search_tool(time_range: str | None, api_key: str | None = None) -> TavilySearch:"
+        },
+        {
+          "line": 30,
+          "text": "def _is_web_url(url: str | None) -> bool:"
+        },
+        {
+          "line": 35,
+          "text": "async def _search(query: str, time_range: str | None, api_key: str | None = None) -> dict:"
+        },
+        {
+          "line": 37,
+          "text": "response = await get_search_tool(time_range, api_key).ainvoke({\"query\": query})"
+        },
+        {
+          "line": 46,
+          "text": "async def _search_all(queries: list[str], time_range: str | None, api_key: str | None) -> list[dict]:"
+        },
+        {
+          "line": 50,
+          "text": "def _merge(responses: list[dict]) -> tuple[list[Source], list[Image]]:"
+        },
+        {
+          "line": 82,
+          "text": "async def search_node(state: ArticleState, runtime: Runtime[NewspaperContext]) -> dict:"
+        }
+      ]
+    },
+    {
+      "path": "backend/agents/publisher.py",
+      "sha256": "dc4282d1326773fdfeb96b5abec6f681e42fb62a647e0427b2307131e37ecc97",
+      "url": "https://github.com/rotemweiss57/gpt-newspaper/blob/1c447b5672dd5ca8cd91a18bfa6daefe257c4fbe/backend/agents/publisher.py",
+      "matches": [
+        {
+          "line": 16,
+          "text": "def publisher_node(state: NewspaperState, runtime: Runtime[NewspaperContext]) -> dict:"
+        }
+      ]
+    },
+    {
+      "path": "backend/agents/common.py",
+      "sha256": "f2c2a7abea81df9f66080dde665f9f4e0f8644d64d0e9daec2f99cae083b53ca",
+      "url": "https://github.com/rotemweiss57/gpt-newspaper/blob/1c447b5672dd5ca8cd91a18bfa6daefe257c4fbe/backend/agents/common.py",
+      "matches": [
+        {
+          "line": 21,
+          "text": "def widen(state: ArticleState, reason: str) -> dict | None:"
+        },
+        {
+          "line": 31,
+          "text": "def slugify(text: str) -> str:"
+        },
+        {
+          "line": 36,
+          "text": "def today() -> str:"
+        },
+        {
+          "line": 41,
+          "text": "def chat_model(ctx: NewspaperContext, schema):"
+        },
+        {
+          "line": 46,
+          "text": "def emit(state: ArticleState, stage: str, message: str, **extra) -> None:"
+        },
+        {
+          "line": 59,
+          "text": "def format_sources(sources: list[Source], full_text: bool = False) -> str:"
+        },
+        {
+          "line": 71,
+          "text": "def format_images(images: list[Image]) -> str:"
+        },
+        {
+          "line": 79,
+          "text": "def format_article(state: ArticleState) -> str:"
+        }
+      ]
+    },
+    {
+      "path": "backend/agents/illustrator.py",
+      "sha256": "7ed63641423d97ce83f9511b3336bb9e3d6275e932f3537de94c861496d9544f",
+      "url": "https://github.com/rotemweiss57/gpt-newspaper/blob/1c447b5672dd5ca8cd91a18bfa6daefe257c4fbe/backend/agents/illustrator.py",
+      "matches": [
+        {
+          "line": 17,
+          "text": "async def illustrator_node(state: ArticleState, runtime: Runtime[NewspaperContext]) -> dict:"
+        },
+        {
+          "line": 28,
+          "text": "brief: IllustrationBrief = await (ILLUSTRATOR_PROMPT | chat_model(ctx, IllustrationBrief)).ainvoke("
+        }
+      ]
+    }
+  ],
+  "dependency_inputs": {
+    "uv.lock": "3debca2f65347aee44ad293dcab5fbf11e6efd84ece8951f6706c7646075e8f8",
+    "requirements.txt": "4af7d216215453cc9b08d79f7eba531822ab080e058fb685bcdf2e1d19cfad88",
+    "pyproject.toml": "fba218f6345e296ebddddcd0d14ae2dd0cdbb032a2828aca66f426a25c93e8bd"
+  },
+  "python": {
+    "argv": [
+      "/data/slanggraph-eval-upstreams/gpt-newspaper/.venv/bin/python",
+      "--version"
+    ],
+    "returncode": 0,
+    "stdout": "Python 3.13.11\n",
+    "stderr": ""
+  },
+  "license_sha256": "3e15f3653b13affe3c0a582ae8505ffa2f21da7d880d2b29ac1d72afaa02f419",
+  "license_text": "MIT License\n\nCopyright (c) 2023-present Rotem Weiss\n\nPermission is hereby granted, free of charge, to any person obtaining a copy\nof this software and associated documentation files (the \"Software\"), to deal\nin the Software without restriction, including without limitation the rights\nto use, copy, modify, merge, publish, distribute, sublicense, and/or sell\ncopies of the Software, and to permit persons to whom the Software is\nfurnished to do so, subject to the following conditions:\n\nThe above copyright notice and this permission notice shall be included in all\ncopies or substantial portions of the Software.\n\nTHE SOFTWARE IS PROVIDED \"AS IS\", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR\nIMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,\nFITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE\nAUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER\nLIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,\nOUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE\nSOFTWARE.\n",
+  "intake_status": "blocked",
+  "baseline_run": null,
+  "effect_inventory_kind": "source inspection; not a runtime trace",
+  "environment_freeze_returncode": 0
+}

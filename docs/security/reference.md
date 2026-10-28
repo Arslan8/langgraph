@@ -108,7 +108,7 @@ coordinator under host DAC and resource credentials. The effective permission
 is `S ∩ H`: denial by either side denies the operation. Host authority is a
 ceiling and never supplies a missing slangGraph grant; slangGraph authorization
 never bypasses a host denial. Because no per-call OS identity is implied, the
-trusted tool or its language sandbox is responsible for honoring `S` while the
+language-sandbox runtime is responsible for honoring `S` while the
 host independently enforces `H`.
 
 Use `slanggraph check --backend X profiles/`; unsupported, unwaived rules produce
@@ -120,7 +120,8 @@ The hash-chained audit identifies every hook verdict, child-subset decision,
 checkpoint verification, registry override, per-rule lowering, waiver, worker
 activation, and denial reason without recording raw secrets.
 
-Operator-authored nodes are trusted by default. Imported nodes are untrusted by
+The legacy `NodeTrust` API is separate from language-sandbox tool admission.
+Operator-authored nodes are hosted in the coordinator by default. Imported nodes are untrusted by
 default; promotion is an audited operator action. Trusted nodes run in the
 coordinator and honor hooks by assumption, checked by placement analysis.
 Untrusted nodes run separately and reach framework objects over the mediated

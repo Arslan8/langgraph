@@ -43,6 +43,7 @@ from langchain_core.runnables.config import (
 )
 from langchain_core.runnables.graph import Graph
 from langchain_core.runnables.schema import StreamEvent
+from langchain_core.tracers.log_stream import RunLog, RunLogPatch
 from langgraph.cache.base import BaseCache
 from langgraph.checkpoint.base import (
     BaseCheckpointSaver,
@@ -127,6 +128,7 @@ from langgraph.pregel._algo import (
     prepare_next_tasks,
 )
 from langgraph.pregel._call import identifier
+from langgraph.pregel._callback_guard import guard_callback_manager
 from langgraph.pregel._checkpoint import (
     achannels_from_checkpoint,
     channels_from_checkpoint,
@@ -137,7 +139,7 @@ from langgraph.pregel._checkpoint import (
     get_updated_channels_from_tasks,
 )
 from langgraph.pregel._draw import draw_graph
-from langgraph.pregel._io import map_input, read_channels
+from langgraph.pregel._io import _OutputEnvelope, map_input, read_channels
 from langgraph.pregel._loop import (
     AsyncPregelLoop,
     SyncPregelLoop,
@@ -840,6 +842,12 @@ class Pregel(
         self._aoutput_filter: Callable[[Any, RunnableConfig], Awaitable[Any]] | None = (
             None
         )
+        self._stream_output_filter: Callable[[Any, RunnableConfig], Any] | None = None
+        self._astream_output_filter: (
+            Callable[[Any, RunnableConfig], Awaitable[Any]] | None
+        ) = None
+        self._callback_filter: Callable[..., Any] | None = None
+        self._acallback_filter: Callable[..., Awaitable[Any]] | None = None
         if auto_validate:
             self.validate()
 
@@ -858,10 +866,24 @@ class Pregel(
         self,
         output_filter: Callable[[Any, RunnableConfig], Any],
         aoutput_filter: Callable[[Any, RunnableConfig], Awaitable[Any]],
+        *,
+        stream_output_filter: Callable[[Any, RunnableConfig], Any] | None = None,
+        astream_output_filter: Callable[[Any, RunnableConfig], Awaitable[Any]]
+        | None = None,
+        callback_filter: Callable[..., Any] | None = None,
+        acallback_filter: Callable[..., Awaitable[Any]] | None = None,
     ) -> None:
         """Install a trusted final emission filter before any stream item escapes."""
         if self._output_filter is not None or self._aoutput_filter is not None:
             raise ValueError("an output filter is already installed")
+        if (stream_output_filter is None) != (astream_output_filter is None):
+            raise ValueError("stream filters require both sync and async callbacks")
+        if (callback_filter is None) != (acallback_filter is None):
+            raise ValueError("callback filters require sync and async delivery")
+        self._callback_filter = callback_filter
+        self._acallback_filter = acallback_filter
+        self._stream_output_filter = stream_output_filter
+        self._astream_output_filter = astream_output_filter
         self._output_filter = output_filter
         self._aoutput_filter = aoutput_filter
 
@@ -1419,10 +1441,37 @@ class Pregel(
             tuple([i for task in tasks_with_writes for i in task.interrupts]),
         )
 
+    def _filter_state_snapshot(
+        self, snapshot: StateSnapshot, config: RunnableConfig
+    ) -> StateSnapshot:
+        if self._stream_output_filter is not None:
+            return self._stream_output_filter(
+                _OutputEnvelope(snapshot, "state-snapshot", (), "state"), config
+            )
+        if self._output_filter is not None:
+            return _OutputEnvelope(snapshot, "state-snapshot", (), "state").rebuild(
+                self._output_filter(snapshot, config)
+            )
+        return snapshot
+
+    async def _afilter_state_snapshot(
+        self, snapshot: StateSnapshot, config: RunnableConfig
+    ) -> StateSnapshot:
+        if self._astream_output_filter is not None:
+            return await self._astream_output_filter(
+                _OutputEnvelope(snapshot, "state-snapshot", (), "state"), config
+            )
+        if self._aoutput_filter is not None:
+            return _OutputEnvelope(snapshot, "state-snapshot", (), "state").rebuild(
+                await self._aoutput_filter(snapshot, config)
+            )
+        return snapshot
+
     def get_state(
         self, config: RunnableConfig, *, subgraphs: bool = False
     ) -> StateSnapshot:
         """Get the current state of the graph."""
+        config = merge_configs(self.config, config) if self.config else config
         checkpointer: BaseCheckpointSaver | None = ensure_config(config)[CONF].get(
             CONFIG_KEY_CHECKPOINTER, self.checkpointer
         )
@@ -1438,14 +1487,14 @@ class Pregel(
             recast = recast_checkpoint_ns(checkpoint_ns)
             # find the subgraph with the matching name
             for _, pregel in self.get_subgraphs(namespace=recast, recurse=True):
-                return pregel.get_state(
+                snapshot = pregel.get_state(
                     patch_configurable(config, {CONFIG_KEY_CHECKPOINTER: checkpointer}),
                     subgraphs=subgraphs,
                 )
+                return self._filter_state_snapshot(snapshot, config)
             else:
                 raise ValueError(f"Subgraph {recast} not found")
 
-        config = merge_configs(self.config, config) if self.config else config
         if self.checkpointer is True:
             ns = cast(str, config[CONF][CONFIG_KEY_CHECKPOINT_NS])
             config = merge_configs(
@@ -1456,17 +1505,19 @@ class Pregel(
             config[CONF][CONFIG_KEY_THREAD_ID] = str(thread_id)
 
         saved = checkpointer.get_tuple(config)
-        return self._prepare_state_snapshot(
+        snapshot = self._prepare_state_snapshot(
             config,
             saved,
             recurse=checkpointer if subgraphs else None,
             apply_pending_writes=CONFIG_KEY_CHECKPOINT_ID not in config[CONF],
         )
+        return self._filter_state_snapshot(snapshot, config)
 
     async def aget_state(
         self, config: RunnableConfig, *, subgraphs: bool = False
     ) -> StateSnapshot:
         """Get the current state of the graph."""
+        config = merge_configs(self.config, config) if self.config else config
         checkpointer: BaseCheckpointSaver | None = ensure_config(config)[CONF].get(
             CONFIG_KEY_CHECKPOINTER, self.checkpointer
         )
@@ -1482,14 +1533,14 @@ class Pregel(
             recast = recast_checkpoint_ns(checkpoint_ns)
             # find the subgraph with the matching name
             async for _, pregel in self.aget_subgraphs(namespace=recast, recurse=True):
-                return await pregel.aget_state(
+                snapshot = await pregel.aget_state(
                     patch_configurable(config, {CONFIG_KEY_CHECKPOINTER: checkpointer}),
                     subgraphs=subgraphs,
                 )
+                return await self._afilter_state_snapshot(snapshot, config)
             else:
                 raise ValueError(f"Subgraph {recast} not found")
 
-        config = merge_configs(self.config, config) if self.config else config
         if self.checkpointer is True:
             ns = cast(str, config[CONF][CONFIG_KEY_CHECKPOINT_NS])
             config = merge_configs(
@@ -1500,12 +1551,13 @@ class Pregel(
             config[CONF][CONFIG_KEY_THREAD_ID] = str(thread_id)
 
         saved = await checkpointer.aget_tuple(config)
-        return await self._aprepare_state_snapshot(
+        snapshot = await self._aprepare_state_snapshot(
             config,
             saved,
             recurse=checkpointer if subgraphs else None,
             apply_pending_writes=CONFIG_KEY_CHECKPOINT_ID not in config[CONF],
         )
+        return await self._afilter_state_snapshot(snapshot, config)
 
     def get_state_history(
         self,
@@ -1516,7 +1568,9 @@ class Pregel(
         limit: int | None = None,
     ) -> Iterator[StateSnapshot]:
         """Get the history of the state of the graph."""
-        config = ensure_config(config)
+        config = ensure_config(
+            merge_configs(self.config, config) if self.config else config
+        )
         checkpointer: BaseCheckpointSaver | None = config[CONF].get(
             CONFIG_KEY_CHECKPOINTER, self.checkpointer
         )
@@ -1532,12 +1586,18 @@ class Pregel(
             recast = recast_checkpoint_ns(checkpoint_ns)
             # find the subgraph with the matching name
             for _, pregel in self.get_subgraphs(namespace=recast, recurse=True):
-                yield from pregel.get_state_history(
-                    patch_configurable(config, {CONFIG_KEY_CHECKPOINTER: checkpointer}),
-                    filter=filter,
-                    before=before,
-                    limit=limit,
-                )
+                with contextlib.closing(
+                    pregel.get_state_history(
+                        patch_configurable(
+                            config, {CONFIG_KEY_CHECKPOINTER: checkpointer}
+                        ),
+                        filter=filter,
+                        before=before,
+                        limit=limit,
+                    )
+                ) as states:
+                    for state in states:
+                        yield self._filter_state_snapshot(state, config)
                 return
             else:
                 raise ValueError(f"Subgraph {recast} not found")
@@ -1556,9 +1616,10 @@ class Pregel(
         for checkpoint_tuple in list(
             checkpointer.list(config, before=before, limit=limit, filter=filter)
         ):
-            yield self._prepare_state_snapshot(
+            snapshot = self._prepare_state_snapshot(
                 checkpoint_tuple.config, checkpoint_tuple
             )
+            yield self._filter_state_snapshot(snapshot, config)
 
     async def aget_state_history(
         self,
@@ -1569,7 +1630,9 @@ class Pregel(
         limit: int | None = None,
     ) -> AsyncIterator[StateSnapshot]:
         """Asynchronously get the history of the state of the graph."""
-        config = ensure_config(config)
+        config = ensure_config(
+            merge_configs(self.config, config) if self.config else config
+        )
         checkpointer: BaseCheckpointSaver | None = ensure_config(config)[CONF].get(
             CONFIG_KEY_CHECKPOINTER, self.checkpointer
         )
@@ -1585,13 +1648,18 @@ class Pregel(
             recast = recast_checkpoint_ns(checkpoint_ns)
             # find the subgraph with the matching name
             async for _, pregel in self.aget_subgraphs(namespace=recast, recurse=True):
-                async for state in pregel.aget_state_history(
-                    patch_configurable(config, {CONFIG_KEY_CHECKPOINTER: checkpointer}),
-                    filter=filter,
-                    before=before,
-                    limit=limit,
-                ):
-                    yield state
+                async with contextlib.aclosing(
+                    pregel.aget_state_history(
+                        patch_configurable(
+                            config, {CONFIG_KEY_CHECKPOINTER: checkpointer}
+                        ),
+                        filter=filter,
+                        before=before,
+                        limit=limit,
+                    )
+                ) as states:
+                    async for state in states:
+                        yield await self._afilter_state_snapshot(state, config)
                 return
             else:
                 raise ValueError(f"Subgraph {recast} not found")
@@ -1613,9 +1681,10 @@ class Pregel(
                 config, before=before, limit=limit, filter=filter
             )
         ]:
-            yield await self._aprepare_state_snapshot(
+            snapshot = await self._aprepare_state_snapshot(
                 checkpoint_tuple.config, checkpoint_tuple
             )
+            yield await self._afilter_state_snapshot(snapshot, config)
 
     def bulk_update_state(
         self,
@@ -2824,6 +2893,16 @@ class Pregel(
                 ]
             if "ls_integration" not in callback_manager.metadata:
                 callback_manager.add_metadata({"ls_integration": "langgraph"})
+            if self._output_filter is not None and self._aoutput_filter is not None:
+                guard_callback_manager(
+                    callback_manager,
+                    config,
+                    self._output_filter,
+                    self._aoutput_filter,
+                    asynchronous=False,
+                    callback_filter=self._callback_filter,
+                    acallback_filter=self._acallback_filter,
+                )
             run_manager = callback_manager.on_chain_start(
                 None,
                 input,
@@ -2834,6 +2913,16 @@ class Pregel(
                 config,
                 run_id=run_manager.run_id,
             )
+            if self._output_filter is not None and self._aoutput_filter is not None:
+                guard_callback_manager(
+                    graph_callback_manager,
+                    config,
+                    self._output_filter,
+                    self._aoutput_filter,
+                    asynchronous=False,
+                    callback_filter=self._callback_filter,
+                    acallback_filter=self._acallback_filter,
+                )
             if checkpointer is None and durability is not None:
                 warnings.warn(
                     "`durability` has no effect when no checkpointer is present.",
@@ -2870,6 +2959,17 @@ class Pregel(
                         subgraphs,
                         parent_ns=tuple(ns_tools.split(NS_SEP)) if ns_tools else None,
                     )
+                )
+
+            if self._output_filter is not None and self._aoutput_filter is not None:
+                guard_callback_manager(
+                    run_manager,
+                    config,
+                    self._output_filter,
+                    self._aoutput_filter,
+                    asynchronous=False,
+                    callback_filter=self._callback_filter,
+                    acallback_filter=self._acallback_filter,
                 )
 
             # set up custom stream mode
@@ -3015,9 +3115,12 @@ class Pregel(
                             version,
                             _output_mapper,
                             _state_mapper,
+                            self._stream_output_filter is not None,
                         ):
                             yield (
-                                self._output_filter(output, config)
+                                (self._stream_output_filter or self._output_filter)(
+                                    output, config
+                                )
                                 if self._output_filter is not None
                                 else output
                             )
@@ -3037,9 +3140,10 @@ class Pregel(
                 version,
                 _output_mapper,
                 _state_mapper,
+                self._stream_output_filter is not None,
             ):
                 yield (
-                    self._output_filter(output, config)
+                    (self._stream_output_filter or self._output_filter)(output, config)
                     if self._output_filter is not None
                     else output
                 )
@@ -3257,6 +3361,16 @@ class Pregel(
                 ]
             if "ls_integration" not in callback_manager.metadata:
                 callback_manager.add_metadata({"ls_integration": "langgraph"})
+            if self._output_filter is not None and self._aoutput_filter is not None:
+                guard_callback_manager(
+                    callback_manager,
+                    config,
+                    self._output_filter,
+                    self._aoutput_filter,
+                    asynchronous=True,
+                    callback_filter=self._callback_filter,
+                    acallback_filter=self._acallback_filter,
+                )
             run_manager = await callback_manager.on_chain_start(
                 None,
                 input,
@@ -3281,6 +3395,16 @@ class Pregel(
                 if _StreamingCallbackHandler is not None
                 else False
             )
+            if self._output_filter is not None and self._aoutput_filter is not None:
+                guard_callback_manager(
+                    graph_callback_manager,
+                    config,
+                    self._output_filter,
+                    self._aoutput_filter,
+                    asynchronous=True,
+                    callback_filter=self._callback_filter,
+                    acallback_filter=self._acallback_filter,
+                )
             if checkpointer is None and durability is not None:
                 warnings.warn(
                     "`durability` has no effect when no checkpointer is present.",
@@ -3318,6 +3442,17 @@ class Pregel(
                         subgraphs,
                         parent_ns=tuple(ns_tools.split(NS_SEP)) if ns_tools else None,
                     )
+                )
+
+            if self._output_filter is not None and self._aoutput_filter is not None:
+                guard_callback_manager(
+                    run_manager,
+                    config,
+                    self._output_filter,
+                    self._aoutput_filter,
+                    asynchronous=True,
+                    callback_filter=self._callback_filter,
+                    acallback_filter=self._acallback_filter,
                 )
 
             # set up custom stream mode
@@ -3508,9 +3643,13 @@ class Pregel(
                                 version,
                                 _output_mapper,
                                 _state_mapper,
+                                self._astream_output_filter is not None,
                             ):
                                 yield (
-                                    await self._aoutput_filter(o, config)
+                                    await (
+                                        self._astream_output_filter
+                                        or self._aoutput_filter
+                                    )(o, config)
                                     if self._aoutput_filter is not None
                                     else o
                                 )
@@ -3536,9 +3675,12 @@ class Pregel(
                 version,
                 _output_mapper,
                 _state_mapper,
+                self._astream_output_filter is not None,
             ):
                 yield (
-                    await self._aoutput_filter(o, config)
+                    await (self._astream_output_filter or self._aoutput_filter)(
+                        o, config
+                    )
                     if self._aoutput_filter is not None
                     else o
                 )
@@ -3845,7 +3987,39 @@ class Pregel(
                 transformers=transformers,
                 **kwargs,
             )
-        return super().astream_events(input, config, version=version, **kwargs)
+        events = super().astream_events(input, config, version=version, **kwargs)
+        if self._aoutput_filter is None:
+            return events
+        return _filter_stream_events(
+            events,
+            self._astream_output_filter or self._aoutput_filter,
+            ensure_config(self.config, config),
+            framed=self._astream_output_filter is not None,
+        )
+
+    def astream_log(
+        self,
+        input: InputT | Command | None,
+        config: RunnableConfig | None = None,
+        *,
+        diff: bool = True,
+        **kwargs: Any,
+    ) -> AsyncIterator[RunLogPatch] | AsyncIterator[RunLog]:
+        """Publish authorized legacy log states, without exposing raw history.
+
+        Secured diff streams use root-replacement patches so redaction cannot
+        leave later operations dependent on a suppressed raw patch.
+        """
+        if self._aoutput_filter is None:
+            return super().astream_log(input, config, diff=diff, **kwargs)
+        logs = super().astream_log(input, config, diff=False, **kwargs)
+        return _filter_stream_logs(
+            logs,
+            self._astream_output_filter or self._aoutput_filter,
+            ensure_config(self.config, config),
+            framed=self._astream_output_filter is not None,
+            diff=diff,
+        )
 
     @overload
     def invoke(
@@ -4249,6 +4423,49 @@ def _trigger_to_nodes(nodes: dict[str, PregelNode]) -> Mapping[str, Sequence[str
     return dict(trigger_to_nodes)
 
 
+async def _filter_stream_logs(
+    logs: AsyncIterator[RunLog],
+    output_filter: Callable[[Any, RunnableConfig], Awaitable[Any]],
+    config: RunnableConfig,
+    *,
+    framed: bool,
+    diff: bool,
+) -> AsyncIterator[RunLogPatch]:
+    """Authorize full states, then publish only reconstructed effective logs."""
+    try:
+        async for log in logs:
+            envelope = _OutputEnvelope(
+                log.state, "legacy-log-patch" if diff else "legacy-log", (), ""
+            )
+            effective = await output_filter(envelope if framed else log.state, config)
+            yield cast(
+                RunLogPatch, effective if framed else envelope.rebuild(effective)
+            )
+    finally:
+        close = getattr(logs, "aclose", None)
+        if close is not None:
+            await close()
+
+
+async def _filter_stream_events(
+    events: AsyncIterator[StreamEvent],
+    output_filter: Callable[[Any, RunnableConfig], Awaitable[Any]],
+    config: RunnableConfig,
+    *,
+    framed: bool,
+) -> AsyncIterator[StreamEvent]:
+    """Mediate each legacy callback event and close its producer on exit."""
+    try:
+        async for event in events:
+            envelope = _OutputEnvelope(event, "legacy-event", (), "")
+            effective = await output_filter(envelope if framed else event, config)
+            yield cast(StreamEvent, envelope.rebuild(effective))
+    finally:
+        close = getattr(events, "aclose", None)
+        if close is not None:
+            await close()
+
+
 def _output(
     stream_mode: StreamMode | Sequence[StreamMode],
     print_mode: StreamMode | Sequence[StreamMode],
@@ -4258,6 +4475,7 @@ def _output(
     version: Literal["v1", "v2"] = "v1",
     output_mapper: Callable[[Any], Any] | None = None,
     state_mapper: Callable[[Any], Any] | None = None,
+    mediated: bool = False,
 ) -> Iterator:
     while True:
         try:
@@ -4287,28 +4505,31 @@ def _output(
         if mode in stream_mode:
             if version == "v2":
                 if mode == "values":
-                    # pop __interrupt__ into typed field, coerce data
                     ints: tuple[Interrupt, ...] = ()
                     if isinstance(payload, dict):
                         ints = payload.pop(INTERRUPT, ())
                         if output_mapper:
                             payload = output_mapper(payload)
-                    yield {"type": mode, "ns": ns, "data": payload, "interrupts": ints}
-                elif mode in ("checkpoints", "debug"):
-                    # coerce state values in checkpoint/debug payloads
-                    if state_mapper:
-                        _coerce_checkpoint_values(payload, state_mapper)
-                    yield {"type": mode, "ns": ns, "data": payload}
+                    if ints:
+                        content = {"data": payload, "interrupts": ints}
+                        envelope = _OutputEnvelope(
+                            content, "v2-values-interrupts", ns, mode
+                        )
+                    else:
+                        envelope = _OutputEnvelope(payload, "v2-values", ns, mode)
                 else:
-                    yield {"type": mode, "ns": ns, "data": payload}
+                    if mode in ("checkpoints", "debug") and state_mapper:
+                        _coerce_checkpoint_values(payload, state_mapper)
+                    envelope = _OutputEnvelope(payload, "v2", ns, mode)
             elif stream_subgraphs and isinstance(stream_mode, list):
-                yield (ns, mode, payload)
+                envelope = _OutputEnvelope(payload, "namespace-mode", ns, mode)
             elif isinstance(stream_mode, list):
-                yield (mode, payload)
+                envelope = _OutputEnvelope(payload, "mode", ns, mode)
             elif stream_subgraphs:
-                yield (ns, payload)
+                envelope = _OutputEnvelope(payload, "namespace", ns, mode)
             else:
-                yield payload
+                envelope = _OutputEnvelope(payload, "plain", ns, mode)
+            yield envelope if mediated else envelope.rebuild(envelope.content)
 
 
 def _coerce_checkpoint_values(payload: Any, mapper: Callable[[Any], Any]) -> None:

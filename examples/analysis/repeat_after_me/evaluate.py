@@ -12,6 +12,7 @@ from langgraph.prebuilt.analysis import (
     AnalysisResult,
     AnalysisRuntime,
     AnalyzerRegistration,
+    BuiltinEvent,
     Registry,
 )
 from langgraph.prebuilt.analysis.adapters.boundary import BoundaryAdapter
@@ -94,7 +95,10 @@ def overhead(iterations=100):
         BUILTIN_EVENTS,
         (
             AnalyzerRegistration(
-                "benchmark.noop", "1", ScriptedNoop(), ("model.request",)
+                analyzer_id="benchmark.noop",
+                version="1",
+                analyzer=ScriptedNoop(),
+                events={BuiltinEvent.MODEL_REQUEST},
             ),
         ),
         producers=frozenset(spec.producer for spec in BUILTIN_EVENTS),

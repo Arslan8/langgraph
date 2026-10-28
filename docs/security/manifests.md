@@ -34,7 +34,7 @@ The helper derives the internal tool identity from `greet.name` and behaves as
 if the body had been wrapped in a `tool greet { ... }` block. `runs` must resolve
 to `inprocess`. The helper pre-registers its core classes, currently `fs` with
 the `read` operation. Additional resource classes are passed through `classes=`
-and must use `enforced_by trusted_tool`. Other enforcement loci use the
+and must use `enforced_by language_sandbox`. Other enforcement loci use the
 standalone form and lower-level host API.
 
 The standalone form accepted by `parse_security_manifest` contains any number
@@ -69,7 +69,7 @@ class automatically:
 
 | Class | Operations | Object | Normalizer | Enforced by |
 | --- | --- | --- | --- | --- |
-| `fs` | `read` | `path` | `fs.realpath` | `trusted_tool` |
+| `fs` | `read` | `path` | `fs.realpath` | `language_sandbox` |
 
 Therefore a normal tool manifest can simply write `fs read @{path} need`.
 Standalone parsing does not assume an enforcement host and consequently does
@@ -78,6 +78,21 @@ document or pre-register `ObjectClass` values with
 `parse_security_manifest(..., classes=plugin_classes)`. Duplicate class names
 fail closed; an application cannot silently replace the helper's core meaning
 of `fs`.
+
+The built-in `read_text(path)` terminal accepts only an exact `str`, requires an
+active matching `fs read` grant, and supports regular files on Linux. After
+checking the canonical pathname, it pins the file with `openat2`, rejecting
+symlinks in every canonical path component. It reads through its owned descriptor
+after verifying the reopened descriptor's device and inode. Missing `openat2` or
+procfs descriptor support denies the read; there is no pathname-read fallback.
+
+This grant names a canonical path. The terminal binds the object at its open,
+not an inode or content snapshot from authorization time. Later pathname
+replacement cannot redirect the pinned read. This does not promise metadata
+secrecy, a historical inode identity, or immutable file contents. Invalid UTF-8
+produces a payload-free `HostExecutionDenied`: the exposed exception has no
+decoder exception in its cause or context containing file bytes. Owned
+descriptors close on success and failure.
 
 ## Lexical syntax
 
@@ -155,7 +170,7 @@ generate the same Cedar entity type.
 | `broker` | A trusted broker performs an application-semantic operation for a worker that lacks direct access. |
 | `resource_side` | A remote resource enforces a scoped credential or server-side policy. |
 | `framework` | A slangGraph hook enforces access to a framework-owned object. |
-| `trusted_tool` | A reviewed in-process tool or its language sandbox honors the exact grant while native host DAC independently restricts the coordinator identity. |
+| `language_sandbox` | The source-admitted restricted language executes only mediated terminals; native host DAC independently restricts the coordinator identity. |
 
 The declaration is a promise, not an implementation. The host must register an
 enforcer for the selected kind, and that enforcer must report support for the
@@ -194,7 +209,7 @@ optional and repeatable.
 
 | Entry | Cardinality | Default | Meaning |
 | --- | --- | --- | --- |
-| `runs RUN_LOCUS` | Zero or one | `inprocess` | Identifier naming the execution locus. The high-level helper accepts trusted `inprocess`, or `linux`/`broker` with an explicit isolated dispatcher. |
+| `runs RUN_LOCUS` | Zero or one | `inprocess` | Identifier naming the execution locus. The high-level helper accepts language-sandbox `inprocess`, or `linux`/`broker` with an explicit isolated dispatcher. |
 | `returns RETURN_CLASS` | Zero or one | `normal` | Identifier classifying the tool result, such as `normal` or `sensitive`. The manifest parser records the identifier; downstream policy gives it meaning. |
 | `CLASS OPERATION OBJECT_PATTERN need` | Zero or more | None | Required resource capability. Removing or denying it denies the complete call. |
 | `CLASS OPERATION OBJECT_PATTERN want` | Zero or more | None | Optional resource capability. Removing or denying it omits the line but does not by itself deny the call. |
@@ -204,10 +219,10 @@ optional and repeatable.
 does not maintain a global enumeration for them. The selected execution path
 is responsible for accepting or rejecting a particular value.
 
-### Trusted in-process intersection
+### Language sandbox and host permission intersection
 
-For `runs inprocess`, the tool executes under the coordinator's host identity
-and is intentionally trusted. Its effective permission is:
+For `runs inprocess`, the admitted language program executes under the
+coordinator's host identity. Its effective permission is:
 
 `effective permission = slangGraph permission ∩ host permission`
 
@@ -219,12 +234,20 @@ other's denial into an allow.
 
 There is no implied mapping from a slangGraph `Principal` to a Unix user or
 other host identity. In the ordinary deployment, the host sees the coordinator
-service account. Because `inprocess` does not install a per-call kernel
-boundary, the trusted tool belongs to the TCB and must not use ambient host
-authority for an operation absent from the surviving slangGraph authorization.
-An enabled language sandbox may enforce that obligation. Use an isolated host,
-broker, framework hook, or resource-side credential when the tool implementation
-must not be trusted to preserve the intersection.
+service account. The language sandbox executes the admitted immutable program,
+not the original Python function. Imports, reflection, dynamic code, and
+arbitrary library objects are unavailable in that language. Framework terminals
+mediate resource access. Use an isolated host and broker for Python outside this
+restricted language. `inprocess` alone is never an enforcement guarantee.
+
+Admission validates native function metadata before comparing loaded code with
+source. Code identity includes native constants and exception tables without
+candidate equality operations. Program execution captures its signature,
+terminal contracts and bindings, proves that captured program, then uses the
+same captured inputs. Forged nested signature/contract fields are rejected
+before their protocols run. Signature capture requires a native inspect layout
+whose mapping-proxy backing can be inspected without mapping dispatch; unknown
+layouts are unsupported. Annotations are not interpreted as executable input.
 
 A resource rule has exactly four whitespace-separated fields:
 
@@ -395,12 +418,12 @@ For each tool call, the object-policy path performs these steps:
 11. Dispatch through the trusted host and verify its activation receipt.
 
 The high-level helper requires [manifest consistency admission](manifest-consistency.md)
-for all in-process tool bodies, including resource-free tools. Resource-free
+for all language-sandbox tool bodies, including resource-free tools. Resource-free
 manifests still receive the Cedar call check and run through the verified
-dispatcher. For `trusted_tool` resource manifests, it performs the complete expansion
+dispatcher. For `language_sandbox` resource manifests, it performs the complete expansion
 and grant construction sequence, canonicalizes descriptor-declared resource
-arguments before executing the trusted tool, and records each issued grant and
-an exact trusted-tool/host-intersection receipt. It generates the owner ceiling
+arguments before executing the admitted language program, and records each issued grant and
+an exact language-sandbox/host-intersection receipt. It generates the owner ceiling
 internally. The caller-facing `policy` permits the resource operations; access
 to those manifest-derived operations determines whether the invocation may be
 dispatched. Resource-free manifests still require an explicit caller-facing
@@ -430,7 +453,7 @@ Manifest parsing rejects:
 - empty operation sets or invalid identifiers;
 - unknown normalizers;
 - invalid enforcement kinds;
-- a `cedar_security` resource class not enforced by `trusted_tool`;
+- a `cedar_security` resource class not enforced by `language_sandbox`;
 - duplicate `runs` or `returns` directives;
 - unknown resource classes or undeclared operations;
 - resource rules that do not have exactly four fields;

@@ -53,6 +53,8 @@ running analysis.
 | `SGV106` | Place checkpoint history, writes, and administrative effects. |
 | `SGV107` | Bind backing-store read results to authoritative ownership and effective values. |
 | `SGV108` | Authenticate and principal-bind checkpoint history tuples before publication. |
+| `SGV109` | Mediate legacy callback event iterators and complete log states before publication. |
+| `SGV110` | Mediate complete state snapshots and delegated history using the caller's authority. |
 | `SGV190` | Restore missing/unresolved analyzer inputs or update its model. |
 | `SGV201` | Restore the router's required protocol and exact identity bindings. |
 | `SGV301` / `SGV302` | Resolve escape findings and stale/malformed waivers. |
@@ -153,6 +155,184 @@ this contract requires every discovered entry to have a contract; stale or
 unclassified entries remain unresolved. `authorizations` records both actual and
 expected arguments with an `entry_bound` result.
 
+`VerificationSpec.return_protocols` checks a separate normal-return provenance
+property. Each discovered entry must declare its allowed operation targets and,
+if supported, its pending-approval authorizers. A return must be the exact result
+of an authorized operation on that path, or the unchanged authorizer result
+whose decision has been narrowed to `ESCALATE`. Helpers and aliases preserve the
+identity; a tuple containing raw data, a substituted request, a changed result,
+an unclassified entry, or an exhausted analysis budget cannot pass. Possible
+aliases between primitive results and their input data participate in mutation
+invalidation. Terminal-result freshness is not assumed to imply a detached copy.
+
+The router now requires this contract for all 21 entries. Root and cross-tool
+calls may return only their respective dispatch results. Framework permission
+routes additionally permit pending approvals; resume routes do not. The fresh
+source proof and loaded-code binding run in `make_host_router`, so even matching
+source and bytecode are refused when the return protocol cannot be proved.
+`return_outcomes` records the derived alternatives per entry. These alternatives
+do not grant publication permission or classify exception payloads. A caller
+still needs a bound receiver, pending-approval handling, and its own publication
+proof; this component does not close SGV901–903.
+
+Native `type(value) is SourceClass` guards can establish an exact source-method
+receiver when the class has a checked fixed slot layout and directly derives
+from `object`. The model accepts literal tuples of distinct ordinary slot names;
+it rejects dictionary/weak-reference slots, method-name collisions, custom
+protocols, dynamic layouts and unmodeled inheritance. An exact class check on an
+ordinary dictionary-bearing instance cannot rule out method shadowing, so its
+calls remain unresolved. `isinstance` and annotations do not establish this
+binding. Type queries preserve the queried identity through aliases; checking
+another object cannot authorize method resolution on the desired receiver.
+
+An input slot may be unset even when the type matches. The checker follows that
+exceptional path as well as the present-slot path, and conservatively revokes
+grants when separately named inputs might alias mutable slot storage. Slot
+values remain unknown until established by source operations. Exact receiver
+identity does not prove the authority or implementation of objects held in slots.
+
+Exact native dictionaries also require key validation. Even a native dictionary
+copy can invoke equality on colliding user-defined keys; an exact `dict` check
+alone does not make lookup, copying or key hashing inert. The engine models
+`tuple(mapping.items())` after the exact-type guard as a native item snapshot.
+A narrow induction rule then follows the actual copy loop: reject each key
+unless `type(key) is str`, and insert the unchanged key/value pair into a fresh
+empty dictionary. The empty and arbitrary nonempty cases establish string keys
+on normal return. Unknown loop bodies, weaker guards, altered pairs, shadowed
+builtins and additional effects remain unresolved. Values retain their original
+identities and capabilities; normalization supplies no authorization. Reports
+record these steps in `mapping_normalizations`.
+
+`HostRouter` now has fixed `policy` and `host` slots, preventing instance method
+replacement. Runtime admission checks both native slot descriptors as well as
+loaded method code. Output mediation checks and captures its exact router before
+calling it; pending-approval continuations retain that router through resume.
+The publication checker now enters the actual router source methods from those
+guards. Policy/host slot contracts, input shapes and continuation publication
+still need composition evidence; no opaque router authorizer is assumed.
+
+`evidence.host_output_correspondence` checks the output-request branch of
+`ObjectManagerHost.dispatch` and `adispatch` against its source snapshot.
+Its conditional property is that every normal return is the identical effective
+`request.content`, after the confidentiality-to-clearance subset check. The
+checker follows request classification, local aliases, the native lock context
+and async forwarding into the synchronous body. Unknown reachable effects,
+substituted inputs, bypassed guards, different results and a lack of any useful
+normal return prevent this component proof. The earlier branch without the
+payload validator has a saved source-derived proof. Current dispatch additionally
+calls `validate_output_request`. That call is discharged only by the validator
+contract recomputed from the audited `output_data.py` source, described below.
+The exact call on the unchanged request forks into a refusal exit and a
+continuation that changes no request field. Without that source, or when its
+derivation fails, the report sets `proved=false` and records the reachable
+validation dependency together with the derivation issues. A validator name or
+a saved report is never evidence of safety.
+
+This derivation assumes exact native request/label records, inert string sets,
+stable source-bound methods and imports, and a native lock. Checked dataclass
+layouts exclude pseudo-fields, descriptor defaults, custom access protocols and
+ambiguous declarations. These checks do not prove module/class initialization,
+constructors, runtime binding, payload admission or authorization. The report
+explicitly leaves `initialization_proved`, `runtime_binding_proved` and
+`system_complete` false. This component cannot be used as an opaque publication
+authorizer; callers must discharge its premises and compose its result with the
+router's permission and pending-approval paths. Other host request kinds and
+host isolation/lifetime remain separate obligations.
+
+The runtime now uses fixed slot layouts for the output mediator and object host,
+checks that the captured router uses the captured host before collecting labels
+and again before routing, and retains that pair through approval continuations.
+Host substitution before resume is refused. These guards prevent instance method
+shadowing and mismatched receivers; source/runtime class bindings and mutation
+inside policy callbacks remain separate obligations.
+
+Output payload handling uses a closed, bounded data grammar in `output_data.py`.
+Unknown mappings, sequences, serializers, callbacks and object types are refused
+before their protocols run. Known framework/message records project their actual
+fields, including message metadata, extras, private storage and nested labeled
+values. Exact native label fields are checked before subset operations. The host
+conservatively inherits labels for matching state-channel keys without invoking
+payload equality, and checks effective output requests after policy transforms.
+Validation runs before output analysis and again at final dispatch. It does not
+establish provenance of untracked derived values or detach mutable payloads.
+
+Output approval subjects include a tagged structural content digest as well as
+destination, output identity, labels, clearance and principal context. Mutation
+between escalation and resume changes the subject and invalidates the prior
+approval. This is a content-binding check, not an atomic snapshot or protection
+against arbitrary concurrent controller mutation. Tool, state and model approval
+formats remain separate contracts. Transform arguments now use a tuple-backed
+native-key mapping whose storage is revalidated before narrowing; a mapping
+proxy alone cannot prove that its backing mapping is native.
+
+The generic source engine now follows the actual `Decision` constructor,
+argument-copy helper and tuple-backed mapping's `__getitem__` body. Its useful
+copy/read fixture retains the original positive assertion and derives one
+authorized dispatch of the original request. Explicit initialization, indexing
+effects and nested aliases participate in analysis. Unmodeled Mapping mixins,
+truth protocols and custom class behavior remain unresolved; the Mapping base
+alone grants no proof contract.
+
+`evidence.output_data_primitives` is recomputed from the same audited source
+snapshot as the host correspondence report. It derives seven bounded helper
+contracts for constructor-owned state, budget charging, strings, native
+dictionary pairs, string sets, label projections and channel labels. It also
+checks the six exact scalar return cases of `walk`. Every accepted statement on
+those selected paths has a native type/effect rule; foreign protocols, changed
+bindings, mismatched calls and additional effects prevent the corresponding
+derivation. Compiler scope analysis includes bindings in the unresolved suffix.
+Label contracts certify captured projections; stability of the original mutable
+record requires a separate premise.
+
+The recursive group is derived by induction on the remaining depth. `fields`,
+`record` and every `compound` branch are checked under the hypothesis that
+`walk` meets its contract at `depth + 1`. Each recursive call must be exactly
+`depth + 1`. `walk` closes the induction with its prefix depth guard, a bound
+written only by the constructor and the finite node budget; if it fails, the
+conditional contracts are retracted. Every module inventory the walker reads is
+derived from its source initializer. Exception projections are limited to simple
+native layouts, and module code may not declare `global` or `nonlocal`. The
+public wrappers are derived last, and only then are `validator_admission_proved`
+and `effect_safety_proved` set. The contract's premises remain explicit:
+initialization and runtime binding, the listed external class layouts, field
+stability, process-global garbage-collection and signal events, and unsanitized
+refusal tracebacks. `validate_output_data`, `validate_security_labels` and
+`output_data_digest` are not covered, and system completeness stays false.
+
+`evidence.output_mediator_correspondence` is a separate source derivation for
+the publication mediator in `placement.py`. For the exact `OutputMediator`
+receiver, every normal return of `_emit`/`_aemit` is `rebuild(result)` where
+`result` is exactly what `router.output_emit` returned for the `OutputRequest`
+built in that call; approvals raise; the router/host pair is checked before
+labels and again before routing; the public wrappers are class-function
+forwardings. `router.output_emit` is consumed by recomputing the router source
+proof and `validate_output_data` by recomputing the wrapper contract. Explicit
+premises: the receiver's slots as stored by its initializer, `rebuild` being
+one of the three framework rebuilders, trusted-runtime principal and operation
+identifiers, and native dataclass construction. Continuation closures remain in
+`remaining_composition`.
+
+## Route-scoped acceptance
+
+Whole-system completeness (`complete`, SGV901–903) is unchanged and still not
+established. Acceptance is now route-scoped: `docs/security/supported-surface.json`
+(schema 2) declares the admitted execution surface, and
+`route_verification.verify_routes` recomputes every check it names from the
+current sources at gate time: the router source proof, the host-output and
+output-mediator correspondences, the validator contract, the admission-surface
+derivation, the Linux host structural checks (regression only), a fresh Lean
+model audit with kernel replay and source identities bound to the tree,
+recorded runtime evidence whose source hashes must still match, and the
+registration of every exclusion's gate code. No saved report satisfies a proof
+check. `acceptance_passed` holds only when every supported route discharges
+every applicable obligation under its stated premises, every exclusion is
+gated, and no exclusion is ungated; anything else is unsupported and refused
+by `SecurityConfig(closed_admission=True)` or an existing gate. The evidence
+standard is in `docs/security/evidence-standard.md`. `make security-verify`
+runs the full gate (including the Lean audit, written under
+`SECURITY_EVIDENCE_DIR`); `make security-verify-fast` skips the audit, and
+that check then fails closed.
+
 The engine models field-only native `typing.NamedTuple` and
 `typing_extensions.NamedTuple` declarations with postponed annotations and
 immutable literal defaults. Constructor positional/keyword binding, field and
@@ -190,7 +370,8 @@ dispatch obligation was reached; these are different report fields.
 
 The repository analysis intentionally does **not** declare router calls as
 refusing-return authorizers: they can return escalation objects. Correct receiver
-binding and that result protocol still need a model. Ownership, integrity,
+binding and caller handling of the source-proved return alternatives still need
+a composition model. Ownership, integrity,
 pending-write authentication and host composition also remain separate obligations.
 The generic engine can prove supported publication contracts; the current
 repository adapter composition is not yet proved. See the source-only positive
@@ -350,6 +531,14 @@ arguments; the terminal contract must preserve that binding.
     the certificate because identical source text can resolve differently when
     executed as a package instead of an ordinary module. Wildcard imports and
     arbitrary lazy exports still require their own models.
+    Function-local imports follow supplied source exports and helper bodies,
+    including aliases and relative imports. Unknown module initializers remain
+    unresolved even when the imported name is unused. Submodule imports that
+    overwrite a different package export are refused. Compiler symbol tables
+    determine function-local bindings: reads before binding, deletion and
+    cleared exception targets cannot fall back to a same-named global. Writes
+    through global or nonlocal declarations remain unresolved, including
+    declarations inside an untaken branch.
 11. Finite `for` loops over known tuples and mappings follow each iteration,
     preserving aliases, fresh-decision consumption, `break`, `continue`, loop
     `else` and finalizers. Mapping keys, values and items views stay live until
@@ -537,6 +726,20 @@ included in the result.
 
 ## Scope and current status
 
+The separate escape-discovery regression gate uses
+[`escape-waivers.json`](escape-waivers.json) for individually reviewed source
+sites. Its version 2 entries bind both the exact finding fingerprint and the
+SHA-256 of the analyzed source file. A changed file invalidates the review even
+when the call remains on the same line. Version 1 is supported for older external
+manifests; this repository uses version 2. Neither format is proof evidence.
+
+The [2026-10-26 review](escape-waiver-review-20261026.json) records the explicit
+agent/model/hook/branch sites re-reviewed after the analysis adapter changes,
+their trust assumptions, source identities, and validation tests. This reconciles
+stale reviews; it does not relax the scanner, authorize new runtime capabilities,
+or discharge SGV901–903. `make security-verify-regressions` can therefore pass
+while `make security-verify` continues to fail on proof obligations.
+
 This is verification of an explicit, restricted execution model. It is not a
 proof of arbitrary Python. The primitive authorizer's correctness, the supplied
 terminal-effect boundary, absence of external concurrent writes to security
@@ -568,3 +771,9 @@ execution and activation denial. The [current summary](source-verification-summa
 records both layers. A passing fixture proves that the engine has a working
 positive path; it does not discharge these production obligations. Complete
 MAC publication/lifetime/confidentiality guarantees remain separate properties.
+
+`SGV110` additionally checks observed raw current-state/history snapshot returns,
+local aliases, and delegated history yields. State inspection now uses the
+caller's output boundary for the complete snapshot, including tasks, interrupts,
+and checkpoint metadata. This rule rejects those known bypass patterns; it does
+not prove arbitrary filter helpers, snapshot provenance, or all publication APIs.

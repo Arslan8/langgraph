@@ -1,0 +1,199 @@
+{
+  "id": "email",
+  "repository": "langchain-ai/executive-ai-assistant",
+  "subdirectory": ".",
+  "entrypoint": "langgraph.json -> eaia/main/graph.py: graph",
+  "graph_files": [
+    "langgraph.json",
+    "eaia/main/graph.py",
+    "eaia/gmail.py",
+    "eaia/cron_graph.py",
+    "scripts/run_ingest.py"
+  ],
+  "effects": "Gmail read/send/mark-as-read and Calendar SDK effects in eaia/gmail.py; send_email_node calls SDK helper directly; preserve human_node approval workflow. OAuth and ingestion outside graph; hosted inbox and LangGraph persistence require separate trace.",
+  "next_action": "Resolve documented install failure with a separately reviewed dependency patch; provision dedicated Gmail OAuth test account and controlled recipients. No personal mailbox use.",
+  "sha": "758db7174223da7864feea7c9f8d1aba12923037",
+  "license": "MIT (see captured LICENSE text)",
+  "retrieved_at": "2026-10-26T00:31:38.372515+00:00",
+  "checkout": "/data/slanggraph-eval-upstreams/executive-ai-assistant",
+  "archive": {
+    "archived": true,
+    "pushed_at": "2026-07-27T17:58:24Z",
+    "html_url": "https://github.com/langchain-ai/executive-ai-assistant"
+  },
+  "source_evidence": [
+    {
+      "path": "langgraph.json",
+      "sha256": "5a29407a9ad411fa1c90fcd4281df1da762904e99bc853b9027497955c9f7d3f",
+      "url": "https://github.com/langchain-ai/executive-ai-assistant/blob/758db7174223da7864feea7c9f8d1aba12923037/langgraph.json",
+      "matches": []
+    },
+    {
+      "path": "eaia/main/graph.py",
+      "sha256": "bf9b16bf5f7c1e10a09bba2acd380d41816ea0e35fa6b001f5055ea9739d34d2",
+      "url": "https://github.com/langchain-ai/executive-ai-assistant/blob/758db7174223da7864feea7c9f8d1aba12923037/eaia/main/graph.py",
+      "matches": [
+        {
+          "line": 4,
+          "text": "from langgraph.graph import END, StateGraph"
+        },
+        {
+          "line": 30,
+          "text": "def route_after_triage("
+        },
+        {
+          "line": 45,
+          "text": "def take_action("
+        },
+        {
+          "line": 73,
+          "text": "def bad_tool_name(state: State):"
+        },
+        {
+          "line": 88,
+          "text": "def enter_after_human("
+        },
+        {
+          "line": 115,
+          "text": "def send_cal_invite_node(state, config):"
+        },
+        {
+          "line": 133,
+          "text": "def send_email_node(state, config):"
+        },
+        {
+          "line": 148,
+          "text": "def mark_as_read_node(state, config):"
+        },
+        {
+          "line": 153,
+          "text": "def human_node(state: State):"
+        },
+        {
+          "line": 162,
+          "text": "graph_builder = StateGraph(State, config_schema=ConfigSchema)"
+        },
+        {
+          "line": 190,
+          "text": "graph = graph_builder.compile()"
+        }
+      ]
+    },
+    {
+      "path": "eaia/gmail.py",
+      "sha256": "89367498e73e9be0a5eb856d974e55d67f10a5cb8a9f2abfeb83ef09c75bcd2c",
+      "url": "https://github.com/langchain-ai/executive-ai-assistant/blob/758db7174223da7864feea7c9f8d1aba12923037/eaia/gmail.py",
+      "matches": [
+        {
+          "line": 30,
+          "text": "async def get_credentials("
+        },
+        {
+          "line": 86,
+          "text": "def extract_message_part(msg):"
+        },
+        {
+          "line": 104,
+          "text": "def parse_time(send_time: str):"
+        },
+        {
+          "line": 112,
+          "text": "def create_message(sender, to, subject, message_text, thread_id, original_message_id):"
+        },
+        {
+          "line": 127,
+          "text": "def get_recipients("
+        },
+        {
+          "line": 147,
+          "text": "def send_message(service, user_id, message):"
+        },
+        {
+          "line": 148,
+          "text": "message = service.users().messages().send(userId=user_id, body=message).execute()"
+        },
+        {
+          "line": 152,
+          "text": "def send_email("
+        },
+        {
+          "line": 187,
+          "text": "async def fetch_group_emails("
+        },
+        {
+          "line": 288,
+          "text": "def mark_as_read("
+        },
+        {
+          "line": 310,
+          "text": "def get_events_for_days(date_strs: list[str]):"
+        },
+        {
+          "line": 357,
+          "text": "def format_datetime_with_timezone(dt_str, timezone=\"US/Pacific\"):"
+        },
+        {
+          "line": 374,
+          "text": "def print_events(events):"
+        },
+        {
+          "line": 402,
+          "text": "def send_calendar_invite("
+        }
+      ]
+    },
+    {
+      "path": "eaia/cron_graph.py",
+      "sha256": "9fe1cb4d90bf55883aebe944e357c5c49db01112ddd076e03c9e2b9b98337778",
+      "url": "https://github.com/langchain-ai/executive-ai-assistant/blob/758db7174223da7864feea7c9f8d1aba12923037/eaia/cron_graph.py",
+      "matches": [
+        {
+          "line": 7,
+          "text": "from langgraph.graph import StateGraph, START, END"
+        },
+        {
+          "line": 17,
+          "text": "async def main(state: JobKickoff, config):"
+        },
+        {
+          "line": 50,
+          "text": "graph = StateGraph(JobKickoff)"
+        },
+        {
+          "line": 54,
+          "text": "graph = graph.compile()"
+        }
+      ]
+    },
+    {
+      "path": "scripts/run_ingest.py",
+      "sha256": "4ded0c90d0d64280b08ccd2ddf9ee752894e0b33fab7a24688e17ff47400d8a7",
+      "url": "https://github.com/langchain-ai/executive-ai-assistant/blob/758db7174223da7864feea7c9f8d1aba12923037/scripts/run_ingest.py",
+      "matches": [
+        {
+          "line": 12,
+          "text": "async def main("
+        }
+      ]
+    }
+  ],
+  "dependency_inputs": {
+    "poetry.lock": "6cf1dac138e4cd07dbdaca0029525b4fb5728e7b43d9ce60fe2b5592023478d9",
+    "pyproject.toml": "f2b5b8253fad24b35dad5cf83433c5f8dcf16a4d2684395e05ad7016730f2f31"
+  },
+  "python": {
+    "argv": [
+      "/data/slanggraph-eval-upstreams/executive-ai-assistant/.venv/bin/python",
+      "--version"
+    ],
+    "returncode": 0,
+    "stdout": "Python 3.13.11\n",
+    "stderr": ""
+  },
+  "license_sha256": "a01dcffdc1291b4043f2a81d249a9f3e45c9036f2308c9cdfeefe18371371e80",
+  "license_text": "MIT License\n\nCopyright (c) 2024 LangChain\n\nPermission is hereby granted, free of charge, to any person obtaining a copy\nof this software and associated documentation files (the \"Software\"), to deal\nin the Software without restriction, including without limitation the rights\nto use, copy, modify, merge, publish, distribute, sublicense, and/or sell\ncopies of the Software, and to permit persons to whom the Software is\nfurnished to do so, subject to the following conditions:\n\nThe above copyright notice and this permission notice shall be included in all\ncopies or substantial portions of the Software.\n\nTHE SOFTWARE IS PROVIDED \"AS IS\", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR\nIMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,\nFITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE\nAUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER\nLIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,\nOUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE\nSOFTWARE.\n",
+  "intake_status": "blocked",
+  "baseline_run": null,
+  "effect_inventory_kind": "source inspection; not a runtime trace",
+  "environment_freeze_returncode": 0
+}

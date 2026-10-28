@@ -79,6 +79,24 @@ def test_client_rejects_invalid_response(monkeypatch):
         records.read("notes/alice")
 
 
+def test_client_refuses_foreign_result_keys_before_equality(monkeypatch):
+    calls = []
+
+    class ForeignKey:
+        def __hash__(self):
+            return hash("value")
+
+        def __eq__(self, other):
+            calls.append("equality")
+            raise AssertionError("result key protocol executed")
+
+    result = {"found": True, ForeignKey(): "private"}
+    monkeypatch.setattr(object_broker, "object_request", lambda *args: result)
+    with pytest.raises(TypeError, match="invalid"):
+        records.read("notes/alice")
+    assert calls == []
+
+
 def test_checker_resolves_registered_import_aliases_and_restricts_effects():
     report = check("key = record\n    db.read(key)\n    return db.write(record, value)")
     assert not report["consistent"]

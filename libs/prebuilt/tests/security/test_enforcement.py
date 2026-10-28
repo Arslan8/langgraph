@@ -9,12 +9,14 @@ import pytest
 
 from langgraph.prebuilt.security.enforcement import (
     ActivationEvidence,
+    ActivationReceipt,
     AdapterPlan,
     AuthorityDomain,
     EnforcementAdapter,
     EnforcementCoordinator,
     EnforcementMode,
     EnforcementObligation,
+    EnforcementPlan,
     ExecutionContext,
     Grant,
     GrantRule,
@@ -22,6 +24,7 @@ from langgraph.prebuilt.security.enforcement import (
     ObligationKind,
     RequirementEntry,
     RequirementLedger,
+    RuleEnforcement,
     SupportAssessment,
     SupportLevel,
     compile_grant,
@@ -565,3 +568,388 @@ def test_activation_rejects_evidence_from_another_worker() -> None:
         coordinator.activate(
             _grant(), result.plan, _host(), _context(), nonce="activation", now=50.0
         )
+
+
+def _composition() -> tuple[
+    EnforcementCoordinator,
+    Grant,
+    EnforcementPlan,
+    HostAttestation,
+    ExecutionContext,
+    ActivationReceipt,
+]:
+    grant = _grant()
+    obligations = compile_obligations(grant)
+    first_ids = {obligations[0].obligation_id}
+    remaining_ids = {item.obligation_id for item in obligations} - first_ids
+    coordinator = EnforcementCoordinator(
+        [_Adapter("first", first_ids), _Adapter("second", remaining_ids)],
+        _Verifier(),
+    )
+    host = _host()
+    context = _context()
+    plan = coordinator.negotiate(
+        grant, _ledger(), obligations, host, expected_nonce="challenge", now=50.0
+    ).plan
+    assert plan is not None
+    receipt = coordinator.activate(
+        grant, plan, host, context, nonce="activation", now=50.0
+    )
+    return coordinator, grant, plan, host, context, receipt
+
+
+@pytest.mark.parametrize("reverse", [False, True])
+def test_complete_multi_adapter_receipt_remains_useful(reverse: bool) -> None:
+    """Evidence order is immaterial; every assigned adapter remains authenticated."""
+    coordinator, grant, plan, host, context, receipt = _composition()
+    assert len(receipt.evidence) == 2
+    assert receipt.activated_obligations
+    assert receipt.rule_enforcement
+    if reverse:
+        receipt = replace(receipt, evidence=tuple(reversed(receipt.evidence)))
+    assert coordinator.validate_receipt(receipt, grant, plan, host, context, now=50.0)
+    assert coordinator.validate_receipt(
+        replace(receipt, valid_until=75.0), grant, plan, host, context, now=50.0
+    )
+
+
+def test_tightened_support_remains_valid() -> None:
+    """A real negotiated stricter relation need not be relabeled as exact."""
+
+    class TightenedAdapter(_Adapter):
+        def assess(
+            self, obligation: EnforcementObligation, host: HostAttestation
+        ) -> SupportAssessment:
+            return replace(
+                super().assess(obligation, host), support=SupportLevel.TIGHTENED
+            )
+
+    grant = _grant()
+    obligations = compile_obligations(grant)
+    adapter = TightenedAdapter("stricter", {item.obligation_id for item in obligations})
+    coordinator = EnforcementCoordinator([adapter], _Verifier())
+    plan = coordinator.negotiate(
+        grant, _ledger(), obligations, _host(), expected_nonce="challenge", now=50.0
+    ).plan
+    assert plan is not None
+    receipt = coordinator.activate(
+        grant, plan, _host(), _context(), nonce="activation", now=50.0
+    )
+    assert all(item.support is SupportLevel.TIGHTENED for item in plan.assignments)
+    assert receipt.mode is EnforcementMode.ENFORCED
+    assert coordinator.validate_receipt(
+        receipt, grant, plan, _host(), _context(), now=50.0
+    )
+
+
+def test_empty_authority_still_requires_complement_evidence() -> None:
+    """A grant with no positive rules retains real closed-world obligations."""
+    grant = replace(_grant(), rules=())
+    obligations = compile_obligations(grant)
+    assert obligations
+    assert all(item.kind is ObligationKind.DENY_COMPLEMENT for item in obligations)
+    coordinator = EnforcementCoordinator(
+        [_Adapter("deny-complement", {item.obligation_id for item in obligations})],
+        _Verifier(),
+    )
+    plan = coordinator.negotiate(
+        grant,
+        RequirementLedger(()),
+        obligations,
+        _host(),
+        expected_nonce="challenge",
+        now=50.0,
+    ).plan
+    assert plan is not None
+    receipt = coordinator.activate(
+        grant, plan, _host(), _context(), nonce="activation", now=50.0
+    )
+    assert receipt.evidence
+    assert receipt.activated_obligations
+    assert coordinator.validate_receipt(
+        receipt, grant, plan, _host(), _context(), now=50.0
+    )
+    assert not coordinator.validate_receipt(
+        replace(receipt, evidence=()), grant, plan, _host(), _context(), now=50.0
+    )
+
+
+@pytest.mark.parametrize(
+    "mutation",
+    [
+        "empty",
+        "truncated",
+        "duplicate",
+        "same_length_duplicate",
+        "unknown_adapter",
+        "bad_signature",
+        "wrong_nonce",
+        "wrong_context",
+        "wrong_native_plan",
+        "missing_obligation",
+        "extra_obligation",
+        "claimed_missing",
+        "claimed_extra",
+        "wrong_rule_support",
+        "wrong_mode",
+        "removed_wants",
+        "empty_nonce",
+        "receipt_nonce",
+        "receipt_expiry",
+        "adapter_expiry",
+        "not_yet_active",
+        "nan_expiry",
+        "infinite_expiry",
+        "nan_adapter_expiry",
+        "nan_activated_at",
+    ],
+)
+def test_receipt_requires_complete_verified_composition(mutation: str) -> None:
+    """Claimed coverage cannot substitute for one bound signed item per adapter."""
+    coordinator, grant, plan, host, context, receipt = _composition()
+    first, second = receipt.evidence
+    if mutation == "empty":
+        receipt = replace(receipt, evidence=())
+    elif mutation == "truncated":
+        receipt = replace(receipt, evidence=(first,))
+    elif mutation == "duplicate":
+        receipt = replace(receipt, evidence=(first, second, first))
+    elif mutation == "same_length_duplicate":
+        receipt = replace(receipt, evidence=(first, first))
+    elif mutation in {
+        "unknown_adapter",
+        "bad_signature",
+        "wrong_nonce",
+        "wrong_context",
+        "wrong_native_plan",
+        "missing_obligation",
+        "extra_obligation",
+        "adapter_expiry",
+        "not_yet_active",
+        "nan_adapter_expiry",
+        "nan_activated_at",
+    }:
+        changes: dict[str, Any] = {
+            "unknown_adapter": {"adapter_id": "other"},
+            "bad_signature": {"signature": "untrusted"},
+            "wrong_nonce": {"nonce": "another-activation"},
+            "wrong_context": {"context_digest": "another-worker"},
+            "wrong_native_plan": {"native_plan_digest": "another-plan"},
+            "missing_obligation": {"obligation_ids": frozenset()},
+            "extra_obligation": {"obligation_ids": second.obligation_ids | {"extra"}},
+            "adapter_expiry": {"expires_at": 75.0},
+            "not_yet_active": {"activated_at": 60.0},
+            "nan_adapter_expiry": {"expires_at": float("nan")},
+            "nan_activated_at": {"activated_at": float("nan")},
+        }[mutation]
+        receipt = replace(receipt, evidence=(first, replace(second, **changes)))
+    elif mutation == "claimed_missing":
+        receipt = replace(receipt, activated_obligations=frozenset())
+    elif mutation == "claimed_extra":
+        receipt = replace(
+            receipt, activated_obligations=receipt.activated_obligations | {"extra"}
+        )
+    elif mutation == "wrong_rule_support":
+        receipt = replace(
+            receipt,
+            rule_enforcement=(
+                RuleEnforcement("mail-rule", SupportLevel.TIGHTENED, "first"),
+            ),
+        )
+    else:
+        changes = {
+            "wrong_mode": {"mode": EnforcementMode.DEGRADED},
+            "removed_wants": {"removed_wants": ("profile:mail",)},
+            "empty_nonce": {"nonce": ""},
+            "receipt_nonce": {"nonce": "another-activation"},
+            "receipt_expiry": {"valid_until": 101.0},
+            "nan_expiry": {"valid_until": float("nan")},
+            "infinite_expiry": {"valid_until": float("inf")},
+        }[mutation]
+        receipt = replace(receipt, **changes)
+    assert not coordinator.validate_receipt(
+        receipt, grant, plan, host, context, now=50.0
+    )
+
+
+def _malformed_composition(plan: EnforcementPlan, mutation: str) -> EnforcementPlan:
+    first, second = plan.adapter_plans
+    assignment, *others = plan.assignments
+    if mutation == "duplicate_plan":
+        return replace(plan, adapter_plans=(first, second, first))
+    if mutation == "missing_plan":
+        return replace(plan, adapter_plans=(first,))
+    if mutation == "empty_plan":
+        return replace(plan, assignments=(), adapter_plans=())
+    if mutation == "duplicate_assignment":
+        return replace(plan, assignments=(*plan.assignments, assignment))
+    if mutation == "missing_assignment":
+        return replace(plan, assignments=tuple(others))
+    if mutation == "reassigned":
+        other_adapter = "second" if assignment.adapter_id == "first" else "first"
+        return replace(
+            plan, assignments=(replace(assignment, adapter_id=other_adapter), *others)
+        )
+    if mutation == "unsupported":
+        return replace(
+            plan,
+            assignments=(
+                replace(assignment, support=SupportLevel.UNSUPPORTED),
+                *others,
+            ),
+        )
+    if mutation == "widened":
+        return replace(
+            plan,
+            adapter_plans=(
+                replace(first, obligation_ids=first.obligation_ids | {"unassigned"}),
+                second,
+            ),
+        )
+    if mutation == "unknown_adapter":
+        return replace(
+            plan,
+            assignments=tuple(
+                replace(item, adapter_id="unknown")
+                if item.adapter_id == first.adapter_id
+                else item
+                for item in plan.assignments
+            ),
+            adapter_plans=(replace(first, adapter_id="unknown"), second),
+        )
+    if mutation == "enforced_waiver":
+        return replace(plan, waived_obligations=("waived",))
+    if mutation == "degraded_without_waiver":
+        return replace(plan, mode=EnforcementMode.DEGRADED)
+    if mutation == "assigned_waiver":
+        return replace(
+            plan,
+            mode=EnforcementMode.DEGRADED,
+            waived_obligations=(assignment.obligation_id,),
+        )
+    if mutation == "duplicate_waiver":
+        return replace(
+            plan, mode=EnforcementMode.DEGRADED, waived_obligations=("waived", "waived")
+        )
+    if mutation == "wrong_grant":
+        return replace(plan, grant_digest="another-grant")
+    if mutation == "wrong_host":
+        return replace(plan, host_digest="another-host")
+    raise AssertionError("unknown test mutation")
+
+
+@pytest.mark.parametrize(
+    "mutation",
+    [
+        "duplicate_plan",
+        "missing_plan",
+        "empty_plan",
+        "duplicate_assignment",
+        "missing_assignment",
+        "reassigned",
+        "unsupported",
+        "widened",
+        "unknown_adapter",
+        "enforced_waiver",
+        "degraded_without_waiver",
+        "assigned_waiver",
+        "duplicate_waiver",
+        "wrong_grant",
+        "wrong_host",
+    ],
+)
+def test_inconsistent_plan_cannot_activate_or_validate(
+    mutation: str, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Coherently changing a receipt digest cannot repair inconsistent assignments."""
+    coordinator, grant, plan, host, context, receipt = _composition()
+    changed = _malformed_composition(plan, mutation)
+    receipt = replace(
+        receipt,
+        plan_digest=changed.digest,
+        mode=changed.mode,
+        activated_obligations=frozenset(
+            item.obligation_id for item in changed.assignments
+        ),
+        rule_enforcement=tuple(
+            RuleEnforcement(
+                item.obligation_id.removeprefix("rule:").removesuffix(":operate"),
+                item.support,
+                item.adapter_id,
+            )
+            for item in changed.assignments
+            if item.obligation_id.startswith("rule:")
+            and item.obligation_id.endswith(":operate")
+        ),
+    )
+    assert not coordinator.validate_receipt(
+        receipt, grant, changed, host, context, now=50.0
+    )
+
+    def forbidden_activation(*args: Any, **kwargs: Any) -> ActivationEvidence:
+        raise AssertionError("an inconsistent plan reached adapter activation")
+
+    monkeypatch.setattr(_Adapter, "activate", forbidden_activation)
+    with pytest.raises(ValueError):
+        coordinator.activate(
+            grant, changed, host, context, nonce="activation", now=50.0
+        )
+
+
+def test_explicit_want_waiver_still_produces_only_degraded_receipt() -> None:
+    """Valid negotiated waivers retain their original constrained behavior."""
+    obligations = _obligations(recipient_waivable=True)
+    supported = {item.obligation_id for item in obligations} - {"mail.recipient"}
+    coordinator = EnforcementCoordinator([_Adapter("service", supported)], _Verifier())
+    grant = _grant(Requirement.WANT)
+    plan = coordinator.negotiate(
+        grant,
+        _ledger(Requirement.WANT),
+        obligations,
+        _host(),
+        expected_nonce="challenge",
+        waivers=frozenset({"mail.recipient"}),
+        now=50.0,
+    ).plan
+    assert plan is not None
+    receipt = coordinator.activate(
+        grant, plan, _host(), _context(), nonce="activation", now=50.0
+    )
+    assert receipt.mode is EnforcementMode.DEGRADED
+    assert "mail.recipient" not in receipt.activated_obligations
+    assert receipt.removed_wants == ("profile:mail",)
+    assert coordinator.validate_receipt(
+        receipt, grant, plan, _host(), _context(), now=50.0
+    )
+    assert not coordinator.validate_receipt(
+        replace(receipt, mode=EnforcementMode.ENFORCED),
+        grant,
+        plan,
+        _host(),
+        _context(),
+        now=50.0,
+    )
+
+
+@pytest.mark.parametrize("now", [0.0, 101.0, float("nan"), float("inf")])
+def test_receipt_rejects_unusable_validation_time(now: float) -> None:
+    coordinator, grant, plan, host, context, receipt = _composition()
+    assert not coordinator.validate_receipt(
+        receipt, grant, plan, host, context, now=now
+    )
+
+
+def test_receipt_worker_boot_must_match_authenticated_host() -> None:
+    """Even internally consistent evidence cannot bind to a different host boot."""
+    coordinator, grant, plan, host, context, receipt = _composition()
+    context = replace(context, boot_id="another-boot")
+    receipt = replace(
+        receipt,
+        context_digest=context.digest,
+        evidence=tuple(
+            replace(item, context_digest=context.digest) for item in receipt.evidence
+        ),
+    )
+    assert not coordinator.validate_receipt(
+        receipt, grant, plan, host, context, now=50.0
+    )

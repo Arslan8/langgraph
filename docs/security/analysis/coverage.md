@@ -20,6 +20,22 @@ arbitrary callables and callbacks are not automatically instrumented.
 | output.emit | Existing secured graph output mediator and explicit OutputAdapter for external publications |
 | interpreter operations | Explicit trusted InterpreterBoundary; no general interpreter |
 
+## Plain-callback event tour
+
+`ToolNode(..., analysis=analysis)` emits the five tool lifecycle event types for
+plain callbacks. `ObservedOperations` explicitly adapts synchronous application
+input/output, model, retrieval, transformation, resource, state/store, checkpoint,
+child-graph and merge operations. Unlike the structured adapters above, it requires
+no findings or provenance references and makes no authorization claim.
+
+[Demo 12b](../../../workspace/12b_all_analysis_events/README.md) exercises all 25
+catalog event types through real local operations, including live llama.cpp inference,
+and checks their effects. Its report is event-type coverage for that workflow,
+not universal route coverage or proof of security enforcement. It prints missing
+events and exits unsuccessfully on incomplete or failed runs. A before-event is
+counted as observed even when its operation subsequently fails; effect checks and
+successful workflow completion are separate conditions for a passing tour.
+
 ## Unsupported or incompletely integrated paths
 
 Unmediated Python/native I/O, direct provider callbacks that bypass graph output

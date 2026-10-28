@@ -1,0 +1,3 @@
+{"id": "region-totals", "kind": "clean", "task": "Return a table with exactly region and total sales, summed by region.", "expected": [["North", 200], ["South", 200]]}
+{"id": "february", "kind": "clean", "task": "Filter dates from 2026-02-01 through 2026-02-28 inclusive and return a table containing only the total sales in that interval.", "expected": [[120]]}
+{"id": "total", "kind": "clean", "task": "Return one row and one column with the total sales from the sales table.", "expected": [[400]]}

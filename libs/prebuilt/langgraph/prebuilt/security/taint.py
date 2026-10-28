@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import argparse
 import ast
+import hashlib
 import json
 from collections import deque
 from collections.abc import Iterable, Sequence
@@ -77,6 +78,7 @@ class TaintReport:
 
     findings: tuple[EscapeFinding, ...]
     parse_errors: tuple[str, ...] = ()
+    source_sha256: tuple[tuple[str, str], ...] = ()
 
     @property
     def safe(self) -> bool:
@@ -97,6 +99,7 @@ class TaintReport:
                     for finding in self.findings
                 ],
                 "parse_errors": list(self.parse_errors),
+                "source_sha256": dict(self.source_sha256),
                 "safe": self.safe,
             },
             indent=2,
@@ -155,7 +158,11 @@ def apply_waivers(report: TaintReport, waiver_path: str | Path) -> WaiverDisposi
             report, (), report.findings, (f"waiver_manifest:{type(exc).__name__}",)
         )
     errors: list[str] = []
-    if not isinstance(raw, dict) or raw.get("version") != 1:
+    if (
+        not isinstance(raw, dict)
+        or type(raw.get("version")) is not int
+        or raw["version"] not in {1, 2}
+    ):
         return WaiverDisposition(
             report, (), report.findings, ("waiver_manifest:version",)
         )
@@ -165,8 +172,13 @@ def apply_waivers(report: TaintReport, waiver_path: str | Path) -> WaiverDisposi
             report, (), report.findings, ("waiver_manifest:entries",)
         )
     reasons: dict[str, str] = {}
+    findings = {item.fingerprint: item for item in report.findings}
+    source_digests = dict(report.source_sha256)
+    fields = {"fingerprint", "reason"}
+    if raw["version"] == 2:
+        fields.add("source_sha256")
     for index, entry in enumerate(entries):
-        if not isinstance(entry, dict) or set(entry) != {"fingerprint", "reason"}:
+        if not isinstance(entry, dict) or set(entry) != fields:
             errors.append(f"waiver_manifest:entry:{index}")
             continue
         fingerprint = entry.get("fingerprint")
@@ -180,8 +192,20 @@ def apply_waivers(report: TaintReport, waiver_path: str | Path) -> WaiverDisposi
         if fingerprint in reasons:
             errors.append(f"waiver_manifest:duplicate:{fingerprint}")
             continue
+        if raw["version"] == 2:
+            digest = entry["source_sha256"]
+            if (
+                not isinstance(digest, str)
+                or len(digest) != 64
+                or any(character not in "0123456789abcdef" for character in digest)
+            ):
+                errors.append(f"waiver_manifest:source_digest:{fingerprint}")
+                continue
+            finding = findings.get(fingerprint)
+            if finding is not None and digest != source_digests.get(finding.path):
+                errors.append(f"waiver_manifest:source_changed:{fingerprint}")
+                continue
         reasons[fingerprint] = reason.strip()
-    findings = {item.fingerprint: item for item in report.findings}
     for fingerprint in sorted(reasons.keys() - findings.keys()):
         errors.append(f"waiver_manifest:stale:{fingerprint}")
     waived = tuple(
@@ -402,6 +426,7 @@ def analyze_source(
     files = _python_files(roots or (Path.cwd(),), exclude)
     findings: list[EscapeFinding] = []
     errors: list[str] = []
+    source_digests: list[tuple[str, str]] = []
     common_root = _common_root(files)
     for source_path in files:
         try:
@@ -411,6 +436,9 @@ def analyze_source(
             errors.append(f"{source_path}: {exc}")
             continue
         display_path = _display_path(source_path, common_root)
+        source_digests.append(
+            (display_path, hashlib.sha256(source.encode("utf-8")).hexdigest())
+        )
         findings.extend(_ModuleAnalyzer(display_path, tree).analyze())
     findings.sort(
         key=lambda item: (
@@ -421,7 +449,9 @@ def analyze_source(
             item.symbol,
         )
     )
-    return TaintReport(tuple(findings), tuple(sorted(errors)))
+    return TaintReport(
+        tuple(findings), tuple(sorted(errors)), tuple(sorted(source_digests))
+    )
 
 
 def _python_files(
