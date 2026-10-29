@@ -1,0 +1,123 @@
+{
+  "mode": "Baseline",
+  "model": {
+    "name": "qwen3:8b",
+    "digest": "500a1f067a9f782620b40bee6f7b0c89e17ae61f686b92c24933e4ca4b2b8b41",
+    "temperature": 0,
+    "seed": 20261005,
+    "reasoning_effort": "none"
+  },
+  "wall_ms": 1489.994673000183,
+  "answer": "The 2004 Summer Olympics were hosted by Athens, Greece. At the time, the country used the euro (EUR) as its currency.",
+  "messages": [
+    {
+      "content": "You must use the search tool. Which city and country hosted the 2004 Summer Olympics, and what currency did that country use at the time?",
+      "additional_kwargs": {},
+      "response_metadata": {},
+      "type": "human",
+      "name": null,
+      "id": "52a8d80c-5048-4e80-a80a-742d7cbe2a1b"
+    },
+    {
+      "content": "",
+      "additional_kwargs": {
+        "refusal": null
+      },
+      "response_metadata": {
+        "token_usage": {
+          "completion_tokens": 37,
+          "prompt_tokens": 178,
+          "total_tokens": 215,
+          "completion_tokens_details": null,
+          "prompt_tokens_details": null
+        },
+        "model_provider": "openai",
+        "model_name": "qwen3:8b",
+        "system_fingerprint": "fp_ollama",
+        "id": "chatcmpl-843",
+        "finish_reason": "tool_calls",
+        "logprobs": null
+      },
+      "type": "ai",
+      "name": null,
+      "id": "lc_run--01a18519-d97a-75c1-868b-ca4e3d45dbbe-0",
+      "tool_calls": [
+        {
+          "name": "tavily_search",
+          "args": {
+            "query": "2004 Summer Olympics host city and country, currency used at the time"
+          },
+          "id": "call_s055kbc9",
+          "type": "tool_call"
+        }
+      ],
+      "invalid_tool_calls": [],
+      "usage_metadata": {
+        "input_tokens": 178,
+        "output_tokens": 37,
+        "total_tokens": 215,
+        "input_token_details": {},
+        "output_token_details": {}
+      }
+    },
+    {
+      "content": "[{\"url\": \"https://www.olympics.com/en/olympic-games/athens-2004\", \"content\": \"The 2004 Summer Olympics were held in Athens, Greece. Greece used the euro (EUR).\"}, {\"url\": \"https://www.olympics.com/en/olympic-games/sydney-2000\", \"content\": \"The 2000 Summer Olympics were held in Sydney, Australia. Australia used the Australian dollar (AUD).\"}]",
+      "additional_kwargs": {},
+      "response_metadata": {},
+      "type": "tool",
+      "name": "tavily_search",
+      "id": "8881b9f1-1465-4d86-a7ef-4bbdba2bf1b9",
+      "tool_call_id": "call_s055kbc9",
+      "artifact": null,
+      "status": "success"
+    },
+    {
+      "content": "The 2004 Summer Olympics were hosted by Athens, Greece. At the time, the country used the euro (EUR) as its currency.",
+      "additional_kwargs": {
+        "refusal": null
+      },
+      "response_metadata": {
+        "token_usage": {
+          "completion_tokens": 32,
+          "prompt_tokens": 339,
+          "total_tokens": 371,
+          "completion_tokens_details": null,
+          "prompt_tokens_details": null
+        },
+        "model_provider": "openai",
+        "model_name": "qwen3:8b",
+        "system_fingerprint": "fp_ollama",
+        "id": "chatcmpl-956",
+        "finish_reason": "stop",
+        "logprobs": null
+      },
+      "type": "ai",
+      "name": null,
+      "id": "lc_run--01a18519-dc7a-77e6-b6c9-d814d62afe7c-0",
+      "tool_calls": [],
+      "invalid_tool_calls": [],
+      "usage_metadata": {
+        "input_tokens": 339,
+        "output_tokens": 32,
+        "total_tokens": 371,
+        "input_token_details": {},
+        "output_token_details": {}
+      }
+    }
+  ],
+  "executed_tools": [
+    "tavily_search"
+  ],
+  "authorization_decisions": [],
+  "authorization_grants": [],
+  "activation_receipts": [],
+  "lowered_restrictions": [],
+  "protections": {
+    "closed_admission": false,
+    "principal_authorization": false,
+    "sealed_operator_policy": false,
+    "linux_isolation": false,
+    "audit": false,
+    "lean_per_call": false
+  }
+}

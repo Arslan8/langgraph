@@ -1,0 +1,10 @@
+{
+  "selection": "Five predeclared questions over a query-dependent frozen search corpus",
+  "tasks": [
+    {"id": "1996", "expected": ["Atlanta", "United States", "USD"]},
+    {"id": "2000", "expected": ["Sydney", "Australia", "AUD"]},
+    {"id": "2004", "expected": ["Athens", "Greece", "EUR"]},
+    {"id": "2012", "expected": ["London", "United Kingdom", "GBP"]},
+    {"id": "2016", "expected": ["Rio de Janeiro", "Brazil", "BRL"]}
+  ]
+}
