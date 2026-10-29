@@ -1,0 +1,9 @@
+Traceback (most recent call last):
+  File "/home/faculty/abk6349/.codex/worktrees/consolidated-evaluation/langgraph/eval/apps/demos/agentic_rag.py", line 176, in <module>
+    main()
+    ~~~~^^
+  File "/home/faculty/abk6349/.codex/worktrees/consolidated-evaluation/langgraph/eval/apps/demos/agentic_rag.py", line 153, in main
+    raise RuntimeError(
+    ...<3 lines>...
+    )
+RuntimeError: argus:unsupported: D2 retrieve_blog_posts closes over an in-process TF-IDF index; no registered retriever resource adapter or Linux worker endpoint preserves the upstream retriever-tool contract

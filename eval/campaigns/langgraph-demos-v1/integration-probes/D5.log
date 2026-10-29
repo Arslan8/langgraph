@@ -1,0 +1,9 @@
+Traceback (most recent call last):
+  File "/home/faculty/abk6349/.codex/worktrees/consolidated-evaluation/langgraph/eval/apps/demos/customer_support.py", line 260, in <module>
+    main()
+    ~~~~^^
+  File "/home/faculty/abk6349/.codex/worktrees/consolidated-evaluation/langgraph/eval/apps/demos/customer_support.py", line 234, in main
+    raise RuntimeError(
+    ...<2 lines>...
+    )
+RuntimeError: argus:unsupported: D5 ToolNodes close over a mutable SQLite path and the production route has no registered adapter preserving checkpointed interrupt/resume access

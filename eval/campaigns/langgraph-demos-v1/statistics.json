@@ -1,0 +1,65 @@
+{
+  "schema_version": 1,
+  "configuration_hash": "6a81789b449d980d65682a5202dbd49f58931fe1befd645f0f1293535aa0fa20",
+  "upstream_revision": "23961cff61a42b52525f3b20b4094d8d2fba1744",
+  "baseline_preflight": {
+    "D1": {
+      "successes": 2,
+      "attempts": 5
+    },
+    "D2": {
+      "successes": 5,
+      "attempts": 5
+    },
+    "D3": {
+      "successes": 0,
+      "attempts": 5
+    },
+    "D4": {
+      "successes": 5,
+      "attempts": 5
+    },
+    "D5": {
+      "successes": 4,
+      "attempts": 5
+    }
+  },
+  "argus_integration": {
+    "D1": {
+      "status": "unsupported",
+      "probe_log": "integration-probes/D1.log",
+      "argus_trials": 0,
+      "measured_trials_started": false
+    },
+    "D2": {
+      "status": "unsupported",
+      "probe_log": "integration-probes/D2.log",
+      "argus_trials": 0,
+      "measured_trials_started": false
+    },
+    "D3": {
+      "status": "unsupported",
+      "probe_log": "integration-probes/D3.log",
+      "argus_trials": 0,
+      "measured_trials_started": false
+    },
+    "D4": {
+      "status": "unsupported",
+      "probe_log": "integration-probes/D4.log",
+      "argus_trials": 0,
+      "measured_trials_started": false
+    },
+    "D5": {
+      "status": "unsupported",
+      "probe_log": "integration-probes/D5.log",
+      "argus_trials": 0,
+      "measured_trials_started": false
+    }
+  },
+  "performance": {
+    "available": false,
+    "reason": "No demo reached a supported full-Argus configuration; the paired 50-trial protocol was not started.",
+    "ratios": {},
+    "geometric_mean": null
+  }
+}

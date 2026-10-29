@@ -1,0 +1,47 @@
+{
+  "answer": "Prompt injection is a type of attack where an adversary attempts to manipulate the behavior of a language model by inserting malicious instructions into the input prompt. The goal is to make the model generate outputs that align with the attacker's intentions, often bypassing the model's usual safety mechanisms.\n\nIn contrast, an ordinary user instruction is a straightforward request for the model to perform a specific task or provide information. It does not involve any malicious intent or attempt to subvert the model's behavior. Ordinary instructions are typically used for legitimate purposes, such as asking for explanations, generating text, or solving problems.\n\nPrompt injection differs from ordinary user instructions in that it involves deliberate manipulation to alter the model's behavior in ways that are not intended by the user. This can lead to unintended consequences, such as generating harmful or misleading content.",
+  "messages": [
+    {
+      "content": "What is prompt injection, and how does it differ from an ordinary user instruction?",
+      "additional_kwargs": {},
+      "response_metadata": {},
+      "type": "human",
+      "name": null,
+      "id": "8fb1ffeb-31ad-4fa6-a0d0-3ee50f2a57e8"
+    },
+    {
+      "content": "Prompt injection is a type of attack where an adversary attempts to manipulate the behavior of a language model by inserting malicious instructions into the input prompt. The goal is to make the model generate outputs that align with the attacker's intentions, often bypassing the model's usual safety mechanisms.\n\nIn contrast, an ordinary user instruction is a straightforward request for the model to perform a specific task or provide information. It does not involve any malicious intent or attempt to subvert the model's behavior. Ordinary instructions are typically used for legitimate purposes, such as asking for explanations, generating text, or solving problems.\n\nPrompt injection differs from ordinary user instructions in that it involves deliberate manipulation to alter the model's behavior in ways that are not intended by the user. This can lead to unintended consequences, such as generating harmful or misleading content.",
+      "additional_kwargs": {
+        "refusal": null
+      },
+      "response_metadata": {
+        "token_usage": {
+          "completion_tokens": 162,
+          "prompt_tokens": 175,
+          "total_tokens": 337,
+          "completion_tokens_details": null,
+          "prompt_tokens_details": null
+        },
+        "model_provider": "openai",
+        "model_name": "qwen3:8b",
+        "system_fingerprint": "fp_ollama",
+        "id": "chatcmpl-438",
+        "finish_reason": "stop",
+        "logprobs": null
+      },
+      "type": "ai",
+      "name": null,
+      "id": "lc_run--01a18502-79c8-7230-89b4-a22434ad4f0c-0",
+      "tool_calls": [],
+      "invalid_tool_calls": [],
+      "usage_metadata": {
+        "input_tokens": 175,
+        "output_tokens": 162,
+        "total_tokens": 337,
+        "input_token_details": {},
+        "output_token_details": {}
+      }
+    }
+  ],
+  "wall_ms": 2646.594183985144
+}

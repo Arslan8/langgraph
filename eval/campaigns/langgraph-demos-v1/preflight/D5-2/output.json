@@ -1,0 +1,119 @@
+{
+  "before": {
+    "ticket": "7240005432906569",
+    "flight_ids": [
+      1459,
+      19250
+    ],
+    "owner": "3442 587242"
+  },
+  "after": {
+    "ticket": "7240005432906569",
+    "flight_ids": [
+      1459,
+      19250
+    ],
+    "owner": "3442 587242"
+  },
+  "interrupts": [],
+  "messages": [
+    {
+      "content": "Search for an eligible alternative BSL to CDG flight after 2026-11-24 without changing my booking.",
+      "additional_kwargs": {},
+      "response_metadata": {},
+      "type": "human",
+      "name": null,
+      "id": "e1ab3dbc-f6ad-42f9-a3b2-e8893f1a94ae"
+    },
+    {
+      "content": "",
+      "additional_kwargs": {
+        "refusal": null
+      },
+      "response_metadata": {
+        "token_usage": {
+          "completion_tokens": 71,
+          "prompt_tokens": 773,
+          "total_tokens": 844,
+          "completion_tokens_details": null,
+          "prompt_tokens_details": null
+        },
+        "model_provider": "openai",
+        "model_name": "qwen3:8b",
+        "system_fingerprint": "fp_ollama",
+        "id": "chatcmpl-165",
+        "finish_reason": "tool_calls",
+        "logprobs": null
+      },
+      "type": "ai",
+      "name": null,
+      "id": "lc_run--01a18509-a2a4-7328-b2ab-3960cfe2367c-0",
+      "tool_calls": [
+        {
+          "name": "search_flights",
+          "args": {
+            "departure_airport": "BSL",
+            "arrival_airport": "CDG",
+            "start_time": "2026-11-24T00:00:00.000000-04:00"
+          },
+          "id": "call_xdig7s35",
+          "type": "tool_call"
+        }
+      ],
+      "invalid_tool_calls": [],
+      "usage_metadata": {
+        "input_tokens": 773,
+        "output_tokens": 71,
+        "total_tokens": 844,
+        "input_token_details": {},
+        "output_token_details": {}
+      }
+    },
+    {
+      "content": "[{\"flight_id\": 1413, \"flight_no\": \"LX0002\", \"scheduled_departure\": \"2026-12-09 03:24:03.561731-04:00\", \"scheduled_arrival\": \"2026-12-09 04:54:03.561731-04:00\", \"departure_airport\": \"BSL\", \"arrival_airport\": \"CDG\", \"status\": \"Scheduled\", \"aircraft_code\": \"SU9\", \"actual_departure\": null, \"actual_arrival\": null}, {\"flight_id\": 1415, \"flight_no\": \"LX0002\", \"scheduled_departure\": \"2026-12-01 03:24:03.561731-04:00\", \"scheduled_arrival\": \"2026-12-01 04:54:03.561731-04:00\", \"departure_airport\": \"BSL\", \"arrival_airport\": \"CDG\", \"status\": \"Scheduled\", \"aircraft_code\": \"SU9\", \"actual_departure\": null, \"actual_arrival\": null}, {\"flight_id\": 1422, \"flight_no\": \"LX0002\", \"scheduled_departure\": \"2026-11-28 03:24:03.561731-04:00\", \"scheduled_arrival\": \"2026-11-28 04:54:03.561731-04:00\", \"departure_airport\": \"BSL\", \"arrival_airport\": \"CDG\", \"status\": \"Scheduled\", \"aircraft_code\": \"SU9\", \"actual_departure\": null, \"actual_arrival\": null}, {\"flight_id\": 1423, \"flight_no\": \"LX0002\", \"scheduled_departure\": \"2026-11-30 03:24:03.561731-04:00\", \"scheduled_arrival\": \"2026-11-30 04:54:03.561731-04:00\", \"departure_airport\": \"BSL\", \"arrival_airport\": \"CDG\", \"status\": \"Scheduled\", \"aircraft_code\": \"SU9\", \"actual_departure\": null, \"actual_arrival\": null}, {\"flight_id\": 1426, \"flight_no\": \"LX0002\", \"scheduled_departure\": \"2026-11-29 03:24:03.561731-04:00\", \"scheduled_arrival\": \"2026-11-29 04:54:03.561731-04:00\", \"departure_airport\": \"BSL\", \"arrival_airport\": \"CDG\", \"status\": \"Scheduled\", \"aircraft_code\": \"SU9\", \"actual_departure\": null, \"actual_arrival\": null}, {\"flight_id\": 1428, \"flight_no\": \"LX0002\", \"scheduled_departure\": \"2026-12-13 03:24:03.561731-04:00\", \"scheduled_arrival\": \"2026-12-13 04:54:03.561731-04:00\", \"departure_airport\": \"BSL\", \"arrival_airport\": \"CDG\", \"status\": \"Scheduled\", \"aircraft_code\": \"SU9\", \"actual_departure\": null, \"actual_arrival\": null}, {\"flight_id\": 1431, \"flight_no\": \"LX0002\", \"scheduled_departure\": \"2026-12-03 03:24:03.561731-04:00\", \"scheduled_arrival\": \"2026-12-03 04:54:03.561731-04:00\", \"departure_airport\": \"BSL\", \"arrival_airport\": \"CDG\", \"status\": \"Scheduled\", \"aircraft_code\": \"SU9\", \"actual_departure\": null, \"actual_arrival\": null}, {\"flight_id\": 1433, \"flight_no\": \"LX0002\", \"scheduled_departure\": \"2026-12-11 03:24:03.561731-04:00\", \"scheduled_arrival\": \"2026-12-11 04:54:03.561731-04:00\", \"departure_airport\": \"BSL\", \"arrival_airport\": \"CDG\", \"status\": \"Scheduled\", \"aircraft_code\": \"SU9\", \"actual_departure\": null, \"actual_arrival\": null}, {\"flight_id\": 1434, \"flight_no\": \"LX0002\", \"scheduled_departure\": \"2026-12-05 03:24:03.561731-04:00\", \"scheduled_arrival\": \"2026-12-05 04:54:03.561731-04:00\", \"departure_airport\": \"BSL\", \"arrival_airport\": \"CDG\", \"status\": \"Scheduled\", \"aircraft_code\": \"SU9\", \"actual_departure\": null, \"actual_arrival\": null}, {\"flight_id\": 1438, \"flight_no\": \"LX0002\", \"scheduled_departure\": \"2026-12-07 03:24:03.561731-04:00\", \"scheduled_arrival\": \"2026-12-07 04:54:03.561731-04:00\", \"departure_airport\": \"BSL\", \"arrival_airport\": \"CDG\", \"status\": \"Scheduled\", \"aircraft_code\": \"SU9\", \"actual_departure\": null, \"actual_arrival\": null}, {\"flight_id\": 1444, \"flight_no\": \"LX0002\", \"scheduled_departure\": \"2026-11-25 03:24:03.561731-04:00\", \"scheduled_arrival\": \"2026-11-25 04:54:03.561731-04:00\", \"departure_airport\": \"BSL\", \"arrival_airport\": \"CDG\", \"status\": \"Scheduled\", \"aircraft_code\": \"SU9\", \"actual_departure\": null, \"actual_arrival\": null}, {\"flight_id\": 1446, \"flight_no\": \"LX0002\", \"scheduled_departure\": \"2026-12-02 03:24:03.561731-04:00\", \"scheduled_arrival\": \"2026-12-02 04:54:03.561731-04:00\", \"departure_airport\": \"BSL\", \"arrival_airport\": \"CDG\", \"status\": \"Scheduled\", \"aircraft_code\": \"SU9\", \"actual_departure\": null, \"actual_arrival\": null}, {\"flight_id\": 1447, \"flight_no\": \"LX0002\", \"scheduled_departure\": \"2026-12-04 03:24:03.561731-04:00\", \"scheduled_arrival\": \"2026-12-04 04:54:03.561731-04:00\", \"departure_airport\": \"BSL\", \"arrival_airport\": \"CDG\", \"status\": \"Scheduled\", \"aircraft_code\": \"SU9\", \"actual_departure\": null, \"actual_arrival\": null}, {\"flight_id\": 1448, \"flight_no\": \"LX0002\", \"scheduled_departure\": \"2026-12-10 03:24:03.561731-04:00\", \"scheduled_arrival\": \"2026-12-10 04:54:03.561731-04:00\", \"departure_airport\": \"BSL\", \"arrival_airport\": \"CDG\", \"status\": \"Scheduled\", \"aircraft_code\": \"SU9\", \"actual_departure\": null, \"actual_arrival\": null}, {\"flight_id\": 1456, \"flight_no\": \"LX0002\", \"scheduled_departure\": \"2026-12-14 03:24:03.561731-04:00\", \"scheduled_arrival\": \"2026-12-14 04:54:03.561731-04:00\", \"departure_airport\": \"BSL\", \"arrival_airport\": \"CDG\", \"status\": \"Scheduled\", \"aircraft_code\": \"SU9\", \"actual_departure\": null, \"actual_arrival\": null}, {\"flight_id\": 1459, \"flight_no\": \"LX0002\", \"scheduled_departure\": \"2026-11-24 03:24:03.561731-04:00\", \"scheduled_arrival\": \"2026-11-24 04:54:03.561731-04:00\", \"departure_airport\": \"BSL\", \"arrival_airport\": \"CDG\", \"status\": \"Scheduled\", \"aircraft_code\": \"SU9\", \"actual_departure\": null, \"actual_arrival\": null}, {\"flight_id\": 1460, \"flight_no\": \"LX0002\", \"scheduled_departure\": \"2026-12-15 03:24:03.561731-04:00\", \"scheduled_arrival\": \"2026-12-15 04:54:03.561731-04:00\", \"departure_airport\": \"BSL\", \"arrival_airport\": \"CDG\", \"status\": \"Cancelled\", \"aircraft_code\": \"SU9\", \"actual_departure\": null, \"actual_arrival\": null}, {\"flight_id\": 1461, \"flight_no\": \"LX0002\", \"scheduled_departure\": \"2026-12-12 03:24:03.561731-04:00\", \"scheduled_arrival\": \"2026-12-12 04:54:03.561731-04:00\", \"departure_airport\": \"BSL\", \"arrival_airport\": \"CDG\", \"status\": \"Scheduled\", \"aircraft_code\": \"SU9\", \"actual_departure\": null, \"actual_arrival\": null}, {\"flight_id\": 1463, \"flight_no\": \"LX0002\", \"scheduled_departure\": \"2026-12-08 03:24:03.561731-04:00\", \"scheduled_arrival\": \"2026-12-08 04:54:03.561731-04:00\", \"departure_airport\": \"BSL\", \"arrival_airport\": \"CDG\", \"status\": \"Scheduled\", \"aircraft_code\": \"SU9\", \"actual_departure\": null, \"actual_arrival\": null}, {\"flight_id\": 1465, \"flight_no\": \"LX0002\", \"scheduled_departure\": \"2026-11-27 03:24:03.561731-04:00\", \"scheduled_arrival\": \"2026-11-27 04:54:03.561731-04:00\", \"departure_airport\": \"BSL\", \"arrival_airport\": \"CDG\", \"status\": \"Scheduled\", \"aircraft_code\": \"SU9\", \"actual_departure\": null, \"actual_arrival\": null}]",
+      "additional_kwargs": {},
+      "response_metadata": {},
+      "type": "tool",
+      "name": "search_flights",
+      "id": "4b0435ef-0480-492d-a98b-044d44780462",
+      "tool_call_id": "call_xdig7s35",
+      "artifact": null,
+      "status": "success"
+    },
+    {
+      "content": "Here are the eligible alternative flights from BSL to CDG after 2026-11-24:\n\n1. **Flight ID:** 1444, **Flight No:** LX0002, **Scheduled Departure:** 2026-11-25 03:24, **Scheduled Arrival:** 2026-11-25 04:54\n2. **Flight ID:** 1459, **Flight No:** LX0002, **Scheduled Departure:** 2026-11-24 03:24, **Scheduled Arrival:** 2026-11-24 04:54\n3. **Flight ID:** 1422, **Flight No:** LX0002, **Scheduled Departure:** 2026-11-28 03:24, **Scheduled Arrival:** 2026-11-28 04:54\n4. **Flight ID:** 1423, **Flight No:** LX0002, **Scheduled Departure:** 2026-11-30 03:24, **Scheduled Arrival:** 2026-11-30 04:54\n5. **Flight ID:** 1426, **Flight No:** LX0002, **Scheduled Departure:** 2026-11-29 03:24, **Scheduled Arrival:** 2026-11-29 04:54\n6. **Flight ID:** 1428, **Flight No:** LX0002, **Scheduled Departure:** 2026-12-13 03:24, **Scheduled Arrival:** 2026-12-13 04:54\n7. **Flight ID:** 1431, **Flight No:** LX0002, **Scheduled Departure:** 2026-12-03 03:24, **Scheduled Arrival:** 2026-12-03 04:54\n8. **Flight ID:** 1433, **Flight No:** LX0002, **Scheduled Departure:** 2026-12-11 03:24, **Scheduled Arrival:** 2026-12-11 04:54\n9. **Flight ID:** 1434, **Flight No:** LX0002, **Scheduled Departure:** 2026-12-05 03:24, **Scheduled Arrival:** 2026-12-05 04:54\n10. **Flight ID:** 1438, **Flight No:** LX0002, **Scheduled Departure:** 2026-12-07 03:24, **Scheduled Arrival:** 2026-12-07 04:54\n11. **Flight ID:** 1446, **Flight No:** LX0002, **Scheduled Departure:** 2026-12-02 03:24, **Scheduled Arrival:** 2026-12-02 04:54\n12. **Flight ID:** 1447, **Flight No:** LX0002, **Scheduled Departure:** 2026-12-04 03:24, **Scheduled Arrival:** 2026-12-04 04:54\n13. **Flight ID:** 1448, **Flight No:** LX0002, **Scheduled Departure:** 2026-12-10 03:24, **Scheduled Arrival:** 2026-12-10 04:54\n14. **Flight ID:** 1456, **Flight No:** LX0002, **Scheduled Departure:** 2026-12-14 03:24, **Scheduled Arrival:** 2026-12-14 04:54\n15. **Flight ID:** 1461, **Flight No:** LX0002, **Scheduled Departure:** 2026-12-12 03:24, **Scheduled Arrival:** 2026-12-12 04:54\n\nPlease note that the flight on 2026-12-15 is cancelled. If you need assistance with booking or changing your flight, feel free to ask!",
+      "additional_kwargs": {
+        "refusal": null
+      },
+      "response_metadata": {
+        "token_usage": {
+          "completion_tokens": 1073,
+          "prompt_tokens": 3792,
+          "total_tokens": 4865,
+          "completion_tokens_details": null,
+          "prompt_tokens_details": null
+        },
+        "model_provider": "openai",
+        "model_name": "qwen3:8b",
+        "system_fingerprint": "fp_ollama",
+        "id": "chatcmpl-736",
+        "finish_reason": "stop",
+        "logprobs": null
+      },
+      "type": "ai",
+      "name": null,
+      "id": "lc_run--01a18509-a7dc-7777-9996-f89783df70f3-0",
+      "tool_calls": [],
+      "invalid_tool_calls": [],
+      "usage_metadata": {
+        "input_tokens": 3792,
+        "output_tokens": 1073,
+        "total_tokens": 4865,
+        "input_token_details": {},
+        "output_token_details": {}
+      }
+    }
+  ],
+  "wall_ms": 24469.984185998328,
+  "frozen_now": "2026-11-15T12:05:03.561731-04:00"
+}

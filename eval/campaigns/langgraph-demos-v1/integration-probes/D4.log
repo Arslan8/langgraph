@@ -1,0 +1,11 @@
+/home/faculty/abk6349/.codex/worktrees/consolidated-evaluation/langgraph/eval/apps/demos/multi_agent.py:18: DeprecationWarning: `langchain-experimental` is being sunset and is no longer actively maintained. See https://github.com/langchain-ai/langchain-experimental/issues/87 for details.
+  from langchain_experimental.utilities import PythonREPL
+Traceback (most recent call last):
+  File "/home/faculty/abk6349/.codex/worktrees/consolidated-evaluation/langgraph/eval/apps/demos/multi_agent.py", line 178, in <module>
+    main()
+    ~~~~^^
+  File "/home/faculty/abk6349/.codex/worktrees/consolidated-evaluation/langgraph/eval/apps/demos/multi_agent.py", line 155, in main
+    raise RuntimeError(
+    ...<2 lines>...
+    )
+RuntimeError: argus:unsupported: D4 requires one persistent PythonREPL namespace across tool calls; the production Linux route creates an isolated fresh worker per call

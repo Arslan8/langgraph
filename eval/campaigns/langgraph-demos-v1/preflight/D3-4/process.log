@@ -1,0 +1,51 @@
+/home/faculty/abk6349/.codex/worktrees/consolidated-evaluation/langgraph/eval/apps/demos/plan_execute.py:74: LangGraphDeprecatedSinceV10: create_react_agent has been moved to `langchain.agents`. Please update your import to `from langchain.agents import create_agent`. Deprecated in LangGraph V1.0 to be removed in V2.0.
+  agent_executor = create_react_agent(
+Traceback (most recent call last):
+  File "/home/faculty/abk6349/.codex/worktrees/consolidated-evaluation/langgraph/eval/apps/demos/plan_execute.py", line 160, in <module>
+    asyncio.run(run(parser.parse_args()))
+    ~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/faculty/abk6349/.local/share/uv/python/cpython-3.13.11-linux-x86_64-gnu/lib/python3.13/asyncio/runners.py", line 195, in run
+    return runner.run(main)
+           ~~~~~~~~~~^^^^^^
+  File "/home/faculty/abk6349/.local/share/uv/python/cpython-3.13.11-linux-x86_64-gnu/lib/python3.13/asyncio/runners.py", line 118, in run
+    return self._loop.run_until_complete(task)
+           ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^
+  File "/home/faculty/abk6349/.local/share/uv/python/cpython-3.13.11-linux-x86_64-gnu/lib/python3.13/asyncio/base_events.py", line 725, in run_until_complete
+    return future.result()
+           ~~~~~~~~~~~~~^^
+  File "/home/faculty/abk6349/.codex/worktrees/consolidated-evaluation/langgraph/eval/apps/demos/plan_execute.py", line 140, in run
+    result = await build(args.corpus).ainvoke(
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    ...<2 lines>...
+    )
+    ^
+  File "/home/faculty/abk6349/.codex/worktrees/consolidated-evaluation/langgraph/libs/langgraph/langgraph/pregel/main.py", line 4332, in ainvoke
+    async for chunk in self.astream(
+    ...<30 lines>...
+            chunks.append(chunk)
+  File "/home/faculty/abk6349/.codex/worktrees/consolidated-evaluation/langgraph/libs/langgraph/langgraph/pregel/main.py", line 3630, in astream
+    async for _ in runner.atick(
+    ...<24 lines>...
+            )
+  File "/home/faculty/abk6349/.codex/worktrees/consolidated-evaluation/langgraph/libs/langgraph/langgraph/pregel/_runner.py", line 396, in atick
+    await arun_with_retry(
+    ...<15 lines>...
+    )
+  File "/home/faculty/abk6349/.codex/worktrees/consolidated-evaluation/langgraph/libs/langgraph/langgraph/pregel/_retry.py", line 744, in arun_with_retry
+    return await task.proc.ainvoke(task.input, config)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/faculty/abk6349/.codex/worktrees/consolidated-evaluation/langgraph/libs/langgraph/langgraph/_internal/_runnable.py", line 756, in ainvoke
+    input = await asyncio.create_task(
+            ^^^^^^^^^^^^^^^^^^^^^^^^^^
+        step.ainvoke(input, config, **kwargs), context=context
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    )
+    ^
+  File "/home/faculty/abk6349/.codex/worktrees/consolidated-evaluation/langgraph/libs/langgraph/langgraph/_internal/_runnable.py", line 522, in ainvoke
+    ret = await self.afunc(*args, **kwargs)
+          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/faculty/abk6349/.codex/worktrees/consolidated-evaluation/langgraph/eval/apps/demos/plan_execute.py", line 102, in execute_step
+    task = plan[0]
+           ~~~~^^^
+IndexError: list index out of range
+During task with name 'agent' and id '17f5472f-f2a3-07d3-6d88-43c87d925fe6'
