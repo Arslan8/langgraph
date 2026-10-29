@@ -1,0 +1,78 @@
+{
+  "demo": "forced-tool",
+  "mode": "Baseline",
+  "prompt": "Hi, I am Bob",
+  "wall_ms": 535.1007340359502,
+  "answer": "Hello Bob!",
+  "messages": [
+    {
+      "content": "Hi, I am Bob",
+      "additional_kwargs": {},
+      "response_metadata": {},
+      "type": "human",
+      "name": null,
+      "id": "06dd9353-953c-4532-8310-edb3a4ee3468"
+    },
+    {
+      "content": "",
+      "additional_kwargs": {
+        "refusal": null
+      },
+      "response_metadata": {
+        "token_usage": {
+          "completion_tokens": 21,
+          "prompt_tokens": 141,
+          "total_tokens": 162,
+          "completion_tokens_details": null,
+          "prompt_tokens_details": null
+        },
+        "model_provider": "openai",
+        "model_name": "qwen3:8b",
+        "system_fingerprint": "fp_ollama",
+        "id": "chatcmpl-350",
+        "finish_reason": "tool_calls",
+        "logprobs": null
+      },
+      "type": "ai",
+      "name": null,
+      "id": "lc_run--01a1851f-d0fa-702c-a084-4041cc7e8f28-0",
+      "tool_calls": [
+        {
+          "name": "greet",
+          "args": {
+            "user_name": "Bob"
+          },
+          "id": "call_2307r1wy",
+          "type": "tool_call"
+        }
+      ],
+      "invalid_tool_calls": [],
+      "usage_metadata": {
+        "input_tokens": 141,
+        "output_tokens": 21,
+        "total_tokens": 162,
+        "input_token_details": {},
+        "output_token_details": {}
+      }
+    },
+    {
+      "content": "Hello Bob!",
+      "additional_kwargs": {},
+      "response_metadata": {},
+      "type": "tool",
+      "name": "greet",
+      "id": "13d9b058-65a6-4382-ad79-d23ace77dc87",
+      "tool_call_id": "call_2307r1wy",
+      "artifact": null,
+      "status": "success"
+    }
+  ],
+  "executed_tools": [
+    "greet"
+  ],
+  "model_digest": "500a1f067a9f782620b40bee6f7b0c89e17ae61f686b92c24933e4ca4b2b8b41",
+  "authorization_decisions": [],
+  "authorization_grants": [],
+  "activation_receipts": [],
+  "lowered_restrictions": []
+}

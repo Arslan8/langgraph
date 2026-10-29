@@ -1,0 +1,16 @@
+{
+  "demo": "fixed-weather",
+  "mode": "Baseline",
+  "status": "completed",
+  "correct": true,
+  "returncode": 0,
+  "stdout": "",
+  "stderr": "",
+  "raw_record": "eval/campaigns/argus-compatible-demo-v1/raw/expanded/fixed-weather-Baseline.json",
+  "wall_ms": 4.395147028844804,
+  "executed_tools": [
+    "get_weather"
+  ],
+  "grant_count": 0,
+  "activation_count": 0
+}

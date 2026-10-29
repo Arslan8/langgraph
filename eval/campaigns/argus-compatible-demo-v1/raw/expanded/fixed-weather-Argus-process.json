@@ -1,0 +1,16 @@
+{
+  "demo": "fixed-weather",
+  "mode": "Argus",
+  "status": "completed",
+  "correct": true,
+  "returncode": 0,
+  "stdout": "",
+  "stderr": "",
+  "raw_record": "eval/campaigns/argus-compatible-demo-v1/raw/expanded/fixed-weather-Argus.json",
+  "wall_ms": 864.7107069846243,
+  "executed_tools": [
+    "get_weather"
+  ],
+  "grant_count": 1,
+  "activation_count": 1
+}

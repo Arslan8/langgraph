@@ -1,0 +1,662 @@
+{
+  "design": "one preflight per demo and mode; compatibility survey, not performance campaign",
+  "upstream_commit": "23961cff61a42b52525f3b20b4094d8d2fba1744",
+  "records": [
+    {
+      "demo": "add-tools",
+      "mode": "Baseline",
+      "status": "completed",
+      "correct": true,
+      "returncode": 0,
+      "stdout": "",
+      "stderr": "",
+      "raw_record": "eval/campaigns/argus-compatible-demo-v1/raw/expanded/add-tools-Baseline.json",
+      "wall_ms": 1511.6672300500795,
+      "executed_tools": [
+        "tavily_search"
+      ],
+      "grant_count": 0,
+      "activation_count": 0
+    },
+    {
+      "demo": "add-tools",
+      "mode": "Argus",
+      "status": "completed",
+      "correct": true,
+      "returncode": 0,
+      "stdout": "",
+      "stderr": "",
+      "raw_record": "eval/campaigns/argus-compatible-demo-v1/raw/expanded/add-tools-Argus.json",
+      "wall_ms": 2292.1357869636267,
+      "executed_tools": [
+        "tavily_search"
+      ],
+      "grant_count": 1,
+      "activation_count": 1
+    },
+    {
+      "demo": "custom-weather",
+      "mode": "Baseline",
+      "status": "completed",
+      "correct": true,
+      "returncode": 0,
+      "stdout": "",
+      "stderr": "",
+      "raw_record": "eval/campaigns/argus-compatible-demo-v1/raw/expanded/custom-weather-Baseline.json",
+      "wall_ms": 944.814755988773,
+      "executed_tools": [
+        "get_weather"
+      ],
+      "grant_count": 0,
+      "activation_count": 0
+    },
+    {
+      "demo": "custom-weather",
+      "mode": "Argus",
+      "status": "completed",
+      "correct": true,
+      "returncode": 0,
+      "stdout": "",
+      "stderr": "",
+      "raw_record": "eval/campaigns/argus-compatible-demo-v1/raw/expanded/custom-weather-Argus.json",
+      "wall_ms": 1769.9169099796563,
+      "executed_tools": [
+        "get_weather"
+      ],
+      "grant_count": 1,
+      "activation_count": 1
+    },
+    {
+      "demo": "fixed-weather",
+      "mode": "Baseline",
+      "status": "completed",
+      "correct": true,
+      "returncode": 0,
+      "stdout": "",
+      "stderr": "",
+      "raw_record": "eval/campaigns/argus-compatible-demo-v1/raw/expanded/fixed-weather-Baseline.json",
+      "wall_ms": 4.395147028844804,
+      "executed_tools": [
+        "get_weather"
+      ],
+      "grant_count": 0,
+      "activation_count": 0
+    },
+    {
+      "demo": "fixed-weather",
+      "mode": "Argus",
+      "status": "completed",
+      "correct": true,
+      "returncode": 0,
+      "stdout": "",
+      "stderr": "",
+      "raw_record": "eval/campaigns/argus-compatible-demo-v1/raw/expanded/fixed-weather-Argus.json",
+      "wall_ms": 864.7107069846243,
+      "executed_tools": [
+        "get_weather"
+      ],
+      "grant_count": 1,
+      "activation_count": 1
+    },
+    {
+      "demo": "parallel-weather",
+      "mode": "Baseline",
+      "status": "completed",
+      "correct": true,
+      "returncode": 0,
+      "stdout": "",
+      "stderr": "",
+      "raw_record": "eval/campaigns/argus-compatible-demo-v1/raw/expanded/parallel-weather-Baseline.json",
+      "wall_ms": 5.211487994529307,
+      "executed_tools": [
+        "get_weather",
+        "get_coolest_cities"
+      ],
+      "grant_count": 0,
+      "activation_count": 0
+    },
+    {
+      "demo": "parallel-weather",
+      "mode": "Argus",
+      "status": "completed",
+      "correct": true,
+      "returncode": 0,
+      "stdout": "",
+      "stderr": "",
+      "raw_record": "eval/campaigns/argus-compatible-demo-v1/raw/expanded/parallel-weather-Argus.json",
+      "wall_ms": 936.7849209811538,
+      "executed_tools": [
+        "get_weather",
+        "get_coolest_cities"
+      ],
+      "grant_count": 2,
+      "activation_count": 2
+    },
+    {
+      "demo": "prebuilt-multiply",
+      "mode": "Baseline",
+      "status": "completed",
+      "correct": true,
+      "returncode": 0,
+      "stdout": "",
+      "stderr": "/home/faculty/abk6349/.codex/worktrees/consolidated-evaluation/langgraph/eval/apps/demos/tool_calling_protected.py:272: LangGraphDeprecatedSinceV10: create_react_agent has been moved to `langchain.agents`. Please update your import to `from langchain.agents import create_agent`. Deprecated in LangGraph V1.0 to be removed in V2.0.\n  graph = create_react_agent(selected_model, chosen, security=selected)\n",
+      "raw_record": "eval/campaigns/argus-compatible-demo-v1/raw/expanded/prebuilt-multiply-Baseline.json",
+      "wall_ms": 1045.030243054498,
+      "executed_tools": [
+        "multiply"
+      ],
+      "grant_count": 0,
+      "activation_count": 0
+    },
+    {
+      "demo": "prebuilt-multiply",
+      "mode": "Argus",
+      "status": "compatibility_failed",
+      "correct": false,
+      "returncode": 1,
+      "stdout": "",
+      "stderr": "/home/faculty/abk6349/.codex/worktrees/consolidated-evaluation/langgraph/eval/apps/demos/tool_calling_protected.py:272: LangGraphDeprecatedSinceV10: create_react_agent has been moved to `langchain.agents`. Please update your import to `from langchain.agents import create_agent`. Deprecated in LangGraph V1.0 to be removed in V2.0.\n  graph = create_react_agent(selected_model, chosen, security=selected)\nTraceback (most recent call last):\n  File \"/home/faculty/abk6349/.codex/worktrees/consolidated-evaluation/langgraph/eval/apps/demos/tool_calling_protected.py\", line 380, in <module>\n    main()\n    ~~~~^^\n  File \"/home/faculty/abk6349/.codex/worktrees/consolidated-evaluation/langgraph/eval/apps/demos/tool_calling_protected.py\", line 298, in main\n    graph, prompt, selected, dispatcher, audit = build(args.demo, args.mode, args.worker_route)\n                                                 ~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/home/faculty/abk6349/.codex/worktrees/consolidated-evaluation/langgraph/eval/apps/demos/tool_calling_protected.py\", line 272, in build\n    graph = create_react_agent(selected_model, chosen, security=selected)\n  File \"/home/faculty/abk6349/.local/share/uv/python/cpython-3.13.11-linux-x86_64-gnu/lib/python3.13/warnings.py\", line 637, in wrapper\n    return arg(*args, **kwargs)\n  File \"/home/faculty/abk6349/.codex/worktrees/consolidated-evaluation/langgraph/libs/prebuilt/langgraph/prebuilt/chat_agent_executor.py\", line 1076, in create_react_agent\n    return workflow.compile(\n           ~~~~~~~~~~~~~~~~^\n        checkpointer=checkpointer,\n        ^^^^^^^^^^^^^^^^^^^^^^^^^^\n    ...<5 lines>...\n        security=security,\n        ^^^^^^^^^^^^^^^^^^\n    )\n    ^\n  File \"/home/faculty/abk6349/.codex/worktrees/consolidated-evaluation/langgraph/libs/langgraph/langgraph/graph/state.py\", line 1242, in compile\n    configured_checkpointer = configure_graph(self, checkpointer=checkpointer)\n  File \"/home/faculty/abk6349/.codex/worktrees/consolidated-evaluation/langgraph/libs/prebuilt/langgraph/prebuilt/security/config.py\", line 235, in configure_graph\n    admitted = _closed_admission_inventory(self, graph)\n  File \"/home/faculty/abk6349/.codex/worktrees/consolidated-evaluation/langgraph/libs/prebuilt/langgraph/prebuilt/security/config.py\", line 667, in _closed_admission_inventory\n    inventory[name] = admit_node(name, spec.runnable, config=config)\n                      ~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/home/faculty/abk6349/.codex/worktrees/consolidated-evaluation/langgraph/libs/prebuilt/langgraph/prebuilt/security/admission.py\", line 225, in admit_node\n    return _admit_trusted_application(name, runnable)\n  File \"/home/faculty/abk6349/.codex/worktrees/consolidated-evaluation/langgraph/libs/prebuilt/langgraph/prebuilt/security/admission.py\", line 514, in _admit_trusted_application\n    captured = _capture_application(name, runnable)\n  File \"/home/faculty/abk6349/.codex/worktrees/consolidated-evaluation/langgraph/libs/prebuilt/langgraph/prebuilt/security/admission.py\", line 560, in _capture_application\n    raise PermissionError(UNSUPPORTED_NODE_BODY)\nPermissionError: admission:unsupported_node_body\n",
+      "raw_record": null,
+      "wall_ms": null,
+      "executed_tools": [],
+      "grant_count": 0,
+      "activation_count": 0
+    },
+    {
+      "demo": "return-direct",
+      "mode": "Baseline",
+      "status": "completed",
+      "correct": true,
+      "returncode": 0,
+      "stdout": "",
+      "stderr": "/home/faculty/abk6349/.codex/worktrees/consolidated-evaluation/langgraph/eval/apps/demos/tool_calling_protected.py:272: LangGraphDeprecatedSinceV10: create_react_agent has been moved to `langchain.agents`. Please update your import to `from langchain.agents import create_agent`. Deprecated in LangGraph V1.0 to be removed in V2.0.\n  graph = create_react_agent(selected_model, chosen, security=selected)\n",
+      "raw_record": "eval/campaigns/argus-compatible-demo-v1/raw/expanded/return-direct-Baseline.json",
+      "wall_ms": 606.1663209693506,
+      "executed_tools": [
+        "add"
+      ],
+      "grant_count": 0,
+      "activation_count": 0
+    },
+    {
+      "demo": "return-direct",
+      "mode": "Argus",
+      "status": "compatibility_failed",
+      "correct": false,
+      "returncode": 1,
+      "stdout": "",
+      "stderr": "/home/faculty/abk6349/.codex/worktrees/consolidated-evaluation/langgraph/eval/apps/demos/tool_calling_protected.py:272: LangGraphDeprecatedSinceV10: create_react_agent has been moved to `langchain.agents`. Please update your import to `from langchain.agents import create_agent`. Deprecated in LangGraph V1.0 to be removed in V2.0.\n  graph = create_react_agent(selected_model, chosen, security=selected)\nTraceback (most recent call last):\n  File \"/home/faculty/abk6349/.codex/worktrees/consolidated-evaluation/langgraph/eval/apps/demos/tool_calling_protected.py\", line 380, in <module>\n    main()\n    ~~~~^^\n  File \"/home/faculty/abk6349/.codex/worktrees/consolidated-evaluation/langgraph/eval/apps/demos/tool_calling_protected.py\", line 298, in main\n    graph, prompt, selected, dispatcher, audit = build(args.demo, args.mode, args.worker_route)\n                                                 ~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/home/faculty/abk6349/.codex/worktrees/consolidated-evaluation/langgraph/eval/apps/demos/tool_calling_protected.py\", line 272, in build\n    graph = create_react_agent(selected_model, chosen, security=selected)\n  File \"/home/faculty/abk6349/.local/share/uv/python/cpython-3.13.11-linux-x86_64-gnu/lib/python3.13/warnings.py\", line 637, in wrapper\n    return arg(*args, **kwargs)\n  File \"/home/faculty/abk6349/.codex/worktrees/consolidated-evaluation/langgraph/libs/prebuilt/langgraph/prebuilt/chat_agent_executor.py\", line 1076, in create_react_agent\n    return workflow.compile(\n           ~~~~~~~~~~~~~~~~^\n        checkpointer=checkpointer,\n        ^^^^^^^^^^^^^^^^^^^^^^^^^^\n    ...<5 lines>...\n        security=security,\n        ^^^^^^^^^^^^^^^^^^\n    )\n    ^\n  File \"/home/faculty/abk6349/.codex/worktrees/consolidated-evaluation/langgraph/libs/langgraph/langgraph/graph/state.py\", line 1242, in compile\n    configured_checkpointer = configure_graph(self, checkpointer=checkpointer)\n  File \"/home/faculty/abk6349/.codex/worktrees/consolidated-evaluation/langgraph/libs/prebuilt/langgraph/prebuilt/security/config.py\", line 235, in configure_graph\n    admitted = _closed_admission_inventory(self, graph)\n  File \"/home/faculty/abk6349/.codex/worktrees/consolidated-evaluation/langgraph/libs/prebuilt/langgraph/prebuilt/security/config.py\", line 667, in _closed_admission_inventory\n    inventory[name] = admit_node(name, spec.runnable, config=config)\n                      ~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/home/faculty/abk6349/.codex/worktrees/consolidated-evaluation/langgraph/libs/prebuilt/langgraph/prebuilt/security/admission.py\", line 225, in admit_node\n    return _admit_trusted_application(name, runnable)\n  File \"/home/faculty/abk6349/.codex/worktrees/consolidated-evaluation/langgraph/libs/prebuilt/langgraph/prebuilt/security/admission.py\", line 514, in _admit_trusted_application\n    captured = _capture_application(name, runnable)\n  File \"/home/faculty/abk6349/.codex/worktrees/consolidated-evaluation/langgraph/libs/prebuilt/langgraph/prebuilt/security/admission.py\", line 560, in _capture_application\n    raise PermissionError(UNSUPPORTED_NODE_BODY)\nPermissionError: admission:unsupported_node_body\n",
+      "raw_record": null,
+      "wall_ms": null,
+      "executed_tools": [],
+      "grant_count": 0,
+      "activation_count": 0
+    },
+    {
+      "demo": "forced-tool",
+      "mode": "Baseline",
+      "status": "completed",
+      "correct": true,
+      "returncode": 0,
+      "stdout": "",
+      "stderr": "/home/faculty/abk6349/.codex/worktrees/consolidated-evaluation/langgraph/eval/apps/demos/tool_calling_protected.py:272: LangGraphDeprecatedSinceV10: create_react_agent has been moved to `langchain.agents`. Please update your import to `from langchain.agents import create_agent`. Deprecated in LangGraph V1.0 to be removed in V2.0.\n  graph = create_react_agent(selected_model, chosen, security=selected)\n",
+      "raw_record": "eval/campaigns/argus-compatible-demo-v1/raw/expanded/forced-tool-Baseline.json",
+      "wall_ms": 535.1007340359502,
+      "executed_tools": [
+        "greet"
+      ],
+      "grant_count": 0,
+      "activation_count": 0
+    },
+    {
+      "demo": "forced-tool",
+      "mode": "Argus",
+      "status": "compatibility_failed",
+      "correct": false,
+      "returncode": 1,
+      "stdout": "",
+      "stderr": "/home/faculty/abk6349/.codex/worktrees/consolidated-evaluation/langgraph/eval/apps/demos/tool_calling_protected.py:272: LangGraphDeprecatedSinceV10: create_react_agent has been moved to `langchain.agents`. Please update your import to `from langchain.agents import create_agent`. Deprecated in LangGraph V1.0 to be removed in V2.0.\n  graph = create_react_agent(selected_model, chosen, security=selected)\nTraceback (most recent call last):\n  File \"/home/faculty/abk6349/.codex/worktrees/consolidated-evaluation/langgraph/eval/apps/demos/tool_calling_protected.py\", line 380, in <module>\n    main()\n    ~~~~^^\n  File \"/home/faculty/abk6349/.codex/worktrees/consolidated-evaluation/langgraph/eval/apps/demos/tool_calling_protected.py\", line 298, in main\n    graph, prompt, selected, dispatcher, audit = build(args.demo, args.mode, args.worker_route)\n                                                 ~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/home/faculty/abk6349/.codex/worktrees/consolidated-evaluation/langgraph/eval/apps/demos/tool_calling_protected.py\", line 272, in build\n    graph = create_react_agent(selected_model, chosen, security=selected)\n  File \"/home/faculty/abk6349/.local/share/uv/python/cpython-3.13.11-linux-x86_64-gnu/lib/python3.13/warnings.py\", line 637, in wrapper\n    return arg(*args, **kwargs)\n  File \"/home/faculty/abk6349/.codex/worktrees/consolidated-evaluation/langgraph/libs/prebuilt/langgraph/prebuilt/chat_agent_executor.py\", line 1076, in create_react_agent\n    return workflow.compile(\n           ~~~~~~~~~~~~~~~~^\n        checkpointer=checkpointer,\n        ^^^^^^^^^^^^^^^^^^^^^^^^^^\n    ...<5 lines>...\n        security=security,\n        ^^^^^^^^^^^^^^^^^^\n    )\n    ^\n  File \"/home/faculty/abk6349/.codex/worktrees/consolidated-evaluation/langgraph/libs/langgraph/langgraph/graph/state.py\", line 1242, in compile\n    configured_checkpointer = configure_graph(self, checkpointer=checkpointer)\n  File \"/home/faculty/abk6349/.codex/worktrees/consolidated-evaluation/langgraph/libs/prebuilt/langgraph/prebuilt/security/config.py\", line 235, in configure_graph\n    admitted = _closed_admission_inventory(self, graph)\n  File \"/home/faculty/abk6349/.codex/worktrees/consolidated-evaluation/langgraph/libs/prebuilt/langgraph/prebuilt/security/config.py\", line 667, in _closed_admission_inventory\n    inventory[name] = admit_node(name, spec.runnable, config=config)\n                      ~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/home/faculty/abk6349/.codex/worktrees/consolidated-evaluation/langgraph/libs/prebuilt/langgraph/prebuilt/security/admission.py\", line 225, in admit_node\n    return _admit_trusted_application(name, runnable)\n  File \"/home/faculty/abk6349/.codex/worktrees/consolidated-evaluation/langgraph/libs/prebuilt/langgraph/prebuilt/security/admission.py\", line 514, in _admit_trusted_application\n    captured = _capture_application(name, runnable)\n  File \"/home/faculty/abk6349/.codex/worktrees/consolidated-evaluation/langgraph/libs/prebuilt/langgraph/prebuilt/security/admission.py\", line 560, in _capture_application\n    raise PermissionError(UNSUPPORTED_NODE_BODY)\nPermissionError: admission:unsupported_node_body\n",
+      "raw_record": null,
+      "wall_ms": null,
+      "executed_tools": [],
+      "grant_count": 0,
+      "activation_count": 0
+    },
+    {
+      "demo": "serial-tools",
+      "mode": "Baseline",
+      "status": "completed",
+      "correct": true,
+      "returncode": 0,
+      "stdout": "",
+      "stderr": "/home/faculty/abk6349/.codex/worktrees/consolidated-evaluation/langgraph/eval/apps/demos/tool_calling_protected.py:272: LangGraphDeprecatedSinceV10: create_react_agent has been moved to `langchain.agents`. Please update your import to `from langchain.agents import create_agent`. Deprecated in LangGraph V1.0 to be removed in V2.0.\n  graph = create_react_agent(selected_model, chosen, security=selected)\n",
+      "raw_record": "eval/campaigns/argus-compatible-demo-v1/raw/expanded/serial-tools-Baseline.json",
+      "wall_ms": 1549.398280971218,
+      "executed_tools": [
+        "add",
+        "multiply"
+      ],
+      "grant_count": 0,
+      "activation_count": 0
+    },
+    {
+      "demo": "serial-tools",
+      "mode": "Argus",
+      "status": "compatibility_failed",
+      "correct": false,
+      "returncode": 1,
+      "stdout": "",
+      "stderr": "/home/faculty/abk6349/.codex/worktrees/consolidated-evaluation/langgraph/eval/apps/demos/tool_calling_protected.py:272: LangGraphDeprecatedSinceV10: create_react_agent has been moved to `langchain.agents`. Please update your import to `from langchain.agents import create_agent`. Deprecated in LangGraph V1.0 to be removed in V2.0.\n  graph = create_react_agent(selected_model, chosen, security=selected)\nTraceback (most recent call last):\n  File \"/home/faculty/abk6349/.codex/worktrees/consolidated-evaluation/langgraph/eval/apps/demos/tool_calling_protected.py\", line 380, in <module>\n    main()\n    ~~~~^^\n  File \"/home/faculty/abk6349/.codex/worktrees/consolidated-evaluation/langgraph/eval/apps/demos/tool_calling_protected.py\", line 298, in main\n    graph, prompt, selected, dispatcher, audit = build(args.demo, args.mode, args.worker_route)\n                                                 ~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/home/faculty/abk6349/.codex/worktrees/consolidated-evaluation/langgraph/eval/apps/demos/tool_calling_protected.py\", line 272, in build\n    graph = create_react_agent(selected_model, chosen, security=selected)\n  File \"/home/faculty/abk6349/.local/share/uv/python/cpython-3.13.11-linux-x86_64-gnu/lib/python3.13/warnings.py\", line 637, in wrapper\n    return arg(*args, **kwargs)\n  File \"/home/faculty/abk6349/.codex/worktrees/consolidated-evaluation/langgraph/libs/prebuilt/langgraph/prebuilt/chat_agent_executor.py\", line 1076, in create_react_agent\n    return workflow.compile(\n           ~~~~~~~~~~~~~~~~^\n        checkpointer=checkpointer,\n        ^^^^^^^^^^^^^^^^^^^^^^^^^^\n    ...<5 lines>...\n        security=security,\n        ^^^^^^^^^^^^^^^^^^\n    )\n    ^\n  File \"/home/faculty/abk6349/.codex/worktrees/consolidated-evaluation/langgraph/libs/langgraph/langgraph/graph/state.py\", line 1242, in compile\n    configured_checkpointer = configure_graph(self, checkpointer=checkpointer)\n  File \"/home/faculty/abk6349/.codex/worktrees/consolidated-evaluation/langgraph/libs/prebuilt/langgraph/prebuilt/security/config.py\", line 235, in configure_graph\n    admitted = _closed_admission_inventory(self, graph)\n  File \"/home/faculty/abk6349/.codex/worktrees/consolidated-evaluation/langgraph/libs/prebuilt/langgraph/prebuilt/security/config.py\", line 667, in _closed_admission_inventory\n    inventory[name] = admit_node(name, spec.runnable, config=config)\n                      ~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/home/faculty/abk6349/.codex/worktrees/consolidated-evaluation/langgraph/libs/prebuilt/langgraph/prebuilt/security/admission.py\", line 225, in admit_node\n    return _admit_trusted_application(name, runnable)\n  File \"/home/faculty/abk6349/.codex/worktrees/consolidated-evaluation/langgraph/libs/prebuilt/langgraph/prebuilt/security/admission.py\", line 514, in _admit_trusted_application\n    captured = _capture_application(name, runnable)\n  File \"/home/faculty/abk6349/.codex/worktrees/consolidated-evaluation/langgraph/libs/prebuilt/langgraph/prebuilt/security/admission.py\", line 560, in _capture_application\n    raise PermissionError(UNSUPPORTED_NODE_BODY)\nPermissionError: admission:unsupported_node_body\n",
+      "raw_record": null,
+      "wall_ms": null,
+      "executed_tools": [],
+      "grant_count": 0,
+      "activation_count": 0
+    },
+    {
+      "demo": "add-memory",
+      "mode": "Baseline",
+      "status": "completed",
+      "correct": true,
+      "returncode": 0,
+      "stdout": "",
+      "stderr": "",
+      "raw_record": "eval/campaigns/argus-compatible-demo-v1/raw/expanded/add-memory-Baseline.json",
+      "wall_ms": 2487.625817011576,
+      "executed_tools": [
+        "tavily_search",
+        "tavily_search"
+      ],
+      "grant_count": 0,
+      "activation_count": 0
+    },
+    {
+      "demo": "add-memory",
+      "mode": "Argus",
+      "status": "completed",
+      "correct": true,
+      "returncode": 0,
+      "stdout": "",
+      "stderr": "",
+      "raw_record": "eval/campaigns/argus-compatible-demo-v1/raw/expanded/add-memory-Argus.json",
+      "wall_ms": 3928.2022480037995,
+      "executed_tools": [
+        "tavily_search",
+        "tavily_search"
+      ],
+      "grant_count": 2,
+      "activation_count": 2
+    },
+    {
+      "demo": "time-travel",
+      "mode": "Baseline",
+      "status": "completed",
+      "correct": true,
+      "returncode": 0,
+      "stdout": "",
+      "stderr": "",
+      "raw_record": "eval/campaigns/argus-compatible-demo-v1/raw/expanded/time-travel-Baseline.json",
+      "wall_ms": 1637.7025230322033,
+      "executed_tools": [
+        "tavily_search"
+      ],
+      "grant_count": 0,
+      "activation_count": 0
+    },
+    {
+      "demo": "time-travel",
+      "mode": "Argus",
+      "status": "completed",
+      "correct": true,
+      "returncode": 0,
+      "stdout": "",
+      "stderr": "",
+      "raw_record": "eval/campaigns/argus-compatible-demo-v1/raw/expanded/time-travel-Argus.json",
+      "wall_ms": 3039.783048967365,
+      "executed_tools": [
+        "tavily_search"
+      ],
+      "grant_count": 2,
+      "activation_count": 2
+    }
+  ],
+  "by_demo": {
+    "add-tools": {
+      "Baseline": {
+        "demo": "add-tools",
+        "mode": "Baseline",
+        "status": "completed",
+        "correct": true,
+        "returncode": 0,
+        "stdout": "",
+        "stderr": "",
+        "raw_record": "eval/campaigns/argus-compatible-demo-v1/raw/expanded/add-tools-Baseline.json",
+        "wall_ms": 1511.6672300500795,
+        "executed_tools": [
+          "tavily_search"
+        ],
+        "grant_count": 0,
+        "activation_count": 0
+      },
+      "Argus": {
+        "demo": "add-tools",
+        "mode": "Argus",
+        "status": "completed",
+        "correct": true,
+        "returncode": 0,
+        "stdout": "",
+        "stderr": "",
+        "raw_record": "eval/campaigns/argus-compatible-demo-v1/raw/expanded/add-tools-Argus.json",
+        "wall_ms": 2292.1357869636267,
+        "executed_tools": [
+          "tavily_search"
+        ],
+        "grant_count": 1,
+        "activation_count": 1
+      }
+    },
+    "custom-weather": {
+      "Baseline": {
+        "demo": "custom-weather",
+        "mode": "Baseline",
+        "status": "completed",
+        "correct": true,
+        "returncode": 0,
+        "stdout": "",
+        "stderr": "",
+        "raw_record": "eval/campaigns/argus-compatible-demo-v1/raw/expanded/custom-weather-Baseline.json",
+        "wall_ms": 944.814755988773,
+        "executed_tools": [
+          "get_weather"
+        ],
+        "grant_count": 0,
+        "activation_count": 0
+      },
+      "Argus": {
+        "demo": "custom-weather",
+        "mode": "Argus",
+        "status": "completed",
+        "correct": true,
+        "returncode": 0,
+        "stdout": "",
+        "stderr": "",
+        "raw_record": "eval/campaigns/argus-compatible-demo-v1/raw/expanded/custom-weather-Argus.json",
+        "wall_ms": 1769.9169099796563,
+        "executed_tools": [
+          "get_weather"
+        ],
+        "grant_count": 1,
+        "activation_count": 1
+      }
+    },
+    "fixed-weather": {
+      "Baseline": {
+        "demo": "fixed-weather",
+        "mode": "Baseline",
+        "status": "completed",
+        "correct": true,
+        "returncode": 0,
+        "stdout": "",
+        "stderr": "",
+        "raw_record": "eval/campaigns/argus-compatible-demo-v1/raw/expanded/fixed-weather-Baseline.json",
+        "wall_ms": 4.395147028844804,
+        "executed_tools": [
+          "get_weather"
+        ],
+        "grant_count": 0,
+        "activation_count": 0
+      },
+      "Argus": {
+        "demo": "fixed-weather",
+        "mode": "Argus",
+        "status": "completed",
+        "correct": true,
+        "returncode": 0,
+        "stdout": "",
+        "stderr": "",
+        "raw_record": "eval/campaigns/argus-compatible-demo-v1/raw/expanded/fixed-weather-Argus.json",
+        "wall_ms": 864.7107069846243,
+        "executed_tools": [
+          "get_weather"
+        ],
+        "grant_count": 1,
+        "activation_count": 1
+      }
+    },
+    "parallel-weather": {
+      "Baseline": {
+        "demo": "parallel-weather",
+        "mode": "Baseline",
+        "status": "completed",
+        "correct": true,
+        "returncode": 0,
+        "stdout": "",
+        "stderr": "",
+        "raw_record": "eval/campaigns/argus-compatible-demo-v1/raw/expanded/parallel-weather-Baseline.json",
+        "wall_ms": 5.211487994529307,
+        "executed_tools": [
+          "get_weather",
+          "get_coolest_cities"
+        ],
+        "grant_count": 0,
+        "activation_count": 0
+      },
+      "Argus": {
+        "demo": "parallel-weather",
+        "mode": "Argus",
+        "status": "completed",
+        "correct": true,
+        "returncode": 0,
+        "stdout": "",
+        "stderr": "",
+        "raw_record": "eval/campaigns/argus-compatible-demo-v1/raw/expanded/parallel-weather-Argus.json",
+        "wall_ms": 936.7849209811538,
+        "executed_tools": [
+          "get_weather",
+          "get_coolest_cities"
+        ],
+        "grant_count": 2,
+        "activation_count": 2
+      }
+    },
+    "prebuilt-multiply": {
+      "Baseline": {
+        "demo": "prebuilt-multiply",
+        "mode": "Baseline",
+        "status": "completed",
+        "correct": true,
+        "returncode": 0,
+        "stdout": "",
+        "stderr": "/home/faculty/abk6349/.codex/worktrees/consolidated-evaluation/langgraph/eval/apps/demos/tool_calling_protected.py:272: LangGraphDeprecatedSinceV10: create_react_agent has been moved to `langchain.agents`. Please update your import to `from langchain.agents import create_agent`. Deprecated in LangGraph V1.0 to be removed in V2.0.\n  graph = create_react_agent(selected_model, chosen, security=selected)\n",
+        "raw_record": "eval/campaigns/argus-compatible-demo-v1/raw/expanded/prebuilt-multiply-Baseline.json",
+        "wall_ms": 1045.030243054498,
+        "executed_tools": [
+          "multiply"
+        ],
+        "grant_count": 0,
+        "activation_count": 0
+      },
+      "Argus": {
+        "demo": "prebuilt-multiply",
+        "mode": "Argus",
+        "status": "compatibility_failed",
+        "correct": false,
+        "returncode": 1,
+        "stdout": "",
+        "stderr": "/home/faculty/abk6349/.codex/worktrees/consolidated-evaluation/langgraph/eval/apps/demos/tool_calling_protected.py:272: LangGraphDeprecatedSinceV10: create_react_agent has been moved to `langchain.agents`. Please update your import to `from langchain.agents import create_agent`. Deprecated in LangGraph V1.0 to be removed in V2.0.\n  graph = create_react_agent(selected_model, chosen, security=selected)\nTraceback (most recent call last):\n  File \"/home/faculty/abk6349/.codex/worktrees/consolidated-evaluation/langgraph/eval/apps/demos/tool_calling_protected.py\", line 380, in <module>\n    main()\n    ~~~~^^\n  File \"/home/faculty/abk6349/.codex/worktrees/consolidated-evaluation/langgraph/eval/apps/demos/tool_calling_protected.py\", line 298, in main\n    graph, prompt, selected, dispatcher, audit = build(args.demo, args.mode, args.worker_route)\n                                                 ~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/home/faculty/abk6349/.codex/worktrees/consolidated-evaluation/langgraph/eval/apps/demos/tool_calling_protected.py\", line 272, in build\n    graph = create_react_agent(selected_model, chosen, security=selected)\n  File \"/home/faculty/abk6349/.local/share/uv/python/cpython-3.13.11-linux-x86_64-gnu/lib/python3.13/warnings.py\", line 637, in wrapper\n    return arg(*args, **kwargs)\n  File \"/home/faculty/abk6349/.codex/worktrees/consolidated-evaluation/langgraph/libs/prebuilt/langgraph/prebuilt/chat_agent_executor.py\", line 1076, in create_react_agent\n    return workflow.compile(\n           ~~~~~~~~~~~~~~~~^\n        checkpointer=checkpointer,\n        ^^^^^^^^^^^^^^^^^^^^^^^^^^\n    ...<5 lines>...\n        security=security,\n        ^^^^^^^^^^^^^^^^^^\n    )\n    ^\n  File \"/home/faculty/abk6349/.codex/worktrees/consolidated-evaluation/langgraph/libs/langgraph/langgraph/graph/state.py\", line 1242, in compile\n    configured_checkpointer = configure_graph(self, checkpointer=checkpointer)\n  File \"/home/faculty/abk6349/.codex/worktrees/consolidated-evaluation/langgraph/libs/prebuilt/langgraph/prebuilt/security/config.py\", line 235, in configure_graph\n    admitted = _closed_admission_inventory(self, graph)\n  File \"/home/faculty/abk6349/.codex/worktrees/consolidated-evaluation/langgraph/libs/prebuilt/langgraph/prebuilt/security/config.py\", line 667, in _closed_admission_inventory\n    inventory[name] = admit_node(name, spec.runnable, config=config)\n                      ~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/home/faculty/abk6349/.codex/worktrees/consolidated-evaluation/langgraph/libs/prebuilt/langgraph/prebuilt/security/admission.py\", line 225, in admit_node\n    return _admit_trusted_application(name, runnable)\n  File \"/home/faculty/abk6349/.codex/worktrees/consolidated-evaluation/langgraph/libs/prebuilt/langgraph/prebuilt/security/admission.py\", line 514, in _admit_trusted_application\n    captured = _capture_application(name, runnable)\n  File \"/home/faculty/abk6349/.codex/worktrees/consolidated-evaluation/langgraph/libs/prebuilt/langgraph/prebuilt/security/admission.py\", line 560, in _capture_application\n    raise PermissionError(UNSUPPORTED_NODE_BODY)\nPermissionError: admission:unsupported_node_body\n",
+        "raw_record": null,
+        "wall_ms": null,
+        "executed_tools": [],
+        "grant_count": 0,
+        "activation_count": 0
+      }
+    },
+    "return-direct": {
+      "Baseline": {
+        "demo": "return-direct",
+        "mode": "Baseline",
+        "status": "completed",
+        "correct": true,
+        "returncode": 0,
+        "stdout": "",
+        "stderr": "/home/faculty/abk6349/.codex/worktrees/consolidated-evaluation/langgraph/eval/apps/demos/tool_calling_protected.py:272: LangGraphDeprecatedSinceV10: create_react_agent has been moved to `langchain.agents`. Please update your import to `from langchain.agents import create_agent`. Deprecated in LangGraph V1.0 to be removed in V2.0.\n  graph = create_react_agent(selected_model, chosen, security=selected)\n",
+        "raw_record": "eval/campaigns/argus-compatible-demo-v1/raw/expanded/return-direct-Baseline.json",
+        "wall_ms": 606.1663209693506,
+        "executed_tools": [
+          "add"
+        ],
+        "grant_count": 0,
+        "activation_count": 0
+      },
+      "Argus": {
+        "demo": "return-direct",
+        "mode": "Argus",
+        "status": "compatibility_failed",
+        "correct": false,
+        "returncode": 1,
+        "stdout": "",
+        "stderr": "/home/faculty/abk6349/.codex/worktrees/consolidated-evaluation/langgraph/eval/apps/demos/tool_calling_protected.py:272: LangGraphDeprecatedSinceV10: create_react_agent has been moved to `langchain.agents`. Please update your import to `from langchain.agents import create_agent`. Deprecated in LangGraph V1.0 to be removed in V2.0.\n  graph = create_react_agent(selected_model, chosen, security=selected)\nTraceback (most recent call last):\n  File \"/home/faculty/abk6349/.codex/worktrees/consolidated-evaluation/langgraph/eval/apps/demos/tool_calling_protected.py\", line 380, in <module>\n    main()\n    ~~~~^^\n  File \"/home/faculty/abk6349/.codex/worktrees/consolidated-evaluation/langgraph/eval/apps/demos/tool_calling_protected.py\", line 298, in main\n    graph, prompt, selected, dispatcher, audit = build(args.demo, args.mode, args.worker_route)\n                                                 ~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/home/faculty/abk6349/.codex/worktrees/consolidated-evaluation/langgraph/eval/apps/demos/tool_calling_protected.py\", line 272, in build\n    graph = create_react_agent(selected_model, chosen, security=selected)\n  File \"/home/faculty/abk6349/.local/share/uv/python/cpython-3.13.11-linux-x86_64-gnu/lib/python3.13/warnings.py\", line 637, in wrapper\n    return arg(*args, **kwargs)\n  File \"/home/faculty/abk6349/.codex/worktrees/consolidated-evaluation/langgraph/libs/prebuilt/langgraph/prebuilt/chat_agent_executor.py\", line 1076, in create_react_agent\n    return workflow.compile(\n           ~~~~~~~~~~~~~~~~^\n        checkpointer=checkpointer,\n        ^^^^^^^^^^^^^^^^^^^^^^^^^^\n    ...<5 lines>...\n        security=security,\n        ^^^^^^^^^^^^^^^^^^\n    )\n    ^\n  File \"/home/faculty/abk6349/.codex/worktrees/consolidated-evaluation/langgraph/libs/langgraph/langgraph/graph/state.py\", line 1242, in compile\n    configured_checkpointer = configure_graph(self, checkpointer=checkpointer)\n  File \"/home/faculty/abk6349/.codex/worktrees/consolidated-evaluation/langgraph/libs/prebuilt/langgraph/prebuilt/security/config.py\", line 235, in configure_graph\n    admitted = _closed_admission_inventory(self, graph)\n  File \"/home/faculty/abk6349/.codex/worktrees/consolidated-evaluation/langgraph/libs/prebuilt/langgraph/prebuilt/security/config.py\", line 667, in _closed_admission_inventory\n    inventory[name] = admit_node(name, spec.runnable, config=config)\n                      ~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/home/faculty/abk6349/.codex/worktrees/consolidated-evaluation/langgraph/libs/prebuilt/langgraph/prebuilt/security/admission.py\", line 225, in admit_node\n    return _admit_trusted_application(name, runnable)\n  File \"/home/faculty/abk6349/.codex/worktrees/consolidated-evaluation/langgraph/libs/prebuilt/langgraph/prebuilt/security/admission.py\", line 514, in _admit_trusted_application\n    captured = _capture_application(name, runnable)\n  File \"/home/faculty/abk6349/.codex/worktrees/consolidated-evaluation/langgraph/libs/prebuilt/langgraph/prebuilt/security/admission.py\", line 560, in _capture_application\n    raise PermissionError(UNSUPPORTED_NODE_BODY)\nPermissionError: admission:unsupported_node_body\n",
+        "raw_record": null,
+        "wall_ms": null,
+        "executed_tools": [],
+        "grant_count": 0,
+        "activation_count": 0
+      }
+    },
+    "forced-tool": {
+      "Baseline": {
+        "demo": "forced-tool",
+        "mode": "Baseline",
+        "status": "completed",
+        "correct": true,
+        "returncode": 0,
+        "stdout": "",
+        "stderr": "/home/faculty/abk6349/.codex/worktrees/consolidated-evaluation/langgraph/eval/apps/demos/tool_calling_protected.py:272: LangGraphDeprecatedSinceV10: create_react_agent has been moved to `langchain.agents`. Please update your import to `from langchain.agents import create_agent`. Deprecated in LangGraph V1.0 to be removed in V2.0.\n  graph = create_react_agent(selected_model, chosen, security=selected)\n",
+        "raw_record": "eval/campaigns/argus-compatible-demo-v1/raw/expanded/forced-tool-Baseline.json",
+        "wall_ms": 535.1007340359502,
+        "executed_tools": [
+          "greet"
+        ],
+        "grant_count": 0,
+        "activation_count": 0
+      },
+      "Argus": {
+        "demo": "forced-tool",
+        "mode": "Argus",
+        "status": "compatibility_failed",
+        "correct": false,
+        "returncode": 1,
+        "stdout": "",
+        "stderr": "/home/faculty/abk6349/.codex/worktrees/consolidated-evaluation/langgraph/eval/apps/demos/tool_calling_protected.py:272: LangGraphDeprecatedSinceV10: create_react_agent has been moved to `langchain.agents`. Please update your import to `from langchain.agents import create_agent`. Deprecated in LangGraph V1.0 to be removed in V2.0.\n  graph = create_react_agent(selected_model, chosen, security=selected)\nTraceback (most recent call last):\n  File \"/home/faculty/abk6349/.codex/worktrees/consolidated-evaluation/langgraph/eval/apps/demos/tool_calling_protected.py\", line 380, in <module>\n    main()\n    ~~~~^^\n  File \"/home/faculty/abk6349/.codex/worktrees/consolidated-evaluation/langgraph/eval/apps/demos/tool_calling_protected.py\", line 298, in main\n    graph, prompt, selected, dispatcher, audit = build(args.demo, args.mode, args.worker_route)\n                                                 ~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/home/faculty/abk6349/.codex/worktrees/consolidated-evaluation/langgraph/eval/apps/demos/tool_calling_protected.py\", line 272, in build\n    graph = create_react_agent(selected_model, chosen, security=selected)\n  File \"/home/faculty/abk6349/.local/share/uv/python/cpython-3.13.11-linux-x86_64-gnu/lib/python3.13/warnings.py\", line 637, in wrapper\n    return arg(*args, **kwargs)\n  File \"/home/faculty/abk6349/.codex/worktrees/consolidated-evaluation/langgraph/libs/prebuilt/langgraph/prebuilt/chat_agent_executor.py\", line 1076, in create_react_agent\n    return workflow.compile(\n           ~~~~~~~~~~~~~~~~^\n        checkpointer=checkpointer,\n        ^^^^^^^^^^^^^^^^^^^^^^^^^^\n    ...<5 lines>...\n        security=security,\n        ^^^^^^^^^^^^^^^^^^\n    )\n    ^\n  File \"/home/faculty/abk6349/.codex/worktrees/consolidated-evaluation/langgraph/libs/langgraph/langgraph/graph/state.py\", line 1242, in compile\n    configured_checkpointer = configure_graph(self, checkpointer=checkpointer)\n  File \"/home/faculty/abk6349/.codex/worktrees/consolidated-evaluation/langgraph/libs/prebuilt/langgraph/prebuilt/security/config.py\", line 235, in configure_graph\n    admitted = _closed_admission_inventory(self, graph)\n  File \"/home/faculty/abk6349/.codex/worktrees/consolidated-evaluation/langgraph/libs/prebuilt/langgraph/prebuilt/security/config.py\", line 667, in _closed_admission_inventory\n    inventory[name] = admit_node(name, spec.runnable, config=config)\n                      ~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/home/faculty/abk6349/.codex/worktrees/consolidated-evaluation/langgraph/libs/prebuilt/langgraph/prebuilt/security/admission.py\", line 225, in admit_node\n    return _admit_trusted_application(name, runnable)\n  File \"/home/faculty/abk6349/.codex/worktrees/consolidated-evaluation/langgraph/libs/prebuilt/langgraph/prebuilt/security/admission.py\", line 514, in _admit_trusted_application\n    captured = _capture_application(name, runnable)\n  File \"/home/faculty/abk6349/.codex/worktrees/consolidated-evaluation/langgraph/libs/prebuilt/langgraph/prebuilt/security/admission.py\", line 560, in _capture_application\n    raise PermissionError(UNSUPPORTED_NODE_BODY)\nPermissionError: admission:unsupported_node_body\n",
+        "raw_record": null,
+        "wall_ms": null,
+        "executed_tools": [],
+        "grant_count": 0,
+        "activation_count": 0
+      }
+    },
+    "serial-tools": {
+      "Baseline": {
+        "demo": "serial-tools",
+        "mode": "Baseline",
+        "status": "completed",
+        "correct": true,
+        "returncode": 0,
+        "stdout": "",
+        "stderr": "/home/faculty/abk6349/.codex/worktrees/consolidated-evaluation/langgraph/eval/apps/demos/tool_calling_protected.py:272: LangGraphDeprecatedSinceV10: create_react_agent has been moved to `langchain.agents`. Please update your import to `from langchain.agents import create_agent`. Deprecated in LangGraph V1.0 to be removed in V2.0.\n  graph = create_react_agent(selected_model, chosen, security=selected)\n",
+        "raw_record": "eval/campaigns/argus-compatible-demo-v1/raw/expanded/serial-tools-Baseline.json",
+        "wall_ms": 1549.398280971218,
+        "executed_tools": [
+          "add",
+          "multiply"
+        ],
+        "grant_count": 0,
+        "activation_count": 0
+      },
+      "Argus": {
+        "demo": "serial-tools",
+        "mode": "Argus",
+        "status": "compatibility_failed",
+        "correct": false,
+        "returncode": 1,
+        "stdout": "",
+        "stderr": "/home/faculty/abk6349/.codex/worktrees/consolidated-evaluation/langgraph/eval/apps/demos/tool_calling_protected.py:272: LangGraphDeprecatedSinceV10: create_react_agent has been moved to `langchain.agents`. Please update your import to `from langchain.agents import create_agent`. Deprecated in LangGraph V1.0 to be removed in V2.0.\n  graph = create_react_agent(selected_model, chosen, security=selected)\nTraceback (most recent call last):\n  File \"/home/faculty/abk6349/.codex/worktrees/consolidated-evaluation/langgraph/eval/apps/demos/tool_calling_protected.py\", line 380, in <module>\n    main()\n    ~~~~^^\n  File \"/home/faculty/abk6349/.codex/worktrees/consolidated-evaluation/langgraph/eval/apps/demos/tool_calling_protected.py\", line 298, in main\n    graph, prompt, selected, dispatcher, audit = build(args.demo, args.mode, args.worker_route)\n                                                 ~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/home/faculty/abk6349/.codex/worktrees/consolidated-evaluation/langgraph/eval/apps/demos/tool_calling_protected.py\", line 272, in build\n    graph = create_react_agent(selected_model, chosen, security=selected)\n  File \"/home/faculty/abk6349/.local/share/uv/python/cpython-3.13.11-linux-x86_64-gnu/lib/python3.13/warnings.py\", line 637, in wrapper\n    return arg(*args, **kwargs)\n  File \"/home/faculty/abk6349/.codex/worktrees/consolidated-evaluation/langgraph/libs/prebuilt/langgraph/prebuilt/chat_agent_executor.py\", line 1076, in create_react_agent\n    return workflow.compile(\n           ~~~~~~~~~~~~~~~~^\n        checkpointer=checkpointer,\n        ^^^^^^^^^^^^^^^^^^^^^^^^^^\n    ...<5 lines>...\n        security=security,\n        ^^^^^^^^^^^^^^^^^^\n    )\n    ^\n  File \"/home/faculty/abk6349/.codex/worktrees/consolidated-evaluation/langgraph/libs/langgraph/langgraph/graph/state.py\", line 1242, in compile\n    configured_checkpointer = configure_graph(self, checkpointer=checkpointer)\n  File \"/home/faculty/abk6349/.codex/worktrees/consolidated-evaluation/langgraph/libs/prebuilt/langgraph/prebuilt/security/config.py\", line 235, in configure_graph\n    admitted = _closed_admission_inventory(self, graph)\n  File \"/home/faculty/abk6349/.codex/worktrees/consolidated-evaluation/langgraph/libs/prebuilt/langgraph/prebuilt/security/config.py\", line 667, in _closed_admission_inventory\n    inventory[name] = admit_node(name, spec.runnable, config=config)\n                      ~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/home/faculty/abk6349/.codex/worktrees/consolidated-evaluation/langgraph/libs/prebuilt/langgraph/prebuilt/security/admission.py\", line 225, in admit_node\n    return _admit_trusted_application(name, runnable)\n  File \"/home/faculty/abk6349/.codex/worktrees/consolidated-evaluation/langgraph/libs/prebuilt/langgraph/prebuilt/security/admission.py\", line 514, in _admit_trusted_application\n    captured = _capture_application(name, runnable)\n  File \"/home/faculty/abk6349/.codex/worktrees/consolidated-evaluation/langgraph/libs/prebuilt/langgraph/prebuilt/security/admission.py\", line 560, in _capture_application\n    raise PermissionError(UNSUPPORTED_NODE_BODY)\nPermissionError: admission:unsupported_node_body\n",
+        "raw_record": null,
+        "wall_ms": null,
+        "executed_tools": [],
+        "grant_count": 0,
+        "activation_count": 0
+      }
+    },
+    "add-memory": {
+      "Baseline": {
+        "demo": "add-memory",
+        "mode": "Baseline",
+        "status": "completed",
+        "correct": true,
+        "returncode": 0,
+        "stdout": "",
+        "stderr": "",
+        "raw_record": "eval/campaigns/argus-compatible-demo-v1/raw/expanded/add-memory-Baseline.json",
+        "wall_ms": 2487.625817011576,
+        "executed_tools": [
+          "tavily_search",
+          "tavily_search"
+        ],
+        "grant_count": 0,
+        "activation_count": 0
+      },
+      "Argus": {
+        "demo": "add-memory",
+        "mode": "Argus",
+        "status": "completed",
+        "correct": true,
+        "returncode": 0,
+        "stdout": "",
+        "stderr": "",
+        "raw_record": "eval/campaigns/argus-compatible-demo-v1/raw/expanded/add-memory-Argus.json",
+        "wall_ms": 3928.2022480037995,
+        "executed_tools": [
+          "tavily_search",
+          "tavily_search"
+        ],
+        "grant_count": 2,
+        "activation_count": 2
+      }
+    },
+    "time-travel": {
+      "Baseline": {
+        "demo": "time-travel",
+        "mode": "Baseline",
+        "status": "completed",
+        "correct": true,
+        "returncode": 0,
+        "stdout": "",
+        "stderr": "",
+        "raw_record": "eval/campaigns/argus-compatible-demo-v1/raw/expanded/time-travel-Baseline.json",
+        "wall_ms": 1637.7025230322033,
+        "executed_tools": [
+          "tavily_search"
+        ],
+        "grant_count": 0,
+        "activation_count": 0
+      },
+      "Argus": {
+        "demo": "time-travel",
+        "mode": "Argus",
+        "status": "completed",
+        "correct": true,
+        "returncode": 0,
+        "stdout": "",
+        "stderr": "",
+        "raw_record": "eval/campaigns/argus-compatible-demo-v1/raw/expanded/time-travel-Argus.json",
+        "wall_ms": 3039.783048967365,
+        "executed_tools": [
+          "tavily_search"
+        ],
+        "grant_count": 2,
+        "activation_count": 2
+      }
+    }
+  }
+}

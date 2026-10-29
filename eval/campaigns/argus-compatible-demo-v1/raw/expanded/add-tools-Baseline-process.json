@@ -1,0 +1,16 @@
+{
+  "demo": "add-tools",
+  "mode": "Baseline",
+  "status": "completed",
+  "correct": true,
+  "returncode": 0,
+  "stdout": "",
+  "stderr": "",
+  "raw_record": "eval/campaigns/argus-compatible-demo-v1/raw/expanded/add-tools-Baseline.json",
+  "wall_ms": 1511.6672300500795,
+  "executed_tools": [
+    "tavily_search"
+  ],
+  "grant_count": 0,
+  "activation_count": 0
+}

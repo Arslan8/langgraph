@@ -1,0 +1,17 @@
+{
+  "demo": "add-memory",
+  "mode": "Baseline",
+  "status": "completed",
+  "correct": true,
+  "returncode": 0,
+  "stdout": "",
+  "stderr": "",
+  "raw_record": "eval/campaigns/argus-compatible-demo-v1/raw/expanded/add-memory-Baseline.json",
+  "wall_ms": 2487.625817011576,
+  "executed_tools": [
+    "tavily_search",
+    "tavily_search"
+  ],
+  "grant_count": 0,
+  "activation_count": 0
+}

@@ -1,0 +1,16 @@
+{
+  "demo": "custom-weather",
+  "mode": "Baseline",
+  "status": "completed",
+  "correct": true,
+  "returncode": 0,
+  "stdout": "",
+  "stderr": "",
+  "raw_record": "eval/campaigns/argus-compatible-demo-v1/raw/expanded/custom-weather-Baseline.json",
+  "wall_ms": 944.814755988773,
+  "executed_tools": [
+    "get_weather"
+  ],
+  "grant_count": 0,
+  "activation_count": 0
+}

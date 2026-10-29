@@ -24,3 +24,24 @@ Adaptations are shared by both modes unless explicitly security-specific:
 This campaign is exploratory and deliberately separate from
 `langgraph-demos-v1`; it neither replaces nor increases the denominator of the
 five fixed applications.
+
+## Expanded survey sources
+
+- `docs/docs/how-tos/tool-calling.md`, SHA-256
+  `869c7589b339e08fd606a43d20ad2ed75c020275488eeccdab8d246c9bdfb17a`:
+  prebuilt multiply, custom weather agent, fixed and parallel `ToolNode`,
+  return-direct, forced-tool, and serial-tools examples.
+- `docs/docs/tutorials/get-started/3-add-memory.md`, SHA-256
+  `441c575d3dcd60669c7ad156b7cb9adc080702d6f88e46627f2d3fc9929d48a6`:
+  in-memory checkpointed conversation across two invocations.
+- `docs/docs/tutorials/get-started/6-time-travel.md`, SHA-256
+  `7fc8fe9ef8bb38331597ec5690cbfee9729bdfe3f842b925bfa80d287bf2bf97`:
+  state-history enumeration and replay from a checkpoint whose next node is
+  the tool node.
+
+The provider and frozen-backend adaptations described above apply throughout.
+The direct `ToolNode` snippets are wrapped only in a `START -> tools` graph so
+the same graph-level admission configuration can be applied; their fixed tool
+calls and outputs are unchanged. No admission bypass or trusted tool body was
+added. The prebuilt-agent examples preserve `create_react_agent` and are
+reported unsupported rather than rewritten as custom graphs.

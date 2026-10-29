@@ -1,0 +1,17 @@
+{
+  "demo": "serial-tools",
+  "mode": "Baseline",
+  "status": "completed",
+  "correct": true,
+  "returncode": 0,
+  "stdout": "",
+  "stderr": "/home/faculty/abk6349/.codex/worktrees/consolidated-evaluation/langgraph/eval/apps/demos/tool_calling_protected.py:272: LangGraphDeprecatedSinceV10: create_react_agent has been moved to `langchain.agents`. Please update your import to `from langchain.agents import create_agent`. Deprecated in LangGraph V1.0 to be removed in V2.0.\n  graph = create_react_agent(selected_model, chosen, security=selected)\n",
+  "raw_record": "eval/campaigns/argus-compatible-demo-v1/raw/expanded/serial-tools-Baseline.json",
+  "wall_ms": 1549.398280971218,
+  "executed_tools": [
+    "add",
+    "multiply"
+  ],
+  "grant_count": 0,
+  "activation_count": 0
+}

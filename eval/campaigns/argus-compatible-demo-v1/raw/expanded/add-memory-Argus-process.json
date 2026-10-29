@@ -1,0 +1,17 @@
+{
+  "demo": "add-memory",
+  "mode": "Argus",
+  "status": "completed",
+  "correct": true,
+  "returncode": 0,
+  "stdout": "",
+  "stderr": "",
+  "raw_record": "eval/campaigns/argus-compatible-demo-v1/raw/expanded/add-memory-Argus.json",
+  "wall_ms": 3928.2022480037995,
+  "executed_tools": [
+    "tavily_search",
+    "tavily_search"
+  ],
+  "grant_count": 2,
+  "activation_count": 2
+}

@@ -1,0 +1,16 @@
+{
+  "demo": "time-travel",
+  "mode": "Argus",
+  "status": "completed",
+  "correct": true,
+  "returncode": 0,
+  "stdout": "",
+  "stderr": "",
+  "raw_record": "eval/campaigns/argus-compatible-demo-v1/raw/expanded/time-travel-Argus.json",
+  "wall_ms": 3039.783048967365,
+  "executed_tools": [
+    "tavily_search"
+  ],
+  "grant_count": 2,
+  "activation_count": 2
+}
